@@ -22,6 +22,9 @@ jobs:
       - name: pytest
         run: pytest -q
 
+      - name: domain layer coverage (design §7.6: >=95%)
+        run: pytest --cov=real_chart_bench.domain --cov-report=term-missing --cov-fail-under=95 tests/domain -q
+
       - name: ruff (lint)
         run: ruff check .
 

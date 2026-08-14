@@ -3,7 +3,7 @@
 - Status: **Approved** (2026-08-15、司令塔レビュー合格。PR #1マージ済み)
 - Author: worker (Claude, herdr経由)
 - Last updated: 2026-08-15
-- 実装: Phase 0(スキャフォールド+CI+import-linter)着手。実装順は §7.7 参照。
+- 実装: Phase 0(PR #2マージ済み)→ Phase 1(Domainメトリクス+マッチング、TDD、PR作成)完了。実装順は §7.7 参照。
 
 ## 0. スコープと非スコープ
 
@@ -394,11 +394,13 @@ v2以降で方針確定(据え置き)。ただし **held-out(非公開)split の
 ### 7.7 パイロット先行実装順 — RESOLVED(採用)
 
 ```
-Phase 0: スキャフォールド + CI + import-linter        ← 現在ここ
-Phase 1: Domainメトリクス + マッチングロジックをTDDで実装
-Phase 2: 数十論文規模のパイロット収集でパイプライン設計を検証
+Phase 0: スキャフォールド + CI + import-linter        ← 完了(PR #2)
+Phase 1: Domainメトリクス + マッチングロジックをTDDで実装  ← 完了(本PR)
+Phase 2: 数十論文規模のパイロット収集でパイプライン設計を検証   ← 次
 Phase 3: データセットv0構築(熱電材料ドメイン)
 ```
+
+**Phase 1実装メモ**: `src/real_chart_bench/domain/{curve,metrics,matching,evaluation}.py`。§3.3の境界ケース8項目(GT1点のみ・予測0件・予測過多・log軸で非正値・カテゴリx軸・x範囲重複なし・完全一致・空ラベル)をすべて単体テストで先行して書き(Red)、実装後に全てGreen。ドメイン層カバレッジ100%(CIで`--cov-fail-under=95`を強制、§7.6目標を上回る)。カテゴリx軸(§3.3の5番目)はv0スコープ外として、ドメイン層は数値x限定・呼び出し側でのordinal encodingを前提とする設計判断をテストとして明文化した(`tests/domain/test_categorical_x_axis_scope.py`)。
 
 ### 7.8 追加要件: LLMO(LLM-Optimization)方針 — 反映済み
 

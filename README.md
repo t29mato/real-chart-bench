@@ -2,7 +2,7 @@
 
 **An open benchmark for chart data extraction — built from real experimental charts in open-access papers.**
 
-> ⚠️ Work in progress. Design approved ([docs/design/benchmark-architecture.md](docs/design/benchmark-architecture.md)); Phase 0 (scaffolding) in progress. No dataset or evaluation results published yet.
+> ⚠️ Work in progress. Design approved ([docs/design/benchmark-architecture.md](docs/design/benchmark-architecture.md)); Phase 0 (scaffolding) and Phase 1 (domain metrics + matching, TDD) done. No dataset or evaluation results published yet.
 
 <!-- machine-readable capability summary for agents/tools parsing this README -->
 `{"tool":"real-chart-bench","purpose":"benchmark chart-data-extraction accuracy (LLMs, dedicated models, classic tools) against real open-access research figures","interface":"cli","cli_entry_point":"real-chart-bench","cli_output_formats":["json","text"],"status":"pre-alpha"}`
@@ -16,8 +16,8 @@ Ground truth is planned to come from human-digitized XY data paired with source 
 ## Roadmap
 
 - [x] Design: data collection pipeline, license filtering, ground-truth pairing, metrics ([docs/design/benchmark-architecture.md](docs/design/benchmark-architecture.md))
-- [ ] Phase 0: project scaffolding, CI, dependency-direction enforcement (in progress)
-- [ ] Phase 1: domain-layer metrics + curve matching (TDD)
+- [x] Phase 0: project scaffolding, CI, dependency-direction enforcement
+- [x] Phase 1: domain-layer metrics + curve matching (TDD, 100% domain coverage)
 - [ ] Phase 2: pilot collection (a few dozen papers) to validate the pipeline
 - [ ] Phase 3: dataset v0 (thermoelectric materials domain first)
 - [ ] Evaluation harness + baseline results for existing models
