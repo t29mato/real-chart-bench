@@ -106,6 +106,7 @@ GroundTruthCurve:
   digitization_method (starrydata_manual)
   quality_flags[]
   alternates[]   # §7.3: 旧デジタイズ版を保持(代表値は最新版、旧版はここに退避)
+  license = "CC BY 4.0", license_source = "manual (NIMS MDR)"   # §7.1で確定。図画像の license_status(PaperRecord)とは別軸
 ```
 
 ---
@@ -128,7 +129,7 @@ GroundTruthCurve:
 3. 図番号・カーブ系列ラベルでの論文内ペアリングは、CSVに含まれる `figure_id` / `figure_number` 相当列(実データを取得次第、列名を確定してスキーマ§1.4に反映)を使う。
 4. APIが将来復旧した場合は差分更新・個別検証用の補助手段として使う設計にしておく(CSVを正、APIを補助という優先順位は崩さない)。
 
-> **要確認事項として司令塔に上げる**: Starrydata自体の利用規約・データライセンス(CC-BY等の明記有無、再配布可否、CSVの二次配布可否)。現時点で本ドキュメントは未確認情報として扱い、§7のリスクに計上する。図の再配布は論文側ライセンス(§1.3)で判定するが、**Starrydataが持つデジタイズ済みXY値そのものの再配布可否**は別問題であり、これもStarrydata側の利用規約次第。
+> **RESOLVED (2026-08-15)**: Starrydataデータのライセンスは **CC BY 4.0** で正式確定(NIMS MDR公式ページで確認。出典: https://mdr.nims.go.jp/datasets/be1aaf76-761d-4b73-8ba4-f958348efade 、推奨引用も同ページに記載)。詳細は§7.1参照。デジタイズ済みXY値は**帰属表示付きで再配布可能**であり、§7.1で決めた「非公開参照データ」フォールバックは不要になった。ただし**論文図画像**のライセンスはStarrydataのライセンスとは独立に、論文ごとに§1.3の判定が必要な点は変更なし。
 
 ### 2.3 ペアリング方式
 
@@ -350,19 +351,28 @@ Infrastructure層のCLIエントリポイントは、人間だけでなく他の
 
 > 元の7項目は司令塔レビューで全て回答済み。以下、各項目を **RESOLVED** として決定内容を記録する。
 
-### 7.1 Starrydata利用規約・データライセンス — RESOLVED(調査は実装と並行、結論保留中)
+### 7.1 Starrydata利用規約・データライセンス — RESOLVED(確定: CC BY 4.0)
 
-**司令塔指示**: 実装と並行してワーカーが一次調査を行う。確認が取れるまでは ground truth XY値を「**非公開参照データ**」として扱い、評価スコアのみ公開するフォールバック設計を正とする。Domain層の実装(Phase 1)はこの結論に依存しないため実装をブロックしない。
-
-**一次調査結果(2026-08-15時点)**:
+**一次調査結果(2026-08-15、実装と並行してワーカーが実施)**:
 
 | 調査先 | 結果 |
 |---|---|
-| GitHub `starrydata/starrydata_datasets` | リポジトリ内にLICENSEファイル・READMEでのライセンス明記は**確認できず**。`all_papers.csv.gz` / `all_samples.csv.gz` / `all_curves.csv.gz` および `<Project>_papers.csv.gz` 等(例: `ThermoelectricMaterials_curves.csv.gz`)がGitHub Releasesで日次配布されている実体を確認 |
-| Figshare "Starrydata datasets" プロジェクト | ページ本体が403で直接確認不可(bot拒否と推定)。Figshareのプラットフォームデフォルトポリシー上はCC0が既定、CC-BYも選択可能だが、**本プロジェクトが実際にどちらを選択しているかは未確認** |
-| starrydata2.org 全般情報 | 「商用・非商用問わず無償利用可、論文引用を推奨」という記述が二次情報として見つかったが、これは利用ガイドライン的な言明であり、**再配布可否を明示するライセンス条文としての確証はない** |
+| GitHub `starrydata/starrydata_datasets` | リポジトリ内にLICENSEファイル・READMEでのライセンス明記は確認できず |
+| Figshare "Starrydata datasets" プロジェクト | ページ本体が403で直接確認不可(bot拒否と推定) |
+| starrydata2.org 全般情報 | 「商用・非商用問わず無償利用可」という二次情報はあったが、ライセンス条文としての確証はなし |
 
-**結論**: `license_status = NEEDS_REVIEW` を維持。`license_evidence_url` には上記GitHubリポジトリURLとFigshareプロジェクトURLを暫定記録し、Figshareの403問題(bot拒否)を人手で解消次第、当該データセットページのライセンスバッジを直接確認して確定させる。確定するまでXY値は非公開参照データ扱い。
+上記の時点では `license_status = NEEDS_REVIEW` とし、確認が取れるまでXY値を「非公開参照データ」として扱うフォールバック方針としていた。
+
+**司令塔による正式確定(2026-08-15)**: Starrydataデータのライセンスは **CC BY 4.0** であることを、NIMS MDR(National Institute for Materials Science, Materials Data Repository)の公式ページで確認済み。
+
+- 出典: https://mdr.nims.go.jp/datasets/be1aaf76-761d-4b73-8ba4-f958348efade
+- 同ページに推奨引用(citation)の記載あり
+- `license_status = REDISTRIBUTABLE`、`license_source = "manual (NIMS MDR)"`、`license_evidence_url = "https://mdr.nims.go.jp/datasets/be1aaf76-761d-4b73-8ba4-f958348efade"` として `GroundTruthCurve`/データセットmanifestに記録する(§1.4スキーマ・§1.3判定ロジックのCC-BY-4.0許可リストにそのまま合致)。
+
+**結論・影響**:
+- ground truth(StarrydataのデジタイズXY値)は**帰属表示付きで再配布可能**。§7.1で予定していた「非公開参照データ」フォールバックは不要になった → Phase 3(データセットv0構築)からXY値を公開データとして扱ってよい。
+- CC BY 4.0の帰属表示要件(著作者表示・ライセンス表示・変更有無の明示)をデータセットmanifest・配布物に組み込む(具体的な表示文言はStarrydata推奨citationに準拠)。
+- **論文図画像のライセンスは本件と独立**。Starrydataのライセンスは同社が生成したデジタイズ済みXY値に対するものであり、元論文の図そのものの著作権・再配布可否は従来通り§1.3のパイプラインで論文ごとに判定する(変更なし)。
 
 ### 7.2 図画像の再配布ライセンス許可リスト — RESOLVED
 
@@ -411,7 +421,8 @@ Phase 3: データセットv0構築(熱電材料ドメイン)
 ## 参考文献・調査ソース
 
 - Starrydata: https://starrydata.wordpress.com/ , https://docs.starrydata.org/ , Tandfonline "Starrydata: from published plots to shared materials data" (2025)
-- Starrydata CSVデータ配布(§2.2, §7.1で調査): https://github.com/starrydata/starrydata_datasets , https://figshare.com/projects/Starrydata_datasets/155129 (403のため未直接確認、要再調査)
+- Starrydata CSVデータ配布(§2.2, §7.1で調査): https://github.com/starrydata/starrydata_datasets , https://figshare.com/projects/Starrydata_datasets/155129 (403のため未直接確認)
+- Starrydataライセンス確定根拠(§7.1、CC BY 4.0): NIMS MDR — https://mdr.nims.go.jp/datasets/be1aaf76-761d-4b73-8ba4-f958348efade
 - LineFormer: Rethinking Line Chart Data Extraction as Instance Segmentation (ICDAR2023) — https://arxiv.org/pdf/2305.01837
 - LineEX: Data Extraction from Scientific Line Charts (WACV2023) — https://arxiv.org/abs/2211 (openaccess.thecvf.com掲載)
 - ChartQA: A Benchmark for Question Answering about Charts (2022) — https://arxiv.org/pdf/2203.10244
