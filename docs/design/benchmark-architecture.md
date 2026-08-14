@@ -1,9 +1,9 @@
 # real-chart-bench ベンチマーク設計書
 
-- Status: Draft — 司令塔レビュー待ち (need-review)
+- Status: **Approved** (2026-08-15、司令塔レビュー合格。PR #1マージ済み)
 - Author: worker (Claude, herdr経由)
-- Last updated: 2026-08-14
-- 実装: **未着手**。本ドキュメントは設計のみ。
+- Last updated: 2026-08-15
+- 実装: Phase 0(スキャフォールド+CI+import-linter)着手。実装順は §7.7 参照。
 
 ## 0. スコープと非スコープ
 
@@ -98,12 +98,14 @@ PaperRecord:
 FigureRecord:
   figure_id, paper_id, figure_number, image_uri, chart_type (line/scatter/mixed/other)
   extraction_source (pdf-embedded / bulk-image / manual-crop)
+  split (public / held_out)   # §7.5: 外部提出受付(v2以降)に備え、v0から確保する
 
 GroundTruthCurve:
   curve_id, figure_id, starrydata_curve_id
   x_values[], y_values[], x_unit, y_unit, x_scale (linear/log), series_label
   digitization_method (starrydata_manual)
   quality_flags[]
+  alternates[]   # §7.3: 旧デジタイズ版を保持(代表値は最新版、旧版はここに退避)
 ```
 
 ---
@@ -308,6 +310,14 @@ sequenceDiagram
     UseCase-->>CLI: EvaluationResult (集計済み)
 ```
 
+### 4.4 CLI出力契約(LLMO方針、§7.8で追加確定)
+
+Infrastructure層のCLIエントリポイントは、人間だけでなく他のエージェント/スクリプトからの利用を第一級のユースケースとして扱う:
+
+- 全コマンドが `--format json` を持つ。**デフォルトはJSON**とし、人間向けの `--format text` は明示指定で切り替える(機械可読性を既定の挙動にする)。
+- JSON出力はパイプ/リダイレクトでそのままパース可能な単一オブジェクト(1行)とし、人間向け装飾(色・罫線・進捗バー等)はstderrに出すかtext modeに限定する。
+- Phase 0で `capabilities` / `version` コマンドに先行実装済み。Phase 1以降の `evaluate` コマンド等もこの契約を継承する。
+
 ---
 
 ## 5. リーダーボード公開方法(提案)
@@ -336,21 +346,72 @@ sequenceDiagram
 
 ---
 
-## 7. 未決事項・リスク(司令塔確認事項)
+## 7. 未決事項・リスク — 司令塔レビュー結果(2026-08-15、承認)
 
-1. **Starrydata自体の利用規約・データライセンス未確認**: デジタイズ済みXY値そのものの二次配布可否、CSVの再配布可否を確認する必要がある(§2.2)。ここが不許可の場合、ground truthを「非公開参照データ」として扱い、評価はメンテナ側のみが実行しスコアだけ公開する設計に変更が必要になる可能性がある。
-2. **図画像自体の再配布可否の最終確認**: §1.3のライセンス許可リストは初期案であり、特にCC-BY-SA・出版社独自ライセンスの扱いは司令塔判断を仰ぎたい。
-3. **重複デジタイズの代表値選定ルール**(§2.4): 平均/最新/人手選定のいずれを採用するか。
-4. **メトリクスの加重合成の重み**(§3.2の系列マッチ率・曲線距離・カバレッジ率の重み付け): 初期は等重みとしたが、要レビュー。
-5. **外部提出受付の是非とスケジュール**(§5): v2以降として保留したが、方針を早期に固めるかどうか。
-6. **ドメイン層カバレッジ目標の数値確定**(§6): 95%案の承認、またはCI運用上の現実的な代替値。
-7. **PMC以外の主要出版社(熱電材料分野で頻出するElsevier/Springer/APS等)のOA図取得の技術的難易度**は未検証。実データでの一次パイロット収集(数十論文規模)を先に回し、パイプライン設計の妥当性を検証すべきという提案。次タスクとして提案したい。
+> 元の7項目は司令塔レビューで全て回答済み。以下、各項目を **RESOLVED** として決定内容を記録する。
+
+### 7.1 Starrydata利用規約・データライセンス — RESOLVED(調査は実装と並行、結論保留中)
+
+**司令塔指示**: 実装と並行してワーカーが一次調査を行う。確認が取れるまでは ground truth XY値を「**非公開参照データ**」として扱い、評価スコアのみ公開するフォールバック設計を正とする。Domain層の実装(Phase 1)はこの結論に依存しないため実装をブロックしない。
+
+**一次調査結果(2026-08-15時点)**:
+
+| 調査先 | 結果 |
+|---|---|
+| GitHub `starrydata/starrydata_datasets` | リポジトリ内にLICENSEファイル・READMEでのライセンス明記は**確認できず**。`all_papers.csv.gz` / `all_samples.csv.gz` / `all_curves.csv.gz` および `<Project>_papers.csv.gz` 等(例: `ThermoelectricMaterials_curves.csv.gz`)がGitHub Releasesで日次配布されている実体を確認 |
+| Figshare "Starrydata datasets" プロジェクト | ページ本体が403で直接確認不可(bot拒否と推定)。Figshareのプラットフォームデフォルトポリシー上はCC0が既定、CC-BYも選択可能だが、**本プロジェクトが実際にどちらを選択しているかは未確認** |
+| starrydata2.org 全般情報 | 「商用・非商用問わず無償利用可、論文引用を推奨」という記述が二次情報として見つかったが、これは利用ガイドライン的な言明であり、**再配布可否を明示するライセンス条文としての確証はない** |
+
+**結論**: `license_status = NEEDS_REVIEW` を維持。`license_evidence_url` には上記GitHubリポジトリURLとFigshareプロジェクトURLを暫定記録し、Figshareの403問題(bot拒否)を人手で解消次第、当該データセットページのライセンスバッジを直接確認して確定させる。確定するまでXY値は非公開参照データ扱い。
+
+### 7.2 図画像の再配布ライセンス許可リスト — RESOLVED
+
+初期案を承認。確定版:
+
+| ライセンス | 扱い |
+|---|---|
+| CC-BY / CC0 | 採用 |
+| CC-BY-SA | 採用(manifestに `license = "CC-BY-SA"` を明記し、同一ライセンス継承条件を下流に伝播させる) |
+| CC-BY-NC*, CC-BY-ND* | 除外 |
+| 出版社独自ライセンス・ライセンス欄空 | 人手確認キュー送り(自動除外) |
+
+### 7.3 重複デジタイズの代表値選定ルール — RESOLVED
+
+**「最新デジタイズを正」**とする。旧版は `GroundTruthCurve` の `alternates[]` として保持し、`quality_flags` に `superseded_by_newer_digitization` 等を記録する。平均化は不採用(サンプリング点位置が版ごとに異なり、平均を取ると実在しない点列が生成されるため)。
+
+### 7.4 メトリクス加重合成の重み — RESOLVED
+
+v0は**等重み**で確定(系列マッチ率・平均曲線距離・カバレッジ率)。Phase 2のパイロット収集で得た実データを見て、Phase 3以降に再調整する。
+
+### 7.5 外部提出受付 — RESOLVED
+
+v2以降で方針確定(据え置き)。ただし **held-out(非公開)split の枠は最初から確保する**: `FigureRecord`/データセットmanifestに `split: "public" | "held_out"` フィールドを追加し(§1.4スキーマに反映済み、下記参照)、v0構築時点からpublic/held-outを分けて記録する。
+
+### 7.6 ドメイン層カバレッジ目標 — RESOLVED
+
+**Domain層 95%以上(行カバレッジ)で確定**。UseCase/Adapter層は70-80%を参考値とする(必達目標ではなく目安)。
+
+### 7.7 パイロット先行実装順 — RESOLVED(採用)
+
+```
+Phase 0: スキャフォールド + CI + import-linter        ← 現在ここ
+Phase 1: Domainメトリクス + マッチングロジックをTDDで実装
+Phase 2: 数十論文規模のパイロット収集でパイプライン設計を検証
+Phase 3: データセットv0構築(熱電材料ドメイン)
+```
+
+### 7.8 追加要件: LLMO(LLM-Optimization)方針 — 反映済み
+
+司令塔指示により以下を必須設計ルールとして追加(§4に補記):
+- CLIは**必ずJSON出力モード**を持つ(`--format json`)。Phase 0のCLI雛形は `--format json` をデフォルトとし、人間向けの `--format text` を別途提供する形で実装済み。
+- READMEに**1文の機械可読な能力記述**(構造化JSON1行)を維持する。
 
 ---
 
 ## 参考文献・調査ソース
 
 - Starrydata: https://starrydata.wordpress.com/ , https://docs.starrydata.org/ , Tandfonline "Starrydata: from published plots to shared materials data" (2025)
+- Starrydata CSVデータ配布(§2.2, §7.1で調査): https://github.com/starrydata/starrydata_datasets , https://figshare.com/projects/Starrydata_datasets/155129 (403のため未直接確認、要再調査)
 - LineFormer: Rethinking Line Chart Data Extraction as Instance Segmentation (ICDAR2023) — https://arxiv.org/pdf/2305.01837
 - LineEX: Data Extraction from Scientific Line Charts (WACV2023) — https://arxiv.org/abs/2211 (openaccess.thecvf.com掲載)
 - ChartQA: A Benchmark for Question Answering about Charts (2022) — https://arxiv.org/pdf/2203.10244
