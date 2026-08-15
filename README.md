@@ -2,7 +2,7 @@
 
 **An open benchmark for chart data extraction — built from real experimental charts in open-access papers.**
 
-> ⚠️ Work in progress. Design approved ([docs/design/benchmark-architecture.md](docs/design/benchmark-architecture.md)); Phase 0-2 done, Phase 3 collection pipeline implemented and validated on a real pilot batch. No published dataset yet.
+> ⚠️ Work in progress. Design approved ([docs/design/benchmark-architecture.md](docs/design/benchmark-architecture.md)); Phase 0-2 done. Phase 3 ground-truth manifest (v0, thermoelectric materials, CC BY 4.0) is collected: 603 papers, 10,057 curves — see [`data/manifest/v0/`](data/manifest/v0/). Evaluation harness not built yet.
 
 <!-- machine-readable capability summary for agents/tools parsing this README -->
 `{"tool":"real-chart-bench","purpose":"benchmark chart-data-extraction accuracy (LLMs, dedicated models, classic tools) against real open-access research figures","interface":"cli","cli_entry_point":"real-chart-bench","cli_output_formats":["json","text"],"status":"pre-alpha"}`
@@ -19,7 +19,7 @@ Ground truth is planned to come from human-digitized XY data paired with source 
 - [x] Phase 0: project scaffolding, CI, dependency-direction enforcement
 - [x] Phase 1: domain-layer metrics + curve matching (TDD, 100% domain coverage)
 - [x] Phase 2: pilot collection (license yield measured on real data: ~6% CC-BY in the thermoelectric-materials corpus)
-- [ ] Phase 3: dataset v0 (thermoelectric materials domain first) — collection pipeline (license → PDF fetch → figure extraction → ground-truth manifest) implemented and pilot-validated on 29 real CC-BY papers ([findings](docs/experiments/2026-08-15-phase3-collection-pilot.md)); full-scale collection pending
+- [x] Phase 3: dataset v0 ground truth (thermoelectric materials) — full-scale collection done: 603 CC-BY papers, 2,555 figures, **10,057 ground-truth curves** ([`data/manifest/v0/`](data/manifest/v0/), [findings](docs/experiments/2026-08-16-v0-full-collection.md)). Image pairs collected for 179 papers (2,458 candidate images, not yet auto-paired to figure IDs — see the [panel-splitting investigation](docs/design/benchmark-architecture.md)); permanent image hosting TBD
 - [ ] Evaluation harness + baseline results for existing models
 - [ ] Public leaderboard
 

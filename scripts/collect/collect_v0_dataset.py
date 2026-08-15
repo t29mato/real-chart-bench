@@ -100,7 +100,12 @@ def classify_all_papers(dois: list[str], cache_path: pathlib.Path) -> dict[str, 
             with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
                 data = json.loads(resp.read())
             for work in data.get("results", []):
-                doi = (work.get("doi") or "").removeprefix("https://doi.org/")
+                # NOTE: OpenAlex normalizes DOI casing in its response, which
+                # can differ from the source CSV's casing for the same DOI.
+                # Always lowercase DOI keys everywhere (here and in
+                # papers_by_doi) so lookups can't silently miss due to case
+                # (root cause of the KeyError crash at paper 401/603).
+                doi = (work.get("doi") or "").removeprefix("https://doi.org/").lower()
                 primary = work.get("primary_location") or {}
                 best_oa = work.get("best_oa_location") or {}
                 cache[doi] = {
@@ -111,7 +116,7 @@ def classify_all_papers(dois: list[str], cache_path: pathlib.Path) -> dict[str, 
             # DOIs OpenAlex didn't return anything for: mark as unresolved so
             # we don't re-query them forever on re-runs.
             for doi in batch:
-                cache.setdefault(doi, {"is_oa": None, "license": None, "pdf_url": None})
+                cache.setdefault(doi.lower(), {"is_oa": None, "license": None, "pdf_url": None})
         except urllib.error.URLError as e:
             log(f"  batch at {i} failed: {e} (will retry on next run)")
         if (i // OPENALEX_BATCH_SIZE) % 10 == 0:
@@ -143,7 +148,7 @@ def main() -> None:
     _download(f"{RELEASE_BASE}/ThermoelectricMaterials_curves.csv.gz", curves_gz)
 
     with gzip.open(papers_gz, "rt", newline="", encoding="utf-8") as f:
-        papers_by_doi = {r["DOI"]: r for r in csv.DictReader(f)}
+        papers_by_doi = {r["DOI"].lower(): r for r in csv.DictReader(f)}
     log(f"loaded {len(papers_by_doi)} papers from Starrydata")
 
     license_cache = classify_all_papers(list(papers_by_doi), cache_dir / "openalex_license.json")
@@ -166,14 +171,40 @@ def main() -> None:
     pdf_fetcher = HttpPdfFetchAdapter()
     extractor = PyMuPdfFigureExtractor()
 
-    all_papers, all_figures, all_curves = [], [], []
-    fetch_status_counts: dict[str, int] = {}
-    n_images_total = 0
+    # Resume support: if a previous run crashed partway through, don't
+    # re-fetch PDFs we already have (wasteful and impolite to re-hammer
+    # publisher servers for papers already processed).
+    all_papers = json.loads((manifest_dir / "papers.json").read_text()) \
+        if (manifest_dir / "papers.json").exists() else []
+    all_figures = json.loads((manifest_dir / "figures.json").read_text()) \
+        if (manifest_dir / "figures.json").exists() else []
+    all_curves = json.loads((manifest_dir / "curves.json").read_text()) \
+        if (manifest_dir / "curves.json").exists() else []
+    already_done = {p["paper_id"] for p in all_papers}
+    if already_done:
+        log(f"resuming: {len(already_done)} papers already processed in a prior run, skipping them")
 
-    for idx, (doi, info) in enumerate(redistributable, start=1):
-        sid = papers_by_doi[doi]["SID"]
+    fetch_status_counts: dict[str, int] = {}
+    for p in all_papers:
+        status = p.get("pdf_status")
+        if status:
+            fetch_status_counts[status] = fetch_status_counts.get(status, 0) + 1
+    n_images_total = sum(p.get("n_extracted_images") or 0 for p in all_papers)
+
+    todo = [
+        (doi, info) for doi, info in redistributable
+        if papers_by_doi.get(doi, {}).get("SID") not in already_done
+    ]
+    log(f"{len(todo)} papers left to process ({len(already_done)} already done)")
+
+    for idx, (doi, info) in enumerate(todo, start=1):
+        paper_row = papers_by_doi.get(doi)
+        if paper_row is None:
+            log(f"  DOI {doi!r} classified by OpenAlex but not found in Starrydata CSV, skipping")
+            continue
+        sid = paper_row["SID"]
         paper = PaperRecord(
-            paper_id=sid, doi=doi, title=papers_by_doi[doi].get("title", ""),
+            paper_id=sid, doi=doi, title=paper_row.get("title", ""),
             license_status=LicenseStatus.REDISTRIBUTABLE, license_id=info.get("license") or "cc-by",
         )
 
@@ -188,11 +219,11 @@ def main() -> None:
             figures, curves = (), ()
 
         n_images = None
+        pdf_status = None
         if not args.skip_images and info.get("pdf_url"):
             fetch_result = pdf_fetcher.fetch(info["pdf_url"])
-            fetch_status_counts[fetch_result.status.value] = (
-                fetch_status_counts.get(fetch_result.status.value, 0) + 1
-            )
+            pdf_status = fetch_result.status.value
+            fetch_status_counts[pdf_status] = fetch_status_counts.get(pdf_status, 0) + 1
             if fetch_result.status is PdfFetchStatus.OK and fetch_result.content:
                 try:
                     images = extractor.extract(fetch_result.content)
@@ -212,6 +243,7 @@ def main() -> None:
             {
                 "paper_id": sid, "doi": doi, "license_id": paper.license_id,
                 "n_figures": len(figures), "n_curves": len(curves), "n_extracted_images": n_images,
+                "pdf_status": pdf_status,
             }
         )
         all_figures.extend(
@@ -225,9 +257,9 @@ def main() -> None:
             for c in curves
         )
 
-        if idx % args.log_every == 0 or idx == len(redistributable):
+        if idx % args.log_every == 0 or idx == len(todo):
             log(
-                f"progress {idx}/{len(redistributable)} papers | "
+                f"progress {idx}/{len(todo)} remaining ({len(all_papers)} total done) | "
                 f"figures={len(all_figures)} curves={len(all_curves)} | "
                 f"pdf_status={fetch_status_counts}"
             )
