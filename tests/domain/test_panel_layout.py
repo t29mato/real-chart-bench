@@ -109,3 +109,64 @@ def test_bbox_coordinates_are_within_image_bounds():
 def test_rejects_non_2d_array():
     with pytest.raises(ValueError, match="2D"):
         detect_panel_grid(np.zeros((10, 10, 3), dtype=np.uint8))
+
+
+def test_excessive_fragmentation_falls_back_to_whole_image_instead_of_crashing():
+    # §7.14 finding: noisy real-world images (JPEG artifacts etc.) can trip
+    # gutter detection into producing far more "panels" than any real
+    # scientific figure has (up to 26+, exceeding the a-z label alphabet and
+    # crashing). Treat "way too many" the same as "not confidently a grid",
+    # even when every individual cell is a real, well-formed panel (a
+    # deterministic 3x5=15-cell grid here, forced over an artificially low
+    # max_panels=10 — more robust than relying on random noise to happen to
+    # produce >max_panels surviving cells after the sliver-band filter).
+    canvas = _canvas(70, 120)
+    for row in range(3):
+        for col in range(5):
+            y0, x0 = row * 25, col * 25
+            _fill(canvas, y0, y0 + 20, x0, x0 + 20)
+
+    regions = detect_panel_grid(canvas, max_panels=10)
+
+    assert regions == (PanelRegion(label="a", row=0, col=0, bbox=(0, 0, 120, 70)),)
+
+
+def test_thin_sliver_band_does_not_produce_spurious_extra_panels():
+    # §7.14 visual audit finding: real charts' axis-tick strips / rotated
+    # axis-label text sit in their own thin whitespace-separated band and
+    # were getting sliced off as bogus extra "panels". A real 2-panel
+    # side-by-side figure plus a thin 3px sliver band below (isolated by a
+    # real 4px gutter on both sides) should still yield exactly 2 panels.
+    canvas = _canvas(101, 100)  # rows 90-93 and 97-100 stay background (gutters)
+    _fill(canvas, 0, 90, 0, 46)
+    _fill(canvas, 0, 90, 54, 100)
+    _fill(canvas, 94, 97, 0, 46)
+    _fill(canvas, 94, 97, 54, 100)
+
+    regions = detect_panel_grid(canvas, min_gutter_px=4, min_panel_size_fraction=0.05)
+
+    assert [r.label for r in regions] == ["a", "b"]
+
+
+def test_min_panel_size_fraction_of_zero_disables_the_sliver_filter():
+    canvas = _canvas(101, 100)
+    _fill(canvas, 0, 90, 0, 46)
+    _fill(canvas, 0, 90, 54, 100)
+    _fill(canvas, 94, 97, 0, 46)
+    _fill(canvas, 94, 97, 54, 100)
+
+    regions = detect_panel_grid(canvas, min_gutter_px=4, min_panel_size_fraction=0.0)
+
+    assert len(regions) == 4
+
+
+def test_max_panels_default_never_exceeds_the_label_alphabet():
+    canvas = _canvas(30 * 40, 30 * 40)
+    for row in range(30):
+        for col in range(30):
+            y0, x0 = row * 40, col * 40
+            _fill(canvas, y0 + 2, y0 + 34, x0 + 2, x0 + 34)
+
+    regions = detect_panel_grid(canvas, min_gutter_px=2)
+
+    assert len(regions) <= 26
