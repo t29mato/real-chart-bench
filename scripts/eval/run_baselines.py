@@ -6,11 +6,16 @@ baseline-eval.md): automatic image<->figure_id pairing remains unsolved
 (§7.10/§7.12), and even manual pairing attempts on "single-figure" papers
 turned out unreliable (2 of 3 manually-checked candidates had a plausible
 image but numerically inconsistent ground truth values on closer
-inspection). This run therefore uses:
+inspection). Per 司令塔's verification-gate instruction (design §7.19,
+"量より信頼性。ベンチマークの信用が資産"), the real-image portion of this run
+is no longer hardcoded inline — it is built exclusively from entries in
+data/verified_pairs/registry.json that have passed status=VERIFIED (see
+domain/verified_pairing.py, usecase/real_image_gate.py). REJECTED entries
+in that registry are excluded by construction, not by convention. This run
+therefore uses:
 
-  - 1 manually verified REAL pair (paper 18759, "Figure 3(a)", electrical
-    conductivity vs temperature) — carefully cross-checked against the raw
-    Starrydata values (see docs/experiments), not just visual-match
+  - every VERIFIED real pair in the registry (currently 1: paper 18759,
+    "Figure 3(a)", electrical conductivity vs temperature)
   - 3 synthetic fixtures with exact known ground truth, to exercise the
     harness across scenarios a single real example can't cover alone
     (multi-series, log x-axis, missing/black series the naive baseline
@@ -32,34 +37,34 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
 from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.panel_layout import PyMuPdfPanelSplitter  # noqa: E402
+from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
 from real_chart_bench.domain.matching import HungarianCurveMatcher  # noqa: E402
 from real_chart_bench.domain.metrics import NormalizedYDistanceMetric  # noqa: E402
+from real_chart_bench.domain.verified_pairing import VerifiedPairing  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     DatasetItem,
     evaluate_model_on_dataset,
 )
 from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
+from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RESULTS_DIR = REPO_ROOT / "results"
+REGISTRY_PATH = REPO_ROOT / "data/verified_pairs/registry.json"
 
 
-def _real_gold_item() -> DatasetItem:
-    """paper 18759, figure_id 12217, 'Figure 3(a)', split=public. Manually
-    verified: 4 series, values cross-checked against raw Starrydata x/y
-    (Temperature K vs Electrical conductivity ohm^-1*m^-1, ~61k-132k range)
-    matching the chart's printed axis (Ω^-1 cm^-1 * 100 = Ω^-1 m^-1)."""
+def _ground_truth_for(pairing: VerifiedPairing) -> list[Curve]:
     import csv
     import gzip
 
     raw_curves = []
     with gzip.open(REPO_ROOT / "data/cache/ThermoelectricMaterials_curves.csv.gz", "rt") as f:
         for row in csv.DictReader(f):
-            if row["figure_id"] == "12217":
+            if row["figure_id"] == pairing.figure_id:
                 raw_curves.append(row)
 
-    ground_truth = [
+    return [
         Curve(
             x_values=tuple(json.loads(row["x"])),
             y_values=tuple(json.loads(row["y"])),
@@ -68,17 +73,35 @@ def _real_gold_item() -> DatasetItem:
         for row in raw_curves
     ]
 
-    image_path = REPO_ROOT / "data/raw/images/18759/p04_embedded_4.jpg"
-    splitter = PyMuPdfPanelSplitter()
-    panels = {p.label: p for p in splitter.split(image_path.read_bytes())}
-    panel_a = panels["a"]
+
+def _dataset_item_for(pairing: VerifiedPairing) -> DatasetItem:
+    """Builds a DatasetItem from a VERIFIED registry entry. Never called on
+    a REJECTED or unverified pairing -- see build_dataset()."""
+    image_path = REPO_ROOT / "data/raw/images" / pairing.paper_id / pairing.image_path
+    image_bytes = image_path.read_bytes()
+
+    if pairing.panel_label is not None:
+        splitter = PyMuPdfPanelSplitter()
+        panels = {p.label: p for p in splitter.split(image_bytes)}
+        image_bytes = panels[pairing.panel_label].image_bytes
 
     task = ExtractionTask(
-        image_bytes=panel_a.image_bytes,
-        x_range=(200.0, 500.0),
-        y_range=(25000.0, 135000.0),  # Ω^-1 m^-1 (chart shows Ω^-1 cm^-1 * 100)
+        image_bytes=image_bytes,
+        x_range=pairing.x_range,
+        y_range=pairing.y_range,
+        x_scale=pairing.x_scale,
     )
-    return DatasetItem(figure_id="18759-12217", task=task, ground_truth=ground_truth)
+    figure_id = f"{pairing.paper_id}-{pairing.figure_id}"
+    return DatasetItem(figure_id=figure_id, task=task, ground_truth=_ground_truth_for(pairing))
+
+
+def _real_gold_items() -> list[DatasetItem]:
+    """Every registry entry with status=VERIFIED (design §7.19 gate) —
+    REJECTED and unverified pairings are structurally excluded, not just
+    conventionally skipped. See data/verified_pairs/registry.json for the
+    full audit trail of what was checked and why."""
+    registry = load_registry(REGISTRY_PATH)
+    return [_dataset_item_for(p) for p in select_verified_pairings(registry)]
 
 
 def _synthetic_items() -> list[DatasetItem]:
@@ -138,7 +161,7 @@ def _synthetic_items() -> list[DatasetItem]:
 
 
 def build_dataset() -> list[DatasetItem]:
-    items = [_real_gold_item()]
+    items = _real_gold_items()
     items.extend(_synthetic_items())
     return items
 

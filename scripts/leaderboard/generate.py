@@ -33,6 +33,7 @@ _TEMPLATE = """<!doctype html>
   th, td {{ border: 1px solid #ccc; padding: 0.5rem 0.75rem; text-align: left; }}
   th {{ background: #f0f0f0; }}
   .score {{ font-variant-numeric: tabular-nums; }}
+  tr.pending {{ color: #888; font-style: italic; }}
   .caveat {{
     background: #fff8e1; border: 1px solid #e0c060;
     padding: 0.75rem 1rem; border-radius: 4px;
@@ -65,13 +66,20 @@ _ROW_TEMPLATE = (
     "<td>{dataset_version}</td><td>{run_at}</td></tr>"
 )
 
+_PENDING_ROW_TEMPLATE = (
+    '<tr class="pending"><td>{rank}</td><td>{model_name}</td>'
+    '<td class="score">—</td><td colspan="3">pending external run — {note}</td></tr>'
+)
+
 
 def main() -> None:
     results = [json.loads(p.read_text()) for p in sorted(RESULTS_DIR.glob("*.json"))]
     rows = build_leaderboard_rows(results)
 
     rows_html = "\n".join(
-        _ROW_TEMPLATE.format(
+        _PENDING_ROW_TEMPLATE.format(rank=r.rank, model_name=r.model_name, note=r.note)
+        if r.status == "pending_external_run"
+        else _ROW_TEMPLATE.format(
             rank=r.rank,
             model_name=r.model_name,
             score=r.mean_summary_score,

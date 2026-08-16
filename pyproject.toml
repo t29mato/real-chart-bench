@@ -37,6 +37,10 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# notebooks/ are self-contained Colab-run scratch notebooks (design §7.19),
+# not library code -- excluded from the lint gate the same way generated/
+# vendored code would be. Their imports and style are Colab's, not this repo's.
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

@@ -683,6 +683,52 @@ fakeクライアントを注入して検証しており、実APIを呼ぶには�
 複数のサードパーティ情報源の要約に基づく参考値。実行承認時に公式ページで再確認が必要。
 実行自体はオーナー承認後に、上記コスト規模を踏まえて着手する。
 
+### 7.19 実画像評価の検証ゲート + LineFormer Colabノートブック(2026-08-16、司令塔回答)
+
+司令塔からの2件の判断を受けた実装。
+
+**背景**: §7.15のベースライン実走で、画像↔ground truthの自動ペアリング未解決問題(§7.10/§7.12)
+の回避策として「単一figure_idの論文」ヒューリスティックで3件を手動突合したところ、
+数値まで厳密に一致したのは **1/3のみ**だった(paper 47139は印字されている軸レンジと
+ground truthの桁が2桁ずれ、paper 5904は候補画像6枚中2枚しか確認できず未解決)。
+この結果を受けた司令塔の指示: **「量より信頼性。ベンチマークの信用が資産」**
+— 手動突合をその場限りの確認で終わらせず、構造的な検証ゲートに昇格させる。
+
+**設計**: `domain/verified_pairing.py`に`VerifiedPairing`(frozen dataclass:
+`paper_id, figure_id, image_path, panel_label, x_range, y_range, status, verified_at,
+evidence, x_scale`)と`VerificationStatus`(`VERIFIED`/`REJECTED`)を定義。
+REJECTEDエントリは**意図的に削除せず保持**する — 却下理由の監査証跡として残すことで、
+将来のワーカーが同じ候補を再調査して誤って採用してしまうことを防ぐ。
+
+- `adapter/verified_pairing_registry.py`: `data/verified_pairs/registry.json`(gitコミット対象、
+  `data/manifest/`と同じ「小さいメタデータは追跡する」方針)からI/O経由でロード。
+- `usecase/real_image_gate.py`: `select_verified_pairings(registry)`(status=VERIFIEDのみ抽出)、
+  `is_verified(registry, *, paper_id, figure_id)`(真偽判定)。
+- `scripts/eval/run_baselines.py`をレジストリ駆動にリファクタリング
+  (旧`_real_gold_item()`のハードコードされた単一実例を撤廃し、
+  `select_verified_pairings()`を通過したエントリだけから`DatasetItem`を構築)。
+  リファクタリング後も同一の実データ実例(paper 18759, figure 12217)で
+  同一スコア(summary_score=0.7776…)を再現し、等価性を確認済み。
+
+現在のレジストリ内容(3件、すべて`docs/experiments/`に手動突合の詳細記録あり):
+
+| paper_id | figure_id | figure参照 | status | 却下理由/検証根拠 |
+|---|---|---|---|---|
+| 18759 | 12217 | Figure 3(a) | VERIFIED | 4曲線、x/y値・軸レンジとも印字軸と整合(単位換算後)。1曲線に未解決の外れ値あり(桁が違う)、監査証跡として明記済み |
+| 47139 | 48697 | 4b | REJECTED | ground truthの桁が印字y軸(log σ)と約2桁不整合 |
+| 5904 | 13761 | 5 | REJECTED(未確定) | 候補画像6枚中2枚のみ確認、いずれも別物理量のチャート。残り4枚は未確認 |
+
+**結果**: real-imageスイートはVERIFIED 1件のみに縮小(旧: 暗黙に信頼されていた1件のまま
+数を偽装していなかったが、構造的な保証がなかった)。TDD: `tests/domain/test_verified_pairing.py`
+(2)、`tests/usecase/test_real_image_gate.py`(5)、`tests/adapter/test_verified_pairing_registry.py`(5)
+= 計12テスト、すべて緑。
+
+**LineFormer Colabノートブック**: ローカル実行(§7.16でmacOS上のmmcv/mmdetectionビルド不可と
+結論済み)を諦め、**Google Colab無料枠で完結する自己完結ノートブック**を用意する方針
+(実行はオーナーがワンクリック、費用ゼロ)。リーダーボードには
+`status: "pending_external_run"`としてLineFormerの行を掲載する(§7.17のスキーマ拡張)。
+ノートブック自体は次段で実装。
+
 ---
 
 ## 参考文献・調査ソース
