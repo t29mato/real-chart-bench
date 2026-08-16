@@ -573,6 +573,116 @@ HF datasets形式の`metadata.jsonl`(paper_id/doi/license/image_files/figures/cu
 本ドキュメント(および`domain/panel_layout.py`等のdocstring)がそのまま連携ドキュメントを
 兼ねる設計を維持する。
 
+### 7.15 評価ハーネス実装 + ベースライン実走(2026-08-16、司令塔加速指示)
+
+「ベンチマークとして動く」状態まで進める指示に対応。Phase 1の`domain/evaluation.py`
+(`evaluate_figure`)をそのまま流用し、design §4.2の`ModelRunnerPort`を実装した。
+
+**v0スコープ決定(実装判断)**: 評価ハーネスは「軸較正(x_range/y_range/x_scale)が
+既知である前提で、曲線トレース精度を測る」設計とした(`ExtractionTask`が画像バイト列と
+較正情報をセットで渡す)。CHART-Infographics task 6a(要素検出)と6b(データ抽出)の分離
+(§3.1)に相当し、軸目盛りOCR(6a相当)は本v0のスコープ外と明示する。
+
+**実装**:
+- `domain/pixel_calibration.py`: `PixelCalibration` — ピクセル座標⇔データ座標の変換
+  (log軸対応)。pure関数、TDD
+- `usecase/model_runner.py`: `ModelRunnerPort`(`extract(task) -> list[Curve]`)、
+  `ExtractionTask`
+- `usecase/evaluate_dataset.py`: `evaluate_model_on_dataset` — モデル実行結果を
+  Phase 1のメトリクスで採点。**1図の抽出失敗が全体を止めない**設計(エラーはスコア0として
+  記録し継続)
+- `adapter/naive_cv_extractor.py`: **ナイーブCVベースライン**。色相バケットで色付き
+  ピクセルをクラスタリングし、列ごとの中央値でピクセル空間の折れ線を復元、
+  `PixelCalibration`でデータ空間に変換。**既知の限界(意図的に単純な参照実装)**: 黒/グレー系
+  の線は軸・文字と区別できないため抽出不可。ピクセル基準枠は色付きピクセルの外接矩形を代用
+  (真の軸検出ではない)
+- `usecase/build_leaderboard.py`: `results/*.json`からランキング行を構築する純粋関数
+
+**評価セットの構築で判明した重要な事実**: 「単一figure_idの論文」ヒューリスティックは
+ペアリング精度を保証しない。17件の単一figure論文のうち3件を候補画像プールから探索したが、
+**2件は画像は見つかったが実データ(prop_x/prop_y/数値範囲)と視覚的内容が一致しなかった**
+(誤ったパネル・誤った図を選んでいた)。1件のみ数値検証まで含めて確実に一致
+(paper 18759, "Figure 3(a)", Electrical conductivity vs Temperature、4曲線)。
+**自動/簡易ヒューリスティックによるペアリングは信頼できないことを再確認**(§7.10/§7.12の
+既知の課題と一致)。
+
+**実行結果**(`results/naive-cv-v0.json`、`scripts/eval/run_baselines.py`): 実データ1件
+(手動検証済み)+ 合成データ3件(単一線・2系列・黒線log軸)の計4件で実走。
+
+| 評価対象 | summary_score | 備考 |
+|---|---|---|
+| 実データ(paper 18759, Figure 3a) | 0.778 | match_rate=1.0(4曲線とも検出)、mean_curve_distance=0.48 |
+| 合成: 単一線形 | 0.997 | ほぼ完璧(単純なケース) |
+| 合成: 2系列線形 | 0.997 | 同上 |
+| 合成: 黒線+logスケール | 0.0 | **意図した既知の弱点を実証**(黒線を検出できない) |
+
+平均0.693。ナイーブベースラインは「色付きの単純な線」には機能するが「黒線」「複雑な
+マーカー付きプロット」には弱い、という直感的に妥当な結果が実データ・合成データ双方で
+再現された。
+
+### 7.16 LineFormer実行可能性の検証(2026-08-16)
+
+事前学習済みLineFormer(mmdetectionベース)およびLineFormer-finetune
+(HF: `t29mato/lineformer-battery-finetuned`)の実行を試みたが、**本環境(macOS/Apple
+Silicon、CUDA無し、Python 3.14)では実行不能と判断**し、無理に動かすことはしなかった
+(司令塔指示「動かなければ制約を報告、無理はしない」に従う)。
+
+**根拠**:
+- `mmcv`(mmdetectionの必須依存)はPyPI上で**ソース配布のみ**(`mmcv-2.2.0.tar.gz`、
+  プリビルドwheelなし)。OpenMMLab公式のプリビルドwheelはLinux+CUDA向けのみで、
+  macOS/CPU版は配布されていない
+- ソースビルドを試みたところ、`ModuleNotFoundError: No module named 'pkg_resources'`
+  で即座に失敗(Python 3.14 + 最新setuptoolsとの非互換。mmcvのビルドシステムは
+  レガシーな`pkg_resources`前提で、近年のPython/setuptoolsでは動作しない)
+- 仮にビルドが通ってもCUDA拡張(deformable conv等)を要する可能性が高く、GPU無しの
+  macOS環境では実行時にも失敗する見込み
+
+**次アクション(司令塔確認事項)**: 実行するには (a) Linux+CUDA環境(クラウドGPUインスタンス
+等)、(b) mmcvが対応する古いPython(3.9〜3.11程度)、のいずれかが必要。クラウドGPU環境の
+利用要否・予算については司令塔判断を仰ぎたい。
+
+### 7.17 リーダーボードv0(静的サイト生成)
+
+`scripts/leaderboard/generate.py`: `results/*.json`を読み込み`site/index.html`を生成。
+`usecase/build_leaderboard.py`(スコア降順ソート、同点はmodel_id昇順で決定的)をTDD実装。
+現時点でnaive-cv-v0の1モデルのみ登録。GitHub Pages公開は司令塔承認後(現状はprivateリポジトリ)。
+
+### 7.18 LLMベースラインの雛形(実装のみ、実行なし)
+
+司令塔指示により、API費用が発生する実行は行わず雛形とコスト見積りのみ用意。
+
+**実装**: `usecase/llm_client.py`(`LlmClientPort`、ベンダーSDKに依存しない抽象化)、
+`adapter/llm_model_runner.py`(`LlmModelRunner`)。プロンプトに軸較正情報を埋め込み、
+JSON形式(`{"series": [{"label","x","y"}, ...]}`、マークダウンのコードフェンス除去にも対応)
+でレスポンスをパースして`Curve`に変換。**構造的な実行防止策**: `LlmClientPort`の実装
+(Anthropic/OpenAI/Google SDK呼び出し)は本リポジトリに一切含めていない。テストは全て
+fakeクライアントを注入して検証しており、実APIを呼ぶには新たにSDK連携コードを書く必要がある
+(HF Hubアップロードの多重ガードと同じ設計思想)。
+
+**コスト見積り(1図あたり、概算)**:
+
+前提: チャート画像 約1000×1000px、プロンプト(較正情報込み)300〜500トークン、
+レスポンス(JSON、数曲線分の座標)500〜2,000トークン。画像トークン数は
+`(横px×縦px)/750`という公開されている近似式(本ベンチマークの画像はAnthropicの
+高解像度上限を大きく下回るため、この式がそのまま適用できる)を用いると
+1000×1000px ≈ 1,333トークン。**価格は変動するため、本実行前に必ず最新価格を確認すること**
+(以下は2026-08-16時点の参考値)。
+
+| モデル | 入力$/1M | 出力$/1M | 1図あたり概算コスト | 出典 |
+|---|---|---|---|---|
+| Claude Sonnet 5(`claude-sonnet-5`、導入価格) | $2.00 | $10.00 | 約$0.01〜0.02 | Anthropic公式(claude-apiスキル、2026-08-16時点の導入価格。2026-08-31まで) |
+| Claude Haiku 4.5(`claude-haiku-4-5`) | $1.00 | $5.00 | 約$0.005〜0.01 | Anthropic公式(claude-apiスキル) |
+| GPT-4o | $2.50 | $10.00 | 約$0.01〜0.02 | Web検索(複数ソース、要最新確認) |
+| Gemini 2.5 Flash | $0.15〜0.30 | $1.25〜2.50 | 約$0.003〜0.01 | Web検索(複数ソース、要最新確認。GPT/Geminiの価格は本セッションでは一次情報を精査していない) |
+
+**v0規模での概算総コスト**(参考、実行はしない):
+- Tier 2(画像ペア確保済み179論文、フィギュア数は§7.13参照)相当を1モデルで全量評価: 数百〜1,000図規模と見積もると **Sonnet 5で約$8〜20、Haiku 4.5で約$4〜10**
+- Tier 1全量(2,555 FigureRecord、画像ペアリング問題が未解決のため現状は実行不可)を仮に評価: **Sonnet 5で約$26〜51、Haiku 4.5で約$13〜26**
+
+**要確認**: GPT/Geminiの価格は本セッションで一次ソース(公式pricing page)を精査できておらず、
+複数のサードパーティ情報源の要約に基づく参考値。実行承認時に公式ページで再確認が必要。
+実行自体はオーナー承認後に、上記コスト規模を踏まえて着手する。
+
 ---
 
 ## 参考文献・調査ソース
