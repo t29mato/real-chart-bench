@@ -727,7 +727,95 @@ REJECTEDエントリは**意図的に削除せず保持**する — 却下理由
 結論済み)を諦め、**Google Colab無料枠で完結する自己完結ノートブック**を用意する方針
 (実行はオーナーがワンクリック、費用ゼロ)。リーダーボードには
 `status: "pending_external_run"`としてLineFormerの行を掲載する(§7.17のスキーマ拡張)。
-ノートブック自体は次段で実装。
+`notebooks/lineformer_colab.ipynb`として実装済み(§7.21参照)。
+
+### 7.20 リーダーボード「pending external run」ステータス対応
+
+`usecase/build_leaderboard.py`の`LeaderboardRow`に`status`(`"scored"` / `"pending_external_run"`)
+と`note`フィールドを追加。pending行は`mean_summary_score=None`で常にscored行より後ろにソートされる
+(モデルIDでタイブレーク)。`results/lineformer-pending.json`(`status: "pending_external_run"`のみを
+持つ結果ファイル)を追加し、`scripts/leaderboard/generate.py`のHTMLテンプレートに専用の行スタイル
+(`tr.pending`、グレーアウト+イタリック)を追加。TDD: `tests/usecase/test_build_leaderboard.py`に
+5テスト追加(scored行の互換性、pending行のnote伝播、pending行が常に後ろにソートされること、
+複数pending行のモデルID順ソート、pending行にも連番rankが振られること)。
+
+### 7.21 検証済みペアの拡充: 1件 → 10件(2026-08-19、HQ並行タスク指示)
+
+**背景**: deep-digitizer側で「実画像評価が1件しかなくノイズ過大でcheckpoint判定が不能」という
+課題が報告され、HQから「検証済みペアを最低10件まで増やす」並行タスクの指示があった
+(Colabノートブック実行はオーナー待ちのまま継続)。§7.19の検証ゲート・監査証跡方針をそのまま
+踏襲し、`data/verified_pairs/registry.json`に新たな候補を追加investigationした。
+
+**手法**: `data/manifest/v0/{papers,figures,curves}.json`から「1論文=1 figure_id」「1論文=2
+figure_id」の低画像枚数(候補が絞り込みやすい)論文を優先度順に抽出し、各候補について
+(1) 該当figure_idのground truth数値(x/y範囲・曲線数・series_label)を取得、(2) 論文の抽出済み
+画像群を目視で走査して該当チャートを特定、(3) 数値レンジ(単位換算込み)がチャート上の
+印字軸レンジ・凡例系列数と一致するかを突合、という§7.19と同じ手続きを繰り返した。
+
+**結果**: 新規9件VERIFIED(既存1件と合わせて計10件)、新規6件REJECTED(既存2件と合わせて計8件)。
+
+新規VERIFIED(paper/figure/根拠概要):
+- 16111/15452「4」: ZT vs T、14系列すべて一致
+- 17038/20816「4a」: KPM/Two-probe両系列、6点すべて数値完全一致
+- 4965/13164「Fig 5」: Seebeck係数vs T(2曲線中1つは空、実質1曲線で検証)
+- 47534/49581「1」: STF35/STF50、2系列一致。**既知の制約**: 元図のY軸がlog scaleだが
+  `ExtractionTask`はlog-x のみ対応でlog-yは未対応 — ペアリング自体は数値検証済みだが、
+  現行ハーネスでのナイーブ線形ピクセル前提ベースラインは正しくスコアできない
+  (§7.22で追跡)。
+- 17037/20736「6d」: 4パネル図のパネル(d)、n=284点の密な電圧振動波形が一致
+- 5166/23909「5a」: 8系列(フォノン熱コンダクタンス)すべて一致
+- 47998/50803「3c」: PLNBSCC Dry/Wet airの2系列一致(PBC系列2本は元々digitize対象外)
+- 4176/20123, 4176/20124: 同一ページの2パネル図(電気伝導率・Seebeck係数)、各5系列すべて一致。
+  **技術的な発見**: この図はベクター描画でPDF埋め込み画像として抽出されず、ページ全体の
+  page-render fallbackで捕捉されていた。`PyMuPdfPanelSplitter`の自動パネル分割をページ全体
+  画像にそのまま適用すると、本文テキスト段落を「パネル」として誤検出し(意図した2パネルでは
+  なく4パネルに分割され、しかもうち1つは図と無関係な本文段落だった)、naive-cvベースラインが
+  無言で0点を返す不具合を誘発した。応急対応として該当パネルを手動クロップし
+  `data/verified_pairs/crops/4176/`にコミット対象として保存(`data/raw/`はgitignore対象のため、
+  再現不可能な手動生成物はここに置く)。`scripts/eval/run_baselines.py`の画像パス解決を、
+  `image_path`に`/`を含む場合はリポジトリルート相対パスとして扱うよう拡張(通常の抽出画像は
+  従来通り`data/raw/images/{paper_id}/{image_path}`のベア filename)。
+
+新規REJECTED(paper/figure/理由):
+- 48052/50906「Fig 4a」: 該当ページの6枚の埋め込み画像すべて確認したが、GTのy範囲
+  (302-579 S/cm)がパネル(a)の8系列いずれとも一致せず(桁ではなく系列自体が見当たらない)
+- 48080/50979「3a」: 論文本文が明示的に言及する抵抗率グラフが、抽出済み11枚のどれにも
+  見当たらず(同ページの別の埋め込み画像がページ閾値を満たしたためpage-render fallbackが
+  発火せず、ベクター図が抽出漏れした可能性)
+- 17024/18598「6(a)」: 抽出済み15枚がすべて装飾バナーか結晶構造図で、目的のチャートなし
+  (48080と同じ抽出漏れパターンの疑い)
+- 46256/46343「4a」: 候補画像(時間軸の電気伝導率チャート)との対応関係が数値的に
+  クリーンに一致せず、確信を持てないため不確実性を理由にREJECTED
+  (「量より信頼性」方針: 曖昧なものは無理に採用しない)
+- 43697/39917「8」: 21枚中12枚を確認したが目的の抵抗率チャートが見つからず、
+  未確認9枚を残したまま時間の都合で中断(不完全な調査として明示)
+- 46123/45876「6」: 画像照合以前に**ground truthデータ自体の品質問題**を発見。
+  5曲線すべてのx値が(0.0, 0.0)に潰れており使用不能。これはHQが指示した
+  「検証手順(GT品質チェック)」がまさに想定する種類の発見であり、画像は一切確認せずに
+  数値異常のみでREJECTED判定できた。
+
+**リーダーボードへの反映**: `scripts/eval/run_baselines.py`をレジストリ駆動のまま
+(§7.19のリファクタ済みコード)10件のVERIFIED全件を読み込むよう変更なし(自動反映)。
+`results/naive-cv-v0.json`を再実行(13図: 実画像10+合成3、mean_summary_score=0.597、
+旧: 4図0.693)。空のground truth曲線(paper 4965)でCurveコンストラクタが例外を出す
+バグを`run_baselines.py`側で修正(x値が空の行はスキップ)。
+
+**未解決の課題(HQへの申し送り)**:
+1. `ExtractionTask`にy_scale(log-y)がない — 47534のような対数Y軸チャートを正しく評価できない
+2. `PyMuPdfPanelSplitter`はページ全体画像に対して機能しない(本文段落を誤ってパネル扱いする)
+   — page-render fallbackで捕捉された複数パネル図全般に影響しうる既知の欠陥
+3. ベクター描画チャートがPDF抽出パイプラインから漏れるケースが複数件確認された
+   (48080, 17024) — embedded-image閾値とpage-render fallbackの発火条件を要見直し
+
+### 7.22 既知の制約: log-y軸チャートの評価非対応
+
+§7.21で発見。`domain/curve.py`の`ScaleType`と`usecase/model_runner.py`の`ExtractionTask`は
+`x_scale`のみを持ち、y軸の対数スケールをモデルに伝える手段がない。対数Y軸のchart
+(例: paper 47534)はground truthとしては有効(§7.21で数値検証済み)だが、ピクセル空間で
+線形補間を行う素朴なモデル(naive-cv baseline等)は原理的に正しくスコアできない。
+LLMベースのモデルは画像内の印字軸ラベルを直接読み取れるためこの制約の影響を受けない
+可能性が高い。対応方針(製品線形y_scale相当のフィールド追加 or 対数Y軸チャートを
+real-image評価から除外する運用ルール)はHQ判断待ち。
 
 ---
 

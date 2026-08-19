@@ -64,20 +64,36 @@ def _ground_truth_for(pairing: VerifiedPairing) -> list[Curve]:
             if row["figure_id"] == pairing.figure_id:
                 raw_curves.append(row)
 
-    return [
-        Curve(
-            x_values=tuple(json.loads(row["x"])),
-            y_values=tuple(json.loads(row["y"])),
-            series_label=row["prop_y"],
-        )
-        for row in raw_curves
-    ]
+    # Some Starrydata rows are empty digitization artifacts (n_points=0, see
+    # data/verified_pairs/registry.json evidence for paper 4965) -- Curve
+    # requires >=1 point, and an empty row contributes nothing to the ground
+    # truth either way, so it's dropped rather than crashing the whole run.
+    curves = []
+    for row in raw_curves:
+        x_values = tuple(json.loads(row["x"]))
+        y_values = tuple(json.loads(row["y"]))
+        if not x_values:
+            continue
+        curves.append(Curve(x_values=x_values, y_values=y_values, series_label=row["prop_y"]))
+    return curves
+
+
+def _resolve_image_path(pairing: VerifiedPairing) -> pathlib.Path:
+    """image_path in the registry is either a bare filename (resolved under
+    data/raw/images/{paper_id}/, the normal case for extracted images that
+    the collection pipeline can regenerate) or a repo-relative path
+    containing '/' (used for the rare committed asset that isn't
+    regeneratable by the pipeline, e.g. a hand-cropped page-render panel --
+    see the paper 4176 registry entries' evidence for why)."""
+    if "/" in pairing.image_path:
+        return REPO_ROOT / pairing.image_path
+    return REPO_ROOT / "data/raw/images" / pairing.paper_id / pairing.image_path
 
 
 def _dataset_item_for(pairing: VerifiedPairing) -> DatasetItem:
     """Builds a DatasetItem from a VERIFIED registry entry. Never called on
     a REJECTED or unverified pairing -- see build_dataset()."""
-    image_path = REPO_ROOT / "data/raw/images" / pairing.paper_id / pairing.image_path
+    image_path = _resolve_image_path(pairing)
     image_bytes = image_path.read_bytes()
 
     if pairing.panel_label is not None:
