@@ -990,6 +990,49 @@ HQ指示により`excluded_reason`で暫定除外中(§7.22)。本節は解除�
 log-y 1件で計11件のVERIFIEDペアが評価可能になる。将来log-y図の候補が増えた場合も
 同じ仕組みでそのまま対応できる。
 
+### 7.26 Colabノートブックのeditable installバグ修正(2026-08-19、HQ優先割込み)
+
+**症状**: オーナーが`notebooks/lineformer_colab.ipynb`のCell 2を実行したところ、
+`%pip install -q -e .`(editable install)自体は成功したにもかかわらず、直後の
+`import real_chart_bench`が`ModuleNotFoundError`で失敗(#31、2回目の再現)。
+
+**原因**: editable install(PEP 660)はsrcレイアウトのプロジェクトを`.pth`ファイル
+経由で`src/`にマッピングする実装が一般的だが、Pythonの`site`モジュールは`.pth`
+ファイルを**インタプリタ起動時にしか処理しない**。ColabやJupyterのカーネルは
+1つの長命インタプリタなので、`%pip install -e .`とその後の`import`が**同一
+プロセス内**で実行される — つまりインタプリタを再起動しない限り、新しく書かれた
+`.pth`ファイルはsys.pathに反映されない。`importlib.invalidate_caches()`は既存の
+sys.pathディレクトリ内のモジュールキャッシュを無効化するだけで、新しいディレクトリを
+sys.pathに追加する処理ではないため、この問題には効かない。
+
+**疑似再現テスト(push前に実施、HQ指示通り)**: クリーンな使い捨てvenv
+(`python3 -m venv`で新規作成、プロジェクトの`.venv`とは別)を用意し、単一のPython
+プロセス内で`subprocess`経由の`pip install -e .`実行 → 直後の`import real_chart_bench`
+という、Colabカーネルの制約を忠実に再現するスクリプトを書いて実行:
+- **修正前**(editable): `pip install -e .`成功 → 同一プロセスでの`import`が
+  `ModuleNotFoundError`で**確かに失敗**(オーナー報告のバグを再現)
+- **修正後**(regular): `pip install .`(editable無し)成功 → 同一プロセスでの
+  `import`が**成功**(`site-packages`に直接コピーされるため、インタプリタ再起動不要)
+- Cell 2の実際の2行(`%pip install -q .` → `%pip install -q pymupdf requests`)と
+  後続セルが使う`load_registry`/`select_verified_pairings`のimportまで含めて
+  同一プロセス内で再現し、成功することを確認
+
+**修正**: `notebooks/lineformer_colab.ipynb` Cell 2を`%pip install -q -e .`から
+`%pip install -q .`(非editable)に変更。このノートブックは実行のたびにgit clone
+し直す使い捨て環境のため、editableのライブリロード機能自体が不要 — 非editableへの
+変更にデメリットはない。Cell 0の手順説明・Cell 1の見出しも整合するよう更新。
+
+**HQ指示(2)への対応**: sys.path明示追加のフォールバックは、今回の再現テストで
+非editable installだけで確実に直ることを確認できたため、追加の複雑さを持ち込まない
+判断とした(必要になった場合の代替案として本節に記録: `sys.path.insert(0, "src")`
+を明示追加する手段もあるが、シンプルな非editable installで十分)。
+
+**未実行**: このノートブック自体はまだColab上で実行されていない(オーナーの3回目の
+実行待ち)。ローカルでの疑似再現テストは「editable installが同一プロセスで失敗する」
+「非editable installなら成功する」というPythonのimportメカニズムの一般的性質を
+検証したものであり、Colab固有のmmcv/mmdetectionインストール等(§7.16参照)の
+成否までは検証していない。
+
 ---
 
 ## 参考文献・調査ソース
