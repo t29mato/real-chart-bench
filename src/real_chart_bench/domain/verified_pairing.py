@@ -38,3 +38,12 @@ class VerifiedPairing:
     verified_at: str
     evidence: str
     x_scale: ScaleType = ScaleType.LINEAR
+    # None: fully includable in the real-image evaluation suite (the normal
+    # case). Non-None: the pairing itself IS correct (status stays VERIFIED,
+    # it is not a REJECTED/wrong pairing) but the current harness cannot
+    # correctly score it -- e.g. a log-y axis chart, which ExtractionTask
+    # has no way to represent (design §7.22). HQ decision 2026-08-19: such
+    # pairings are excluded from the real-image suite until the relevant
+    # harness gap is closed, tracked as a separate feature task rather than
+    # blocking the verified-pair count.
+    excluded_reason: str | None = None

@@ -62,7 +62,8 @@
     "x_scale": "linear",
     "status": "verified",
     "verified_at": "2026-08-19",
-    "evidence": "2 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical conductivity/ohm^(-1)*m^(-1)), x-range 872-1174K matches the chart's 600-900 degC axis exactly. y-values 35.4-42.0 ohm^-1*m^-1 (=0.354-0.420 S/cm) match the 'STF35' circle series; y-values 170.4-220.2 ohm^-1*m^-1 (=1.70-2.20 S/cm) match the 'STF50' triangle series, including the STF50 curve's non-monotonic peak-then-decline shape. CAVEAT: the chart's y-axis (Conductivity / S cm^-1) is drawn log-scale, but real_chart_bench's ExtractionTask/PixelCalibration only model log-x, not log-y -- a naive linear-pixel-space model will misjudge this figure's y-values by construction. The pairing itself (this image <-> this ground truth) is verified; scoring against it with the current harness is a separate, known limitation flagged to HQ."
+    "evidence": "2 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical conductivity/ohm^(-1)*m^(-1)), x-range 872-1174K matches the chart's 600-900 degC axis exactly. y-values 35.4-42.0 ohm^-1*m^-1 (=0.354-0.420 S/cm) match the 'STF35' circle series; y-values 170.4-220.2 ohm^-1*m^-1 (=1.70-2.20 S/cm) match the 'STF50' triangle series, including the STF50 curve's non-monotonic peak-then-decline shape. CAVEAT: the chart's y-axis (Conductivity / S cm^-1) is drawn log-scale, but real_chart_bench's ExtractionTask/PixelCalibration only model log-x, not log-y -- a naive linear-pixel-space model will misjudge this figure's y-values by construction. The pairing itself (this image <-> this ground truth) is verified; scoring against it with the current harness is a separate, known limitation flagged to HQ.",
+    "excluded_reason": "log-y axis chart; ExtractionTask/PixelCalibration have no y_scale support (design 7.22). HQ decision 2026-08-19: excluded from the real-image evaluation suite until y_scale is implemented as a separate feature task; the pairing itself remains VERIFIED and does not count against the 8-rejected total."
   },
   {
     "paper_id": "17037",
@@ -128,6 +129,19 @@
     "status": "verified",
     "verified_at": "2026-08-19",
     "evidence": "5 ground-truth curves (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1)), one per composition x=0.005/0.01/0.05/0.1/0.5, same source page render as figure_id=20123 (panel B of the same 2-panel figure). x-range 300-330K matches. Converting GT y (V/K) to the chart's microV/K units (multiply by 1e6): x=0.005 -> +18.2 to +36.3 (chart's only positive series, ~18-36, matches exactly including sign flip vs the other 4 series); x=0.01 -> -3.2 to -2.5; x=0.05 -> -2.6 to -0.7; x=0.1 -> -7.9 to -5.9; x=0.5 -> -16.0 to -13.3 (chart's most negative series, ~-14 to -16). Same manual-crop workaround as figure 20123 applies (crop bbox on the full page render: x=[100,620], y=[555,910] for panel B); see that entry's evidence for the full explanation of why panel_label/PyMuPdfPanelSplitter was not used here."
+  },
+  {
+    "paper_id": "17040",
+    "figure_id": "21020",
+    "figure_reference": "2a",
+    "image_path": "data/verified_pairs/crops/17040/manual_crop_fig2a.png",
+    "panel_label": null,
+    "x_range": [-60.0, 60.0],
+    "y_range": [0.0, 4000.0],
+    "x_scale": "linear",
+    "status": "verified",
+    "verified_at": "2026-08-19",
+    "evidence": "4 ground-truth curves (prop_x=Voltage/V [bottom-gate Vbg], prop_y=Resistance/ohm), one per side-gate voltage Vig=0/-0.5/-1.0/-1.5V. x-range matches the chart panel (a)'s -60 to 60V Vbg axis for all 4 curves (e.g. -59.61 to 60.35, -58.84 to 59.61). y-ranges (258.6-3319.0, 301.7-2577.6, 379.3-1267.2, 327.6-1060.3 ohm = 0.26-3.32, 0.30-2.58, 0.38-1.27, 0.33-1.06 kOhm) match the panel's R axis (0-4.0 kOhm) and the visible peak heights of the 4 legend series (blue -1.5V highest ~3.3, green -1.0V ~2.6, red -0.5V and black 0V both ~1.0-1.3). This is a vector-drawn plot captured via the page-render fallback (design 1.2/7.10), same PyMuPdfPanelSplitter full-page-splitting bug as the paper 4176 entries above (confirmed, not re-tested in detail here) -- manually cropped instead (crop bbox on the full page render p03_page_render_2.png, 1241x1630px at render_dpi=150: x=[355,815], y=[90,705] for panel a) and saved to data/verified_pairs/crops/17040/, same workaround pattern as paper 4176."
   },
   {
     "paper_id": "47139",

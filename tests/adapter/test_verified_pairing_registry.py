@@ -74,6 +74,47 @@ def test_empty_registry_file_parses_to_empty_list():
     assert parse_registry([]) == []
 
 
+def test_excluded_reason_defaults_to_none_when_absent():
+    raw = [
+        {
+            "paper_id": "1",
+            "figure_id": "1",
+            "image_path": "a.jpg",
+            "panel_label": None,
+            "x_range": [0.0, 1.0],
+            "y_range": [0.0, 1.0],
+            "x_scale": "linear",
+            "status": "verified",
+            "verified_at": "2026-08-16",
+            "evidence": "x",
+        }
+    ]
+
+    assert parse_registry(raw)[0].excluded_reason is None
+
+
+def test_excluded_reason_parses_when_present():
+    raw = [
+        {
+            "paper_id": "47534",
+            "figure_id": "49581",
+            "image_path": "p03_embedded_2.jpg",
+            "panel_label": None,
+            "x_range": [873.15, 1173.15],
+            "y_range": [10.0, 1000.0],
+            "x_scale": "linear",
+            "status": "verified",
+            "verified_at": "2026-08-19",
+            "evidence": "numerically verified, but log-y axis",
+            "excluded_reason": "log-y axis chart; ExtractionTask has no y_scale support",
+        }
+    ]
+
+    assert parse_registry(raw)[0].excluded_reason == (
+        "log-y axis chart; ExtractionTask has no y_scale support"
+    )
+
+
 def test_registry_json_round_trip_from_real_file_shape(tmp_path):
     from real_chart_bench.adapter.verified_pairing_registry import load_registry
 

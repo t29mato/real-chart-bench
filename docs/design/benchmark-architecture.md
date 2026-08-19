@@ -795,27 +795,75 @@ figure_id」の低画像枚数(候補が絞り込みやすい)論文を優先度
   数値異常のみでREJECTED判定できた。
 
 **リーダーボードへの反映**: `scripts/eval/run_baselines.py`をレジストリ駆動のまま
-(§7.19のリファクタ済みコード)10件のVERIFIED全件を読み込むよう変更なし(自動反映)。
-`results/naive-cv-v0.json`を再実行(13図: 実画像10+合成3、mean_summary_score=0.597、
-旧: 4図0.693)。空のground truth曲線(paper 4965)でCurveコンストラクタが例外を出す
-バグを`run_baselines.py`側で修正(x値が空の行はスキップ)。
+(§7.19のリファクタ済みコード)VERIFIEDかつ評価可能な全件を読み込むよう変更なし(自動反映)。
+`results/naive-cv-v0.json`を再実行。空のground truth曲線(paper 4965)でCurveコンストラクタが
+例外を出すバグを`run_baselines.py`側で修正(x値が空の行はスキップ)。
 
-**未解決の課題(HQへの申し送り)**:
+**未解決の課題(HQへの申し送り、§7.22/§7.23で対応方針確定)**:
 1. `ExtractionTask`にy_scale(log-y)がない — 47534のような対数Y軸チャートを正しく評価できない
 2. `PyMuPdfPanelSplitter`はページ全体画像に対して機能しない(本文段落を誤ってパネル扱いする)
    — page-render fallbackで捕捉された複数パネル図全般に影響しうる既知の欠陥
 3. ベクター描画チャートがPDF抽出パイプラインから漏れるケースが複数件確認された
    (48080, 17024) — embedded-image閾値とpage-render fallbackの発火条件を要見直し
 
-### 7.22 既知の制約: log-y軸チャートの評価非対応
+### 7.22 既知の制約: log-y軸チャートの評価非対応 — HQ判断確定(2026-08-19)
 
 §7.21で発見。`domain/curve.py`の`ScaleType`と`usecase/model_runner.py`の`ExtractionTask`は
 `x_scale`のみを持ち、y軸の対数スケールをモデルに伝える手段がない。対数Y軸のchart
 (例: paper 47534)はground truthとしては有効(§7.21で数値検証済み)だが、ピクセル空間で
 線形補間を行う素朴なモデル(naive-cv baseline等)は原理的に正しくスコアできない。
 LLMベースのモデルは画像内の印字軸ラベルを直接読み取れるためこの制約の影響を受けない
-可能性が高い。対応方針(製品線形y_scale相当のフィールド追加 or 対数Y軸チャートを
-real-image評価から除外する運用ルール)はHQ判断待ち。
+可能性が高い。
+
+**HQ判断(2026-08-19)**: 当面log-y図はreal-image評価から除外する運用とし、
+線形スケールの検証済みペア10件到達を最優先(deep-digitizerの律速のため)。
+y_scale対応はTODO(§7.23)として10件達成後の機能タスクに登録。
+
+**実装**: `domain/verified_pairing.py`の`VerifiedPairing`に`excluded_reason: str | None`
+フィールドを追加。`None`=評価スイートに含めてよい通常のペア、非`None`=ペアリング自体は
+`status=VERIFIED`のまま正しいが、現行ハーネスでは正しくスコアできないため評価対象から除外
+(`REJECTED`とは異なる概念 — ペアの信頼性ではなくハーネスの機能不足が理由)。
+`usecase/real_image_gate.py`の`select_verified_pairings()`は`status=VERIFIED`かつ
+`excluded_reason is None`のエントリのみを返すよう変更(`is_verified()`は`excluded_reason`に
+関わらず`status`のみで判定 — 「検証済みか」と「今スコア可能か」は別の問い)。paper 47534の
+レジストリエントリに`excluded_reason`を設定し、real-image評価スイートから除外した。
+TDD: 6テスト追加(domain 2、usecase 2、adapter 2)、計199テストすべて緑。
+
+### 7.23 検証済みペア10件到達(線形スケール)+ TODO登録
+
+§7.22の除外運用により、線形スケールの検証済みペアは47534を除いた9件のみとなったため、
+追加で1件を検証: **paper 17040 / figure 21020(ref "2a")**、
+4系列(側ゲート電圧Vig=0/-0.5/-1.0/-1.5V)、Vbg範囲-60〜60V、抵抗範囲0.26-3.32kΩが
+チャートと一致(数値完全一致)。これも§7.21のpaper 4176と同じくpage-render fallbackで
+捕捉されたベクター図であり、`PyMuPdfPanelSplitter`のページ全体分割バグを再度踏むため、
+同じ手動クロップ運用(`data/verified_pairs/crops/17040/`にコミット)で対応した。
+
+**手動クロップ手順(§7.21のpaper 4176と共通、HQ指示により記録)**:
+1. `pymupdf.Pixmap(page_render_path)` でページ全体画像を読み込み、`.width`/`.height`を確認
+2. 目的のパネルのおおよそのピクセル矩形を目視で見積もり、`pymupdf.IRect(x0,y0,x1,y1)` +
+   `Pixmap(colorspace, rect, alpha).copy(pix, rect)` でクロップ
+3. クロップ結果を目視確認し、隣接パネルの数値が写り込んでいないか確認(軸ラベルの文字が
+   少し入り込む程度は許容 — naive-cv baselineは色付きピクセルのみ見るため無害)
+4. `data/verified_pairs/crops/{paper_id}/` に保存してコミット対象とする(`data/raw/`は
+   gitignore対象のため、再現不能な手動生成物はここに置く)
+5. レジストリの`image_path`にリポジトリルート相対パス(`/`を含む)を指定、
+   `panel_label`は`null`(クロップ済みで単一パネルのため分割不要)
+6. evidenceにクロップ元ページのpx寸法・render_dpi・クロップ矩形を明記し、
+   将来の再現(PDF再取得+同dpiでの再レンダリング+同矩形クロップ)を可能にする
+
+**結果**: `data/verified_pairs/registry.json`は計19エントリ(VERIFIED 11、うちevaluatable
+10件[線形]+1件[47534、excluded_reason設定済み]、REJECTED 8)。
+`results/naive-cv-v0.json`再実行: 13図(実画像10[評価可能]+合成3)、
+17040-21020のsummary_score=0.887。`site/index.html`再生成、リーダーボードcaveat文言も
+「実図1枚」から「検証済みレジストリでゲートされた実図10件」に更新済み。
+
+**TODO登録(post-10件到達の機能タスク、HQ指示により明示的にTODOとして記録)**:
+- [ ] `ExtractionTask`/`PixelCalibration`にy_scale(log-y)サポートを追加し、
+  47534のexcluded_reasonを解除できるようにする(§7.22)
+- [ ] `PyMuPdfPanelSplitter`をページ全体画像(page-render fallbackで捕捉された複数パネル図)
+  に対応させ、paper 4176・17040の手動クロップ運用を自動化に置き換える(§7.21/§7.23)
+- [ ] embedded-image抽出閾値とpage-render fallbackの発火条件を見直し、ベクター描画チャートの
+  抽出漏れ(48080, 17024で確認)を減らす(§7.21)
 
 ---
 
