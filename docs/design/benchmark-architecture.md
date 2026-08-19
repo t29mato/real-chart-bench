@@ -917,6 +917,79 @@ paper 4176・17040のレジストリエントリは変更していない(すで�
 (再現テスト、無効化エスケープハッチ、busy-chart回帰ガード、既存11テストは維持) —
 domain層カバレッジ100%を維持。計202テストすべて緑。
 
+### 7.25 y_scale(log-y)対応 — 設計(2026-08-19、HQ優先タスク2、実装は設計レビュー後)
+
+**背景**: §7.22で発見・HQ判断確定した既知の制約。paper 47534の図はY軸がlog scaleで
+描画されており、ground truthとしては数値検証済み(§7.21)だが、現行の
+`ExtractionTask`/`PixelCalibration`はlog-xのみモデル化しておりlog-yを表現できないため、
+ピクセル位置ベースで動作するモデル(naive-cv baseline等)がこの図を正しく評価できない。
+HQ指示により`excluded_reason`で暫定除外中(§7.22)。本節は解除に向けた実装設計であり、
+**このセッションでは実装しない**(HQレビュー後に着手)。
+
+**スコープの確認: y_scaleが実際に必要な層はどこか**
+
+既存コードを調査した結果、log-x対応は2箇所に及んでいる一方(下表)、log-yはそのうち
+**1箇所のみ**で足りることが分かった:
+
+| 層 | log-xの現状 | log-yに同様の対応が必要か |
+|---|---|---|
+| `domain/pixel_calibration.py` `PixelCalibration.to_data()` | `x_scale`でピクセル→データ変換をlog補間 | **必要**。ピクセル位置ベースのモデルがY軸方向も同様に誤変換するため |
+| `usecase/model_runner.py` `ExtractionTask` | `x_scale`をモデルに渡す較正情報として保持 | **必要**(上記のための入力) |
+| `domain/metrics.py` `NormalizedYDistanceMetric._to_x_space()` | GT/予測曲線のx値をlog空間に変換してから補間(np.interpの整合性のため) | **不要**。この関数はcurveの**生データ値**(x_values/y_values)を直接比較する際の話であり、元のチャートがどう"見た目描画"されていたか(log-y軸か否か)とは無関係。Y誤差はGT y-rangeで線形正規化するだけで、対数軸で描かれていたかどうかに依存しない計算になっている |
+| `domain/curve.py` `Curve.x_scale` | GT curve自体のx軸解釈(メトリクス層が参照) | **不要**。上記と同じ理由でCurveにy_scaleを追加する必要はない |
+
+これは非対称に見えるが原理的に正しい: **x_scaleは「メトリクスが2つの曲線をどう比較するか」
+にも影響する**(log-x軸のデータは対数空間で補間しないと誤った距離になる)一方、
+**y_scaleは「モデルがチャート画像から正しい生データ値を読み取れるか」という抽出時の
+問題にすぎず**、一度正しいdata-space値が得られてしまえば、比較・スコアリングの計算自体は
+元のチャートが線形軸で描かれていたかlog軸で描かれていたかに依存しない。つまりy_scaleは
+`ExtractionTask`/`PixelCalibration`という「抽出インターフェース」層だけの関心事であり、
+`domain/curve.py`/`domain/metrics.py`という「評価」層には影響しない。
+
+**具体的な変更(実装時のタスク一覧)**:
+
+1. `usecase/model_runner.py`: `ExtractionTask`に`y_scale: ScaleType = ScaleType.LINEAR`を追加
+2. `domain/pixel_calibration.py`: `PixelCalibration`に`y_scale: ScaleType = ScaleType.LINEAR`を
+   追加。`to_data()`のy計算を、既存のx計算と対称的にlog対応:
+   ```python
+   y_lo, y_hi = self.y_range
+   if self.y_scale is ScaleType.LOG:
+       if y_lo <= 0 or y_hi <= 0:
+           raise ValueError("log y_scale requires a strictly positive y_range")
+       log_y = math.log10(y_lo) + y_frac * (math.log10(y_hi) - math.log10(y_lo))
+       y = 10**log_y
+   else:
+       y = y_lo + y_frac * (y_hi - y_lo)
+   ```
+3. `adapter/naive_cv_extractor.py`: `PixelCalibration`構築時に`y_scale=task.y_scale`を渡す
+   (現在`x_scale=task.x_scale`のみ渡している箇所に1行追加)
+4. `domain/verified_pairing.py`: `VerifiedPairing`に`y_scale: ScaleType = ScaleType.LINEAR`を追加
+   (既存`x_scale`と対称)
+5. `adapter/verified_pairing_registry.py`: `y_scale`のJSON parse追加(既存`x_scale`と対称)
+6. `scripts/eval/run_baselines.py`: `ExtractionTask`構築時に`y_scale=pairing.y_scale`を渡す
+7. `notebooks/lineformer_colab.ipynb`の`LineFormerModelRunner.extract()`(既に`task.x_scale`で
+   log-x分岐している箇所)にy軸の対称的な分岐を追加 — Colab実行はオーナー待ちのため
+   このノートブック更新は破壊的ではない(まだ実行されていない)
+8. `data/verified_pairs/registry.json`のpaper 47534エントリ: `excluded_reason`を解除し、
+   `y_scale: "log"`を設定。`select_verified_pairings()`が自動的にこのペアを
+   real-image評価スイートに含めるようになる(コード変更不要、レジストリ更新のみ)
+
+**TDD計画(実装時)**:
+- `PixelCalibration.to_data()`: y_scale=LOGでの正しいlog-yピクセル→データ変換
+  (既存の log-x テストと対称なケースを追加)
+- `PixelCalibration.to_data()`: y_scale=LOGかつ`y_range`が非正の場合に`ValueError`
+  (既存の log-x エラーケーステストと対称)
+- `ExtractionTask`/`PixelCalibration`のデフォルト`y_scale=LINEAR`が後方互換であること
+  (既存の全テスト・全VERIFIEDペアがy_scale省略時と同じ結果になることを確認)
+- `NaiveCvModelRunner`のend-to-endテストに、色付き線・log-y軸の合成チャートを追加
+  (既存の`synthetic-log-black-line`はx軸のみ・黒線のためnaive-cvが原理的に検出不能な
+  ケース — log-y版は色付き線にして、ピクセル較正の正しさ自体を検証できるようにする)
+- `verified_pairing_registry`のy_scale JSON parseテスト(既存x_scaleテストと対称)
+
+**実装後の期待効果**: paper 47534がreal-image評価スイートに復帰し、線形スケール10件+
+log-y 1件で計11件のVERIFIEDペアが評価可能になる。将来log-y図の候補が増えた場合も
+同じ仕組みでそのまま対応できる。
+
 ---
 
 ## 参考文献・調査ソース
