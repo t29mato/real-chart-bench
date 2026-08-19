@@ -160,6 +160,79 @@ def test_min_panel_size_fraction_of_zero_disables_the_sliver_filter():
     assert len(regions) == 4
 
 
+def test_text_paragraph_band_is_excluded_even_though_it_has_substantial_content():
+    # §7.21 finding (paper 4176): running PyMuPdfPanelSplitter on a *full
+    # academic page render* (figure + caption + body text, not a pre-cropped
+    # figure) produced a bogus extra "panel" that was actually a paragraph
+    # of running text. A paragraph has plenty of non-background content
+    # (like a real chart), so the existing content_fraction filter alone
+    # doesn't reject it -- but its texture is distinctive: many thin,
+    # evenly-spaced horizontal "lines" (individual text lines) rather than
+    # one large, roughly continuous content block (an axes box + curves).
+    canvas = _canvas(200, 100)
+    _fill(canvas, 0, 70, 0, 100)  # panel a: real chart-like content
+    # gutter 70-78 (8px, >= min_gutter_px)
+    _fill(canvas, 78, 148, 0, 100)  # panel b: real chart-like content
+    # gutter 148-156 (8px)
+    # rows 156-192: 6 "text lines" (4px dark + 2px background gap each).
+    # The 2px gaps are below min_gutter_px=4, so they don't split into
+    # separate row-bands -- the whole paragraph merges into one row-band,
+    # exactly reproducing the real full-page-render failure mode.
+    for i in range(6):
+        y0 = 156 + i * 6
+        _fill(canvas, y0, y0 + 4, 0, 100)
+
+    regions = detect_panel_grid(canvas, min_gutter_px=4)
+
+    assert [r.label for r in regions] == ["a", "b"]
+
+
+def test_min_text_line_runs_can_be_raised_to_stop_rejecting_a_real_panel():
+    # A real chart with several separated content bands within one panel
+    # (e.g. a legend box floating above the plotted data) could in principle
+    # brush up against the text-detection heuristic. Raising
+    # min_text_line_runs is the escape hatch -- mirrors how
+    # min_panel_size_fraction=0.0 disables the sliver-band filter.
+    canvas = _canvas(200, 100)
+    _fill(canvas, 0, 70, 0, 100)
+    _fill(canvas, 78, 148, 0, 100)
+    for i in range(6):
+        y0 = 156 + i * 6
+        _fill(canvas, y0, y0 + 4, 0, 100)
+
+    regions = detect_panel_grid(canvas, min_gutter_px=4, min_text_line_runs=100)
+
+    assert [r.label for r in regions] == ["a", "b", "c"]
+
+
+def test_busy_multi_series_chart_panel_is_not_misclassified_as_text():
+    # Regression guard: an earlier version of the text-line heuristic used
+    # run *count* alone, which false-positived on a real 6-series line
+    # chart (paper 17037 figure 20736 panel a) and silently dropped a
+    # legitimate, previously-VERIFIED panel. That panel's real per-row
+    # content-run heights were [3, 71, 87, 121, 10] (highly irregular) vs a
+    # real text block's [15, 20, 20, 16] (nearly uniform) -- reproduce that
+    # irregular-run-height shape here directly, using is_background rows
+    # that mimic several overlapping curves rather than evenly spaced
+    # text lines.
+    canvas = _canvas(200, 100)
+    _fill(canvas, 0, 46, 0, 100)  # neighbor panel (kept simple, unrelated)
+    # gutter 46-54 (real gutter, >= min_gutter_px)
+    # one panel with internal content runs of wildly different heights
+    # (3, 71, 87, 121, 10), separated by 2px gaps -- below min_gutter_px=4,
+    # so they merge into a single row-band (exactly how the real panel
+    # showed up), while still producing distinct is_content_row runs for
+    # the per-cell text heuristic to (correctly) not flag as text.
+    y = 54
+    for height in (3, 71, 87, 121, 10):
+        _fill(canvas, y, y + height, 0, 100)
+        y += height + 2
+
+    regions = detect_panel_grid(canvas, min_gutter_px=4)
+
+    assert [r.label for r in regions] == ["a", "b"]
+
+
 def test_max_panels_default_never_exceeds_the_label_alphabet():
     canvas = _canvas(30 * 40, 30 * 40)
     for row in range(30):
