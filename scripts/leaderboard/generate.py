@@ -43,7 +43,7 @@ _TEMPLATE = """<!doctype html>
 <body>
 <h1>real-chart-bench leaderboard (v0)</h1>
 <p><strong>⚠️ pre-alpha:</strong> evaluation set is a small manually-verified pilot
-(11 real figures, gated on data/verified_pairs/registry.json + 3 synthetic
+(20 real figures, gated on data/verified_pairs/registry.json + 3 synthetic
 fixtures), not the full v0 dataset. See docs/experiments/ and
 docs/design/benchmark-architecture.md &sect;7.19/&sect;7.21 for methodology and
 known limitations (automatic image&harr;figure pairing is unsolved outside the
