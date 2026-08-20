@@ -29,24 +29,34 @@ class PixelCalibration:
     x_range: tuple[float, float]
     y_range: tuple[float, float]
     x_scale: ScaleType = ScaleType.LINEAR
+    # design §7.25: y_scale only matters here (pixel->data extraction) — the
+    # evaluation metric (domain/metrics.py) compares curves' raw data values
+    # directly and doesn't need to know how the source chart was rendered,
+    # so unlike x_scale this has no counterpart on Curve/the metric layer.
+    y_scale: ScaleType = ScaleType.LINEAR
 
     def to_data(self, pixel_x: float, pixel_y: float) -> tuple[float, float]:
         px0, py0, px1, py1 = self.pixel_bbox
         x_frac = _safe_frac(pixel_x, px0, px1)
         y_frac = 1.0 - _safe_frac(pixel_y, py0, py1)  # invert: pixel-down -> data-up
 
-        x_lo, x_hi = self.x_range
-        if self.x_scale is ScaleType.LOG:
-            if x_lo <= 0 or x_hi <= 0:
-                raise ValueError("log x_scale requires a strictly positive x_range")
-            log_x = math.log10(x_lo) + x_frac * (math.log10(x_hi) - math.log10(x_lo))
-            x = 10**log_x
-        else:
-            x = x_lo + x_frac * (x_hi - x_lo)
-
-        y_lo, y_hi = self.y_range
-        y = y_lo + y_frac * (y_hi - y_lo)
+        x = _scale_frac(x_frac, self.x_range, self.x_scale, axis_name="x")
+        y = _scale_frac(y_frac, self.y_range, self.y_scale, axis_name="y")
         return x, y
+
+
+def _scale_frac(
+    frac: float, value_range: tuple[float, float], scale: ScaleType, *, axis_name: str
+) -> float:
+    lo, hi = value_range
+    if scale is ScaleType.LOG:
+        if lo <= 0 or hi <= 0:
+            raise ValueError(
+                f"log {axis_name}_scale requires a strictly positive {axis_name}_range"
+            )
+        log_value = math.log10(lo) + frac * (math.log10(hi) - math.log10(lo))
+        return 10**log_value
+    return lo + frac * (hi - lo)
 
 
 def _safe_frac(value: float, lo: float, hi: float) -> float:

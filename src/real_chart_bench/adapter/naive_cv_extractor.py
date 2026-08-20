@@ -95,6 +95,7 @@ class NaiveCvModelRunner:
             x_range=task.x_range,
             y_range=task.y_range,
             x_scale=task.x_scale,
+            y_scale=task.y_scale,
         )
 
         hue = _hue_degrees(rgb)

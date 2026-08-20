@@ -1,3 +1,4 @@
+from real_chart_bench.domain.curve import ScaleType
 from real_chart_bench.domain.verified_pairing import VerificationStatus, VerifiedPairing
 
 
@@ -69,3 +70,37 @@ def test_verified_pairing_may_carry_an_excluded_reason():
     )
     assert pairing.status is VerificationStatus.VERIFIED
     assert pairing.excluded_reason is not None
+
+
+def test_y_scale_defaults_to_linear():
+    pairing = VerifiedPairing(
+        paper_id="18759",
+        figure_id="12217",
+        image_path="p04_embedded_4.jpg",
+        panel_label="a",
+        x_range=(200.0, 500.0),
+        y_range=(25000.0, 135000.0),
+        status=VerificationStatus.VERIFIED,
+        verified_at="2026-08-16",
+        evidence="ok",
+    )
+    assert pairing.y_scale is ScaleType.LINEAR
+
+
+def test_y_scale_can_be_set_to_log():
+    # design §7.25: a log-y pairing (e.g. paper 47534) no longer needs
+    # excluded_reason once y_scale exists to describe it correctly.
+    pairing = VerifiedPairing(
+        paper_id="47534",
+        figure_id="49581",
+        image_path="p03_embedded_2.jpg",
+        panel_label=None,
+        x_range=(873.15, 1173.15),
+        y_range=(10.0, 1000.0),
+        status=VerificationStatus.VERIFIED,
+        verified_at="2026-08-19",
+        evidence="numerically verified pairing, chart's y-axis is log-scale",
+        y_scale=ScaleType.LOG,
+    )
+    assert pairing.y_scale is ScaleType.LOG
+    assert pairing.excluded_reason is None

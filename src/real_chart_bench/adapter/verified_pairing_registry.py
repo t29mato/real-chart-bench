@@ -35,6 +35,7 @@ def _parse_entry(raw: dict[str, Any]) -> VerifiedPairing:
         verified_at=raw["verified_at"],
         evidence=raw["evidence"],
         x_scale=ScaleType(raw["x_scale"]) if "x_scale" in raw else ScaleType.LINEAR,
+        y_scale=ScaleType(raw["y_scale"]) if "y_scale" in raw else ScaleType.LINEAR,
         excluded_reason=raw.get("excluded_reason"),
     )
 

@@ -60,10 +60,10 @@
     "x_range": [873.15, 1173.15],
     "y_range": [10.0, 1000.0],
     "x_scale": "linear",
+    "y_scale": "log",
     "status": "verified",
     "verified_at": "2026-08-19",
-    "evidence": "2 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical conductivity/ohm^(-1)*m^(-1)), x-range 872-1174K matches the chart's 600-900 degC axis exactly. y-values 35.4-42.0 ohm^-1*m^-1 (=0.354-0.420 S/cm) match the 'STF35' circle series; y-values 170.4-220.2 ohm^-1*m^-1 (=1.70-2.20 S/cm) match the 'STF50' triangle series, including the STF50 curve's non-monotonic peak-then-decline shape. CAVEAT: the chart's y-axis (Conductivity / S cm^-1) is drawn log-scale, but real_chart_bench's ExtractionTask/PixelCalibration only model log-x, not log-y -- a naive linear-pixel-space model will misjudge this figure's y-values by construction. The pairing itself (this image <-> this ground truth) is verified; scoring against it with the current harness is a separate, known limitation flagged to HQ.",
-    "excluded_reason": "log-y axis chart; ExtractionTask/PixelCalibration have no y_scale support (design 7.22). HQ decision 2026-08-19: excluded from the real-image evaluation suite until y_scale is implemented as a separate feature task; the pairing itself remains VERIFIED and does not count against the 8-rejected total."
+    "evidence": "2 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical conductivity/ohm^(-1)*m^(-1)), x-range 872-1174K matches the chart's 600-900 degC axis exactly. y-values 35.4-42.0 ohm^-1*m^-1 (=0.354-0.420 S/cm) match the 'STF35' circle series; y-values 170.4-220.2 ohm^-1*m^-1 (=1.70-2.20 S/cm) match the 'STF50' triangle series, including the STF50 curve's non-monotonic peak-then-decline shape. The chart's y-axis (Conductivity / S cm^-1) is drawn log-scale; y_range=[10.0, 1000.0] ohm^-1*m^-1 is the full printed log-axis extent (0.1-10 S/cm), used together with y_scale=log for correct pixel<->data conversion (design 7.25, implemented 2026-08-21 -- previously excluded via excluded_reason under design 7.22 pending this feature)."
   },
   {
     "paper_id": "17037",

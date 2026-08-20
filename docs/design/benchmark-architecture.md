@@ -858,8 +858,8 @@ TDD: 6テスト追加(domain 2、usecase 2、adapter 2)、計199テストすべ�
 「実図1枚」から「検証済みレジストリでゲートされた実図10件」に更新済み。
 
 **TODO登録(post-10件到達の機能タスク、HQ指示により明示的にTODOとして記録)**:
-- [ ] `ExtractionTask`/`PixelCalibration`にy_scale(log-y)サポートを追加し、
-  47534のexcluded_reasonを解除できるようにする(§7.22、§7.25で設計)
+- [x] ~~`ExtractionTask`/`PixelCalibration`にy_scale(log-y)サポートを追加し、
+  47534のexcluded_reasonを解除できるようにする~~ → §7.25で実装完了(2026-08-21)
 - [x] ~~`PyMuPdfPanelSplitter`をページ全体画像に対応させ、paper 4176・17040の
   手動クロップ運用を自動化に置き換える~~ → §7.24で対応・一部解決(誤検出バグは
   恒久修正、ページ全体の自動分割自体は依然不可能と判明 — 手動クロップ運用は継続)
@@ -917,14 +917,15 @@ paper 4176・17040のレジストリエントリは変更していない(すで�
 (再現テスト、無効化エスケープハッチ、busy-chart回帰ガード、既存11テストは維持) —
 domain層カバレッジ100%を維持。計202テストすべて緑。
 
-### 7.25 y_scale(log-y)対応 — 設計(2026-08-19、HQ優先タスク2、実装は設計レビュー後)
+### 7.25 y_scale(log-y)対応 — 設計 + 実装完了(2026-08-19設計 / 2026-08-21実装、HQ優先タスク2)
 
 **背景**: §7.22で発見・HQ判断確定した既知の制約。paper 47534の図はY軸がlog scaleで
 描画されており、ground truthとしては数値検証済み(§7.21)だが、現行の
 `ExtractionTask`/`PixelCalibration`はlog-xのみモデル化しておりlog-yを表現できないため、
 ピクセル位置ベースで動作するモデル(naive-cv baseline等)がこの図を正しく評価できない。
-HQ指示により`excluded_reason`で暫定除外中(§7.22)。本節は解除に向けた実装設計であり、
-**このセッションでは実装しない**(HQレビュー後に着手)。
+HQ指示により`excluded_reason`で暫定除外中(§7.22)。
+
+**実装状況(2026-08-21追記)**: HQ指示「設計に沿って実装」に従い、下記の設計通りに実装済み。
 
 **スコープの確認: y_scaleが実際に必要な層はどこか**
 
@@ -989,6 +990,34 @@ HQ指示により`excluded_reason`で暫定除外中(§7.22)。本節は解除�
 **実装後の期待効果**: paper 47534がreal-image評価スイートに復帰し、線形スケール10件+
 log-y 1件で計11件のVERIFIEDペアが評価可能になる。将来log-y図の候補が増えた場合も
 同じ仕組みでそのまま対応できる。
+
+**実装結果(2026-08-21)**: 上記タスク一覧・TDD計画通りに実装(`PixelCalibration`の
+x/y計算は共通ヘルパー`_scale_frac()`に統合し、コード重複を避けた点のみ設計からの
+差分)。`data/verified_pairs/registry.json`のpaper 47534を更新:
+`excluded_reason`を削除し`y_scale: "log"`を設定(y_rangeの値自体は変更不要 —
+元々printed log軸の全域[10.0, 1000.0] ohm^-1*m^-1を表しており、linear計算前提から
+log計算前提に解釈が変わるだけで正しく機能する)。
+
+`select_verified_pairings()`は自動的にこのペアを含むようになり、real-image評価
+スイートは11件(線形10件+log-y1件)に拡大。`scripts/eval/run_baselines.py`を再実行し
+`results/naive-cv-v0.json`を更新(14図: 実画像11+合成3、mean_summary_score=0.617)。
+
+**分かったこと(正直な記録)**: paper 47534のnaive-cvスコアは実装後も0.0のまま —
+ただしこれはy_scale実装のバグではなく、**別の既知の制約**(白抜きマーカーが黒背景に
+描かれており無彩色のため、naive-cvの色相ベース検出が原理的に検出不能。17037パネル(d)
+や`synthetic-log-black-line`と同じ「naive-cvは黒/白/灰色系列を見れない」制約)による。
+`PixelCalibration.to_data()`のlog-y変換自体の正しさは、色付き線を使った新規end-to-end
+テスト(`test_respects_log_y_scale`)で別途検証済み(この合成テストはy>0であることと
+方向性を確認しており、naive-cvが実際にトレースできることを示している)。
+
+`notebooks/lineformer_colab.ipynb`の`LineFormerModelRunner.extract()`にも対称的な
+log-y分岐を追加(x/y共通の`_scale_frac`静的メソッドとして実装、
+`domain/pixel_calibration.py`のロジックと平仄を合わせた) — このノートブックは
+まだColab上で未実行(#31、オーナー実行待ち)。
+
+テスト: 新規9件(domain: pixel_calibration 4件・verified_pairing 2件、
+adapter: naive_cv_extractor 1件・verified_pairing_registry 2件)追加、計211テスト
+すべて緑。domain層カバレッジ100%維持。
 
 ### 7.26 Colabノートブックのeditable installバグ修正(2026-08-19、HQ優先割込み)
 

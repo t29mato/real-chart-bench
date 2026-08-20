@@ -77,3 +77,23 @@ def test_respects_log_x_scale():
 
     assert len(curves) >= 1
     assert all(x > 0 for x in curves[0].x_values)
+
+
+def test_respects_log_y_scale():
+    # design §7.25: a colored line (unlike the black-line synthetic fixture
+    # used elsewhere) lets naive-cv actually see the series, so this
+    # exercises PixelCalibration's log-y pixel->data conversion end-to-end
+    # rather than just documenting a known-blind-spot.
+    extractor = NaiveCvModelRunner()
+    image = _red_diagonal_line_png()
+    task = ExtractionTask(
+        image_bytes=image, x_range=(0, 10), y_range=(1, 100), y_scale=ScaleType.LOG
+    )
+
+    curves = extractor.extract(task)
+
+    assert len(curves) >= 1
+    assert all(y > 0 for y in curves[0].y_values)
+    # NW->SE colored line -> downward-sloping data curve, same as the
+    # linear-y case (test_diagonal_line_roughly_traces_y_equals_x).
+    assert curves[0].y_values[0] > curves[0].y_values[-1]

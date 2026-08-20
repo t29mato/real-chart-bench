@@ -20,6 +20,7 @@ class ExtractionTask:
     x_range: tuple[float, float]
     y_range: tuple[float, float]
     x_scale: ScaleType = ScaleType.LINEAR
+    y_scale: ScaleType = ScaleType.LINEAR  # design §7.25
 
 
 class ModelRunnerPort(Protocol):

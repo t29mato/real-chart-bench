@@ -106,6 +106,7 @@ def _dataset_item_for(pairing: VerifiedPairing) -> DatasetItem:
         x_range=pairing.x_range,
         y_range=pairing.y_range,
         x_scale=pairing.x_scale,
+        y_scale=pairing.y_scale,
     )
     figure_id = f"{pairing.paper_id}-{pairing.figure_id}"
     return DatasetItem(figure_id=figure_id, task=task, ground_truth=_ground_truth_for(pairing))

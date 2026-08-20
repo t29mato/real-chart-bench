@@ -70,6 +70,43 @@ def test_parses_log_x_scale():
     assert parse_registry(raw)[0].x_scale is ScaleType.LOG
 
 
+def test_parses_log_y_scale():
+    raw = [
+        {
+            "paper_id": "47534",
+            "figure_id": "49581",
+            "image_path": "p03_embedded_2.jpg",
+            "panel_label": None,
+            "x_range": [873.15, 1173.15],
+            "y_range": [10.0, 1000.0],
+            "y_scale": "log",
+            "status": "verified",
+            "verified_at": "2026-08-19",
+            "evidence": "y",
+        }
+    ]
+
+    assert parse_registry(raw)[0].y_scale is ScaleType.LOG
+
+
+def test_y_scale_defaults_to_linear_when_absent():
+    raw = [
+        {
+            "paper_id": "1",
+            "figure_id": "1",
+            "image_path": "a.jpg",
+            "panel_label": None,
+            "x_range": [0.0, 1.0],
+            "y_range": [0.0, 1.0],
+            "status": "verified",
+            "verified_at": "2026-08-16",
+            "evidence": "x",
+        }
+    ]
+
+    assert parse_registry(raw)[0].y_scale is ScaleType.LINEAR
+
+
 def test_empty_registry_file_parses_to_empty_list():
     assert parse_registry([]) == []
 
