@@ -1179,6 +1179,28 @@ HQから再度「log-y図を評価対象に戻す」「PanelSplitter手動クロ
 (「Figure N」キャプション位置からPDF構造上の図領域を特定する等)が必要で、
 今回の再確認範囲を超える。着手判断はHQに委ねる。**
 
+### 7.30 ライセンス面の再点検(2026-08-22、HQ task 3)
+
+**点検内容**: `data/verified_pairs/registry.json`の全VERIFIEDエントリ(当時20件)の
+`paper_id`を`data/manifest/v0/papers.json`の`license_id`と突き合わせ、全件が
+`"cc-by"`(CC BY 4.0)であることを確認した。
+
+**構造的な改善**: 上記の突き合わせは`paper_id`経由の**間接参照**でしか確認できず、
+レジストリ単体では自己完結的に監査できない状態だった。特に
+`data/verified_pairs/crops/`配下には図の**派生クロップ画像を実際にコミットして
+再配布**しているため、各エントリがそれ自体でライセンス根拠を示せることが
+望ましいと判断し、`VerifiedPairing`に`license_id: str | None`フィールドを追加
+(design: `x_scale`/`y_scale`と同様、papers.jsonの生の識別子文字列をそのまま保持)。
+
+`data/verified_pairs/registry.json`の全29エントリ(VERIFIED 20 + REJECTED 9)に
+`license_id`を機械的に補完(paper_idからpapers.jsonを引いて転記) — 全件`"cc-by"`
+であることを再確認。REJECTEDエントリにも(画像はコミットしていないが)監査証跡の
+一貫性のため付与した。
+
+**テスト**: `tests/domain/test_verified_pairing.py`・
+`tests/adapter/test_verified_pairing_registry.py`に4テスト追加、計215テストすべて緑、
+domain層カバレッジ100%維持。
+
 ---
 
 ## 参考文献・調査ソース

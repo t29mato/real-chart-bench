@@ -104,3 +104,38 @@ def test_y_scale_can_be_set_to_log():
     )
     assert pairing.y_scale is ScaleType.LOG
     assert pairing.excluded_reason is None
+
+
+def test_license_id_defaults_to_none():
+    pairing = VerifiedPairing(
+        paper_id="18759",
+        figure_id="12217",
+        image_path="p04_embedded_4.jpg",
+        panel_label="a",
+        x_range=(200.0, 500.0),
+        y_range=(25000.0, 135000.0),
+        status=VerificationStatus.VERIFIED,
+        verified_at="2026-08-16",
+        evidence="ok",
+    )
+    assert pairing.license_id is None
+
+
+def test_license_id_records_the_pairings_redistribution_basis():
+    # design §7.30 (HQ license audit 2026-08-22): committing a derived crop
+    # under data/verified_pairs/crops/ is active redistribution, so each
+    # entry should record its own license basis rather than only being
+    # reachable via a cross-reference to data/manifest/v0/papers.json.
+    pairing = VerifiedPairing(
+        paper_id="18759",
+        figure_id="12217",
+        image_path="p04_embedded_4.jpg",
+        panel_label="a",
+        x_range=(200.0, 500.0),
+        y_range=(25000.0, 135000.0),
+        status=VerificationStatus.VERIFIED,
+        verified_at="2026-08-16",
+        evidence="ok",
+        license_id="cc-by",
+    )
+    assert pairing.license_id == "cc-by"

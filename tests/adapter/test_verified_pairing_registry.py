@@ -89,6 +89,43 @@ def test_parses_log_y_scale():
     assert parse_registry(raw)[0].y_scale is ScaleType.LOG
 
 
+def test_parses_license_id_when_present():
+    raw = [
+        {
+            "paper_id": "18759",
+            "figure_id": "12217",
+            "image_path": "p04_embedded_4.jpg",
+            "panel_label": "a",
+            "x_range": [200.0, 500.0],
+            "y_range": [25000.0, 135000.0],
+            "status": "verified",
+            "verified_at": "2026-08-16",
+            "evidence": "x",
+            "license_id": "cc-by",
+        }
+    ]
+
+    assert parse_registry(raw)[0].license_id == "cc-by"
+
+
+def test_license_id_defaults_to_none_when_absent():
+    raw = [
+        {
+            "paper_id": "1",
+            "figure_id": "1",
+            "image_path": "a.jpg",
+            "panel_label": None,
+            "x_range": [0.0, 1.0],
+            "y_range": [0.0, 1.0],
+            "status": "verified",
+            "verified_at": "2026-08-16",
+            "evidence": "x",
+        }
+    ]
+
+    assert parse_registry(raw)[0].license_id is None
+
+
 def test_y_scale_defaults_to_linear_when_absent():
     raw = [
         {

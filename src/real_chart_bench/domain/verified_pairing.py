@@ -39,6 +39,15 @@ class VerifiedPairing:
     evidence: str
     x_scale: ScaleType = ScaleType.LINEAR
     y_scale: ScaleType = ScaleType.LINEAR  # design §7.25
+    # design §7.30 (HQ license audit request 2026-08-22): the paper-level
+    # license is already recorded in data/manifest/v0/papers.json, but a
+    # pairing's own license basis (needed to justify committing a derived
+    # crop under data/verified_pairs/crops/, which is active redistribution)
+    # was only reachable by a cross-reference, not self-contained/auditable
+    # from the registry alone. Recording it here directly (same raw
+    # identifier string as papers.json's license_id, e.g. "cc-by") makes
+    # each entry independently auditable.
+    license_id: str | None = None
     # None: fully includable in the real-image evaluation suite (the normal
     # case). Non-None: the pairing itself IS correct (status stays VERIFIED,
     # it is not a REJECTED/wrong pairing) but the current harness cannot
