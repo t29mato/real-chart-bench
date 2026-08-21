@@ -1108,6 +1108,35 @@ PDF内で回転・反転して配置されているにもかかわらず、`figu
 (embedded-image抽出時にPDFのplacement/transformation matrixを適用するよう
 `figure_extraction.py`を改修する)。
 
+### 7.28 リーダーボードのバージョン明記 + log-y状態確認(2026-08-21、HQ回答3件)
+
+HQから20件到達確認と3件の指示を受けた対応。
+
+1. **log-y図の評価対象復帰**: 確認したところ、§7.25のy_scale実装完了時点
+   (commit bea3174)で既にpaper 47534(`excluded_reason`解除・`y_scale=log`設定)は
+   real-image評価スイートに復帰済みだった。§7.27の20件拡充後もそのまま含まれている
+   (`select_verified_pairings()`で20件中の1件として確認)。**追加対応不要**。
+
+2. **リーダーボードのバージョン明記**: `dataset_version`が
+   `"v0-eval-pilot-2026-08-16"`という**ハードコードされた固定文字列**だったことが判明
+   (1件時代からずっと同じ値のまま、実際の検証済みペア数の変化を反映していなかった —
+   まさにHQが懸念した「10件時代の数値と混在」を引き起こしうる構造的なバグ)。
+
+   **恒久対応**: `scripts/eval/run_baselines.py`の`build_dataset()`を
+   `(items, n_real)`のタプルを返すよう変更し、`dataset_version`を
+   `f"v0-eval-pilot-n{n_real}"`として**実際の実データ件数から動的に生成**するよう修正
+   (ハードコード文字列を撤廃、今後ペア数が増えても再発しない)。
+   `scripts/leaderboard/generate.py`に、直近に実行されたスコア済み結果から動的に
+   算出する「Latest evaluated set」バナーを追加(件数・実行日時を目立つ形でページ上部に表示)。
+   これも結果ファイルから都度算出するため、ハードコードの再発を防ぐ設計。
+
+   結果: `results/naive-cv-v0.json`の`dataset_version`は`"v0-eval-pilot-n20"`に、
+   `site/index.html`には「📌 Latest evaluated set: v0-eval-pilot-n20 (most recent run:
+   2026-08-21T00:41:19Z UTC)」というバナーが表示されるようになった。
+
+3. **deep-digitizer側の代表checkpoint入れ替え提案**: 現時点で提案は未着信。
+   到着次第、リーダーボードへの反映整合を取る(本節に追記予定)。
+
 ---
 
 ## 参考文献・調査ソース

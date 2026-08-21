@@ -177,14 +177,19 @@ def _synthetic_items() -> list[DatasetItem]:
     return items
 
 
-def build_dataset() -> list[DatasetItem]:
-    items = _real_gold_items()
-    items.extend(_synthetic_items())
-    return items
+def build_dataset() -> tuple[list[DatasetItem], int]:
+    """Returns (items, n_real) -- n_real is exposed separately so the results
+    payload's dataset_version can encode the actual verified-pair count
+    (design §7.27/HQ 2026-08-21: a hardcoded version string went stale
+    across the 1->10->20-pair expansions and could be confused with older
+    runs; deriving it from len(real_items) makes that impossible)."""
+    real_items = _real_gold_items()
+    items = real_items + _synthetic_items()
+    return items, len(real_items)
 
 
 def run(model_id: str, model_name: str, model) -> dict:
-    items = build_dataset()
+    items, n_real = build_dataset()
     matcher = HungarianCurveMatcher(metric=NormalizedYDistanceMetric())
     results = evaluate_model_on_dataset(model, items, matcher=matcher)
 
@@ -204,7 +209,7 @@ def run(model_id: str, model_name: str, model) -> dict:
     payload = {
         "model_id": model_id,
         "model_name": model_name,
-        "dataset_version": "v0-eval-pilot-2026-08-16",
+        "dataset_version": f"v0-eval-pilot-n{n_real}",
         "run_at": datetime.now(UTC).isoformat(),
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
