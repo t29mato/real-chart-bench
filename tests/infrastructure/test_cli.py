@@ -53,3 +53,21 @@ def test_version_command_supports_json(capsys: pytest.CaptureFixture[str]) -> No
 def test_unknown_command_exits_nonzero() -> None:
     with pytest.raises(SystemExit):
         main(["not-a-real-command"])
+
+
+def test_capabilities_payload_points_agents_at_the_live_leaderboard_and_dataset(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """HQ usability audit (2026-08-22, design §7.31): the capabilities
+    payload is the machine-readable entry point an agent/script queries
+    first -- it must not describe a stale "not yet published" state once
+    the dataset and leaderboard are actually live, and should point
+    directly at where to find them rather than making a caller dig through
+    docs."""
+    main(["capabilities", "--format", "json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert "not yet published" not in payload["status"]
+    assert payload["leaderboard_url"] == "https://t29mato.github.io/real-chart-bench/"
+    assert "verified_pairs_registry" in payload
+    assert "readme" in payload

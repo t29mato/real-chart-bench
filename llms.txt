@@ -1,0 +1,50 @@
+# real-chart-bench
+
+> An open benchmark for chart-data-extraction accuracy, built from real experimental
+> figures in open-access research papers (not synthetic charts). Ground truth comes from
+> Starrydata's human-digitized XY curves (CC BY 4.0), paired with real figure images from
+> CC BY 4.0 papers. Evaluates LLMs, dedicated models (e.g. LineFormer), and classic CV
+> tools against a common, growing set of manually numeric-cross-verified real charts.
+> Pre-alpha: dataset, evaluation harness, and leaderboard are live; the verified
+> real-image set is still small and growing (reliability over quantity is a deliberate
+> project policy, not a temporary gap).
+
+## Start here
+
+- [README.md](README.md): quick start, how to evaluate your own model, how scores are
+  computed, how to add results to the leaderboard, data layout, license.
+- Live leaderboard: https://t29mato.github.io/real-chart-bench/
+- [docs/design/benchmark-architecture.md](docs/design/benchmark-architecture.md): the
+  full design history — every architectural decision, every empirical finding from real
+  data (license yield rates, panel-splitting failure modes, image-orientation bugs,
+  metric design rationale), in dated, numbered sections (§1-§7.30+). This is the
+  authoritative source if README's summary isn't enough detail.
+
+## Core interfaces (read these before writing code against this repo)
+
+- [src/real_chart_bench/usecase/model_runner.py](src/real_chart_bench/usecase/model_runner.py):
+  `ModelRunnerPort` — the one interface you implement to plug a model into the harness.
+- [src/real_chart_bench/domain/metrics.py](src/real_chart_bench/domain/metrics.py),
+  [matching.py](src/real_chart_bench/domain/matching.py),
+  [evaluation.py](src/real_chart_bench/domain/evaluation.py): the scoring logic (pure,
+  no I/O, 100% test coverage — read the tests for exact boundary-case behavior).
+- [scripts/eval/run_baselines.py](scripts/eval/run_baselines.py): a complete, working
+  example wiring a `ModelRunnerPort` into the harness and writing a leaderboard-ready
+  results file.
+
+## Data
+
+- [data/manifest/v0/](data/manifest/v0/): committed ground-truth manifest (papers,
+  figures, curves), CC BY 4.0.
+- [data/verified_pairs/registry.json](data/verified_pairs/registry.json): committed
+  audit trail of manually verified (and rejected) image↔ground-truth pairings, with
+  numeric evidence and a `license_id` on every entry.
+- `data/raw/` is gitignored (regeneratable); run
+  [scripts/eval/fetch_verified_images.py](scripts/eval/fetch_verified_images.py) to
+  fetch just what the verified-pairs registry needs.
+
+## For coding agents modifying this repo
+
+See [AGENTS.md](AGENTS.md) for setup, test/lint commands, and architecture conventions
+(clean architecture with a machine-enforced dependency direction, TDD, 100%
+domain-layer coverage requirement).

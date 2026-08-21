@@ -26,9 +26,13 @@ def _capabilities_payload() -> dict:
             "Benchmark how accurately models (LLMs, dedicated chart models, "
             "classic tools) recover XY data from real research-paper figures."
         ),
-        "status": "pre-alpha: dataset and evaluation harness not yet published",
+        "status": "pre-alpha: v0 dataset + evaluation harness + leaderboard are live",
         "commands": list(COMMANDS),
         "design_doc": "docs/design/benchmark-architecture.md",
+        "readme": "README.md",
+        "leaderboard_url": "https://t29mato.github.io/real-chart-bench/",
+        "ground_truth_manifest": "data/manifest/v0/",
+        "verified_pairs_registry": "data/verified_pairs/registry.json",
     }
 
 

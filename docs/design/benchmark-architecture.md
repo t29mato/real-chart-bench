@@ -1201,6 +1201,51 @@ HQから再度「log-y図を評価対象に戻す」「PanelSplitter手動クロ
 `tests/adapter/test_verified_pairing_registry.py`に4テスト追加、計215テストすべて緑、
 domain層カバレッジ100%維持。
 
+### 7.31 利用しやすさの点検(2026-08-22、HQ task 2)
+
+**発見した重大な問題**: 「外部の研究者がREADMEを読んで自分のモデルを評価できるか」を
+実際に検証したところ、**リポジトリを新規cloneしただけでは評価スクリプトが動かない**
+ことが判明した。`data/raw/images/`はgitignore対象(§6の方針通り)だが、
+`data/verified_pairs/registry.json`の多くのVERIFIEDエントリが`image_path`を
+bare filename(`data/raw/images/{paper_id}/`配下を暗黙に指す)で参照しており、
+これが存在しない新規clone環境では`scripts/eval/run_baselines.py`が
+`FileNotFoundError`で即座に失敗する。README等のドキュメントにもこの前提条件が
+一切明記されていなかった。
+
+**恒久対応**: `scripts/eval/fetch_verified_images.py`を新規実装。
+`data/verified_pairs/registry.json`のVERIFIEDエントリのうち`image_path`が
+bare filenameのもの(20件中9論文)だけを対象に、Colabノートブック(§7.19)と同じ
+OpenAlex経由DOI解決 + PDF再取得 + 画像再抽出ロジックで**必要な画像だけを
+狙い撃ちで取得**する(603論文の全量収集ではない、既に取得済みの画像は
+スキップ、冪等)。実際に1論文(paper 43697)でライブのPDF取得〜画像抽出まで
+エンドツーエンドで実行し、ローカル開発環境に既にある画像とバイト完全一致する
+ことを確認した上でコミット。
+
+**その他の対応**:
+- `README.md`を全面改訂: 現状(評価ハーネス・リーダーボードは既に稼働中)を
+  正確に反映するようStatusセクションを刷新、「Evaluate your own model」セクションで
+  `fetch_verified_images.py` → `run_baselines.py`の具体的な実行手順、
+  `ModelRunnerPort`の実装方法、スコアの定義(`NormalizedYDistanceMetric`・
+  `HungarianCurveMatcher`の要約)、リーダーボードへの結果追加方法(現状PRベース、
+  自動投稿パイプラインは未実装であることを正直に明記)を追加。データ配置
+  (何がcommit対象で何がgitignore対象か)・ライセンスセクションも整理。
+- `src/real_chart_bench/infrastructure/cli.py`の`capabilities`コマンドが
+  `"status": "pre-alpha: dataset and evaluation harness not yet published"`という
+  **これも古いまま固定された文字列**だったことを発見(実際には両方とも稼働中)。
+  `leaderboard_url`・`readme`・`ground_truth_manifest`・`verified_pairs_registry`への
+  ポインタを追加し、エージェント/スクリプトが`real-chart-bench capabilities`を
+  叩いた際に迷わず本体にたどり着けるようにした。
+- **LLMO方針(§7.8)の拡充**: `llms.txt`(llmstxt.org規約準拠、リポジトリの
+  構成・主要インターフェースへのポインタをLLM/エージェント向けに要約)、
+  `AGENTS.md`(コーディングエージェント向けのセットアップ・テストコマンド・
+  clean architecture規約・TDD規約 — CLAUDE.mdの司令塔向けガバナンス記述とは
+  分離し、外部コントリビューターのエージェントにも有用な技術的内容のみ)を新規追加。
+
+**テスト**: `tests/infrastructure/test_cli.py`に1件追加(capabilities payloadが
+古い文言を含まないこと・leaderboard_url等を含むことを検証)、計216テストすべて緑。
+`fetch_verified_images.py`・`run_baselines.py`はscripts配下の実行スクリプトの
+既存慣習通りテストファイルは設けず、直接実行して動作確認(design §7.15参照)。
+
 ---
 
 ## 参考文献・調査ソース
