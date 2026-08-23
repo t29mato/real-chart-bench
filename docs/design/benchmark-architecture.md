@@ -1296,6 +1296,93 @@ OpenAlex経由DOI解決 + PDF再取得 + 画像再抽出ロジックで**必要�
 テスト: レジストリ拡充はデータ変更のみのため既存216テストに変更なし、
 すべて緑を再確認。
 
+### 7.33 Colabノートブックの構造修正: 実行毎のライブPDF再取得を撤廃(2026-08-23、HQ優先割込み)
+
+**症状**: オーナーの4回目のColab実行が、インストールは通ったものの実行段階で
+`RuntimeError: PDF fetch failed for paper 4173: PdfFetchStatus.NOT_A_PDF`で失敗。
+
+**根本原因の切り分け**: paper 4173のOpenAlex解決pdf_url
+(`https://link.springer.com/content/pdf/10.1186/1556-276X-6-548.pdf`)を
+ローカル環境から直接`HttpPdfFetchAdapter`で取得したところ、**正常にPDFを取得できた**
+(status OK、有効なPDFバイト列)。つまりURLそのものは腐敗していない。最も可能性が
+高い説明は、SpringerのようなpublisherがGoogle Cloud/Colabのデータセンター
+IPレンジをアンチスクレイピング対策としてブロックしている(住宅/オフィスIPからは
+通る)というもの。これはpaper 4173固有の問題ではなく、**「評価のたびに外部URLから
+ライブでPDFを再取得する」という設計そのものが、どの論文に対しても、どの実行の
+タイミングでも起こりうる構造的な脆弱性**であるとHQの指摘通り認識した。
+
+**恒久対応(優先順)**:
+
+1. **再配布可能な画像をリポジトリに同梱**: 検証済み30ペアのうち、これまで
+   `data/raw/images/`(gitignore対象)のbare filenameに依存していた11エントリ
+   (9論文分、計約2MB)を`data/verified_pairs/images/{paper_id}/`にコピーし
+   コミット対象化。`registry.json`の`image_path`をリポジトリルート相対パスに更新
+   (既存の`data/verified_pairs/crops/`と同じ「`/`を含む=コミット済み資産」規約
+   に統一、`_resolve_image_path()`のロジック変更は不要)。結果、**30件全ての
+   VERIFIEDエントリがコミット済み画像を持つ状態になり、ライブPDF再取得は
+   現在の登録内容に対しては一切不要になった**。
+   - 帰属表示: `scripts/eval/generate_attribution.py`を新規実装し、
+     `data/verified_pairs/registry.json` + `data/manifest/v0/papers.json`から
+     `data/verified_pairs/ATTRIBUTION.md`を自動生成(手書きするとレジストリの
+     成長に追従できず陳腐化するため、§7.28のdataset_version動的化・
+     リーダーボードバージョンバナーと同じ「常に導出する」設計方針を踏襲)。
+     論文DOIリンク・ライセンス種別・コミット済みファイルパス・改変有無
+     (クロップ/向き補正の有無)を1行ずつ記録。
+2. **ノートブックをskip-and-report構造に変更**: `notebooks/lineformer_colab.ipynb`
+   のCell 7(画像取得)を、(a) まずコミット済み同梱画像を`image_path`から
+   直接読む、(b) bare filenameで同梱画像が無い場合のみライブPDF再取得
+   (OpenAlex解決→PDF取得→図再抽出)を試みる、(c) この(b)が失敗しても
+   `RuntimeError`で全体を落とさず、`skipped`リストに理由付きで記録して
+   `continue`する、という構造に変更。Cell 9(DatasetItem構築)は`skipped`に
+   含まれるペアを自動的に除外。Cell 14(結果書き込み)は最後に
+   「評価N件+スキップM件(理由付き)」のサマリを明示的に出力し、
+   `dataset_version`・`n_verified_pairs_evaluated`・`n_verified_pairs_skipped`・
+   `skipped_pairs`を結果JSONにも記録(`mean_summary_score`がN件で計算された
+   ことを明示)。`dataset_version`のハードコード(§7.28で発見・修正した
+   同種のバグがこのノートブックにも残っていた)も、実際に評価できた件数から
+   動的に生成するよう修正(`scripts/eval/run_baselines.py`と同じ導出方法)。
+3. **paper 4173個別調査**: 上記の通り、ローカル環境からのPDF取得自体は成功する
+   ため、代替OA locationを探す必要はなかった。今回の同梱化によりColab実行時に
+   このURLへアクセスすること自体がなくなったため、この問題は構造的に解消。
+
+**追加発見(クリーンルームテスト準備中に発覚): ground truthの実データも
+同じ問題を抱えていた**。`data/manifest/v0/curves.json`(コミット対象)は
+`n_points`・`series_label`等のメタデータのみで、**曲線のx/y実数値は
+`data/cache/ThermoelectricMaterials_curves.csv.gz`(gitignore対象)にしか
+存在しない**ことが判明。`scripts/eval/run_baselines.py`とノートブックの
+`ground_truth_for()`はどちらもこのgitignoreされたキャッシュファイルに
+直接依存しており、新規clone環境では`FileNotFoundError`で失敗する —
+今回の画像同梱と全く同じ種類の問題が、image_pathの外側にもう1つ潜んでいた。
+自分のローカル開発環境には過去のPhase 2/3収集作業でこのキャッシュが
+既にあったため、この問題にこれまで気付けなかった(§7.31の利用しやすさ点検
+でも見落としていた)。
+
+**対応**: `data/cache/ThermoelectricMaterials_curves.csv.gz`から、
+VERIFIEDレジストリが参照する30件のfigure_id分のx/y値のみを抽出し、
+`data/verified_pairs/ground_truth.json`(141KB)としてコミット
+(画像と同じ「評価に必要な分だけ同梱する」方針)。
+`scripts/eval/run_baselines.py`の`_ground_truth_for()`とノートブックCell 9の
+`ground_truth_for()`をこの新しい委託ファイルを読むよう変更。変更後も
+`mean_summary_score`が完全に一致することを確認(0.5165541204543662、不変)。
+
+**クリーンルーム疑似再現テスト(push前に実施)**: ローカルでの変更をまず
+コミット(pushはまだ)し、そのコミットを別ディレクトリに`git clone`して、
+Cell 1-4・6-7・9-10のロジックを再現するスクリプトを実行:
+- Cell 6相当: レジストリから30件のVERIFIEDペアを取得
+- Cell 7相当: 全30件が同梱画像から**ネットワーク接続なしで**解決され、
+  `skipped`が空(0件)であることを確認
+- Cell 9相当: 同梱`ground_truth.json`から30件の`DatasetItem`が
+  正しく構築されることを確認(ネットワーク・gitignore対象データいずれにも
+  依存しないことを検証)
+(mmcv/mmdetection自体はmacOSにインストールできないため、Cell 4以降の
+LineFormer推論部分はクリーンルームテストの対象外 — §7.16の既知の制約通り)
+
+**テスト**: 既存の`scripts/eval/run_baselines.py`・pytest等はデータの参照先が
+変わっただけで、`mean_summary_score`が同梱化前後で完全に一致することを再確認
+(0.5165541204543662、不変)。design §7.23のTODOリストに「実行毎のライブPDF
+再取得やgitignore対象データへの依存を残さない」という設計原則を今後の新規ペア
+追加時にも適用する旨を追記。
+
 ---
 
 ## 参考文献・調査ソース

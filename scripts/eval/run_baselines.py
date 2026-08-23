@@ -52,17 +52,20 @@ from real_chart_bench.usecase.real_image_gate import select_verified_pairings  #
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RESULTS_DIR = REPO_ROOT / "results"
 REGISTRY_PATH = REPO_ROOT / "data/verified_pairs/registry.json"
+# Committed (design §7.33): data/manifest/v0/curves.json only has metadata
+# (n_points, series_label, ...), not the actual x/y values -- those live in
+# data/cache/ThermoelectricMaterials_curves.csv.gz, which is gitignored
+# (large, regeneratable). A fresh clone therefore has no ground-truth values
+# at all unless they're committed separately -- this file is that: just the
+# x/y arrays for the figure_ids the verified-pairs registry actually
+# references (~30 figures, 141KB), extracted once and committed, the same
+# "bundle only what evaluation needs" pattern as data/verified_pairs/images/.
+GROUND_TRUTH_PATH = REPO_ROOT / "data/verified_pairs/ground_truth.json"
 
 
 def _ground_truth_for(pairing: VerifiedPairing) -> list[Curve]:
-    import csv
-    import gzip
-
-    raw_curves = []
-    with gzip.open(REPO_ROOT / "data/cache/ThermoelectricMaterials_curves.csv.gz", "rt") as f:
-        for row in csv.DictReader(f):
-            if row["figure_id"] == pairing.figure_id:
-                raw_curves.append(row)
+    ground_truth = json.loads(GROUND_TRUTH_PATH.read_text())
+    raw_curves = ground_truth.get(pairing.figure_id, [])
 
     # Some Starrydata rows are empty digitization artifacts (n_points=0, see
     # data/verified_pairs/registry.json evidence for paper 4965) -- Curve
@@ -70,8 +73,8 @@ def _ground_truth_for(pairing: VerifiedPairing) -> list[Curve]:
     # truth either way, so it's dropped rather than crashing the whole run.
     curves = []
     for row in raw_curves:
-        x_values = tuple(json.loads(row["x"]))
-        y_values = tuple(json.loads(row["y"]))
+        x_values = tuple(row["x"])
+        y_values = tuple(row["y"])
         if not x_values:
             continue
         curves.append(Curve(x_values=x_values, y_values=y_values, series_label=row["prop_y"]))
