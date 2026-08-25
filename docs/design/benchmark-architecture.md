@@ -1478,6 +1478,106 @@ Colab実GPU環境での実行を100%保証するものではない。torch/CUDA�
 したかを即座に印字する設計にしてあるので、原因特定は大幅に容易になって
 いるはず。
 
+### 7.35 Colab 7回目実行の失敗修正: Python 3.12ではtorch 1.13.1のwheelが存在しない(2026-08-26、HQ優先割込み #31)
+
+**症状**: オーナーの7回目のColab実行は、§7.34のmmcv-full修正により
+`import infer`のImportError自体は解消したが、その手前の
+`pip install torch==1.13.1+cu117`が**候補すら見つからず**失敗
+(提示される候補は`2.5.0`以降のみ)。
+
+**根本原因**: Colabの既定ランタイムがPython 3.12へ更新されており、
+`torch==1.13.1+cu117`にはそもそも`cp312`向けwheelが存在しない。
+`https://download.pytorch.org/whl/cu117/torch/`を直接確認したところ
+`torch-1.13.1+cu117`のLinux wheelは`cp37`〜`cp311`までで、`cp312`は
+ビルドされたことがない(indexURLやフラグでは存在しないwheelを出現させ
+られない)。`mmcv_full==1.7.2`も同様に`cp310`/`cp311`止まりであることを
+OpenMMLab自身のwheel index
+(`https://download.openmmlab.com/mmcv/dist/cu117/torch1.13.0/index.html`)
+で確認。LineFormer自身の`install.sh`も`python=3.8`を前提としており、
+Python 3.12ではこのバージョン系列のスタックそのものが成立しない。
+
+**方針決定(HQ指示: 案A=mmdet 3.x/mmcv 2.x移行、案B=condacolabでPython 3.10化、
+のいずれかを検証の上選定)**:
+
+- **案A(mmdet 3.x/mmcv 2.x/torch 2.x移行)を却下**: LineFormerが同梱する
+  `mmdetection/`はmmdet 2.x世代のconfig/registryシステムで書かれており、
+  事前学習済みcheckpoint(`iter_3000.pth`)もその世代のモデル構造に
+  紐づいている。mmdet 3.xはconfig形式・レジストリを破壊的に刷新しており、
+  LineFormer側・OpenMMLab側双方に公式の変換パスが存在しない。config
+  全面書き換え+checkpointのkey対応という研究レベルの作業になり、
+  成功する保証もない。ノートブック修正の範囲を超えると判断し却下。
+- **案B(condacolab)を検証した上で却下**: `pip install condacolab`で
+  実際に取得できる公開版(0.1.12、2026-08-26時点)のソースを直接読んだ
+  ところ、`TARGET_PYTHON = "3.12"`が**ハードコード**されており、
+  `_check_python()`は「Colabの現在のPythonが3.12と完全一致すること」を
+  `assert`で強制する。`python_version`引数は存在せず、pixiベースの実装
+  でもない(GitHub `main`ブランチのREADMEはリリース版と乖離した未来の
+  書き換え案を記述していたと見られる — WebFetch調査結果を鵜呑みにせず
+  実際にpip installして確認したことで発覚)。condacolabは「Colabの
+  *既存の* Pythonにconda-forgeパッケージ管理を追加する」ためのツールで
+  あり、「別のPythonバージョンに切り替える」用途には使えないと判明。
+  案Bも当初想定の形では成立しない。
+
+**採用した方針**: ノートブックのカーネル自体はColabの既定Python
+(現在3.12)のまま一切変更せず、**LineFormer専用の完全に独立した
+Python 3.10環境**を[`uv`](https://docs.astral.sh/uv/)で構築し
+(`uv python install 3.10`によるスタンドアロン・自己完結型CPythonビルド
+— apt/condaリポジトリに一切依存しない)、`LineFormerModelRunner`から
+**サブプロセスとして**そのPython 3.10インタプリタを呼び出す設計に変更。
+ノートブックのカーネルプロセス自体は`torch`/`mmcv`/`mmdet`を一切
+importしないため、カーネル再起動が完全に不要になった(§7.34時点の
+`condacolab`案では「カーネル再起動が発生する、再起動後は次のセルから
+続行する」という運用上の脆さが残っていたが、この設計ではその脆さ自体が
+消える)。
+
+**追加で発覚した問題と対応: `mim install mmcv-full`が`pkg_resources`欠如で
+クラッシュ**。`uv venv`はデフォルトで`pip`/`setuptools`をシードしない
+(uv自身がインストールを管理するため)。ローカルで`uv`製のvenvに対し
+実際に`pip install -U openmim` → `mim install mmcv-full`を実行したところ、
+`ModuleNotFoundError: No module named 'pkg_resources'`でクラッシュする
+ことを確認 — `mim`が実行時に非推奨化された`pkg_resources`
+(`setuptools`本体からAPI削除済み、現行版`setuptools==84.0.0`で確認)に
+依存しているため。**対応**: `mim`を経由せず、OpenMMLabの
+wheel index(`.../cu117/torch1.13.0/index.html`)を`pip`の`-f`
+(`--find-links`)で直接指定してインストールする方式に変更。これは
+`mim`の「インストール済みtorchバージョンを自動検出してindex URLを選ぶ」
+という薄い利便性レイヤーを完全に迂回するもので、`uv pip install
+--dry-run --python-platform linux`でmmcv-full==1.7.2とその推移的依存
+(addict, yapf等)がこのURLから過不足なく解決されることをローカルで
+確認済み。念のため`setuptools<81`(`pkg_resources`を含む最後の世代、
+ローカルで動作確認済み)も明示的にインストールし、mmcv-full/mmdet
+自体の実行時コードが同じ理由で壊れる可能性にも備えた。
+
+**ローカルでの実機検証(macOS、Colabの完全な代替にはならないが可能な
+範囲で)**:
+- `uv python install 3.10` → `uv venv --python 3.10` → `uv pip install`
+  の一連の流れが実際に動作することを確認(標準出力を記録)。
+- `uv pip install --dry-run --python-platform linux <pkg>`で、Linux
+  ターゲットに対する依存解決を**実際にダウンロードせずに**検証:
+  - `torch==1.13.1+cu117` + `torchvision==0.14.1+cu117`(cu117 wheel
+    index)が10パッケージ全て解決。
+  - `mmcv-full==1.7.2`(OpenMMLab wheel index)+ 残りのplain-pip依存
+    (chardet, scikit-image, matplotlib, opencv-python, pillow,
+    scipy==1.9.3, bresenham, tqdm)が全て解決。
+- `mim install mmcv-full`の`pkg_resources`クラッシュを実際に再現し、
+  `setuptools<81`で解消することを確認。
+- ノートブックJSON妥当性 + 全10コードセルのPython構文検証(シェル
+  マジック行を除去した上で`compile()`)、および埋め込みワーカースクリプト
+  文字列単体の構文検証も実施、全てパス。
+- pytest 216件・ruff・import-linterは本ノートブック以外に変更がないため
+  全てgreen。
+
+**検証できなかった残存リスク(正直に明記)**: LineFormer同梱の
+`mmdetection/`自体のビルド(`pip install -e mmdetection`、Cコンパイル
+を伴う可能性がある)は、mmcv-full自体がLinux+CUDA専用のprebuiltバイナリ
+でmacOSにインストールできないため、この環境からは検証不可能
+(§7.16の既知の制約と同根)。またColab実GPU環境での実際のtorch.cuda
+可用性・checkpointロード・推論結果の妥当性も同様に未検証。この2点は
+構造上、実Colab環境でしか確認できない。ノートブックのCell 2は
+これらの失敗点に対して「何が・なぜ失敗したか」を即座に印字して停止する
+検証ブロックを備えているため、万一次回も失敗する場合の原因特定は
+大幅に容易なはず。
+
 ---
 
 ## 参考文献・調査ソース
