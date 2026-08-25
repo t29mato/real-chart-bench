@@ -1383,6 +1383,101 @@ LineFormer推論部分はクリーンルームテストの対象外 — §7.16�
 再取得やgitignore対象データへの依存を残さない」という設計原則を今後の新規ペア
 追加時にも適用する旨を追記。
 
+### 7.34 Colab 5回目実行の失敗修正: mmcv誤ジェネレーションのインストール(2026-08-25、HQ優先割込み)
+
+**症状**: オーナーの5回目のColab実行は、§7.33の画像同梱修正により以前の
+失敗ポイント(paper 4173 PDF fetch)を全て通過したが、新たに
+`import infer as lineformer_infer` の行で
+`ModuleNotFoundError: No module named 'mmcv'` により失敗。
+
+**根本原因**: このノートブックのCell 4(インストールセル)は当初、Colab環境への
+実アクセスなしに記憶ベースで書かれたもので、`mmcv>=2.0.0` + `mmengine` +
+PyPI `mmdet`(=OpenMMLabの**新世代**、mmcv 2.x系列)をインストールしていた。
+しかしLineFormer本体(`TheJaeLal/LineFormer`)が要求するのは**旧世代**
+(mmcv 1.x系列、PyPI配布名`mmcv-full`)であり、両者は非互換 — これが
+`mmcv`モジュールが見つからない直接原因だった。WebFetchでLineFormerの
+実ソースを調査し、以下を確認した:
+
+- `install.sh`(リポジトリルート)の実際のコマンド列: `conda create -n
+  LineFormer python=3.8` → `pip install openmim` →
+  `conda install pytorch==1.13.1 torchvision==0.14.1 pytorch-cuda=11.7
+  -c pytorch -c nvidia` → **`mim install mmcv-full`**(`mmcv`ではない) →
+  scikit-image・matplotlib・opencv-python・pillow・`scipy==1.9.3`等の
+  素のpip install → **`pip install -e mmdetection`**(リポジトリ直下に
+  同梱された、LineFormer自身が改変した`mmdetection/`ディレクトリのeditable
+  install。PyPIの`mmdet`パッケージではない。`.gitmodules`が404で
+  存在しないため、submoduleではなく通常のディレクトリと確認済み) →
+  `pip install bresenham tqdm`。
+- READMEの推論APIサンプルコードから、`infer.load_model(CONFIG, CKPT,
+  DEVICE)`が**3引数**であることが判明(このノートブックの
+  `LineFormerModelRunner.__init__`は2引数しか渡していなかった —
+  これも次に踏むはずだった失敗ポイント)。
+- pretrained checkpointはGoogle Driveの**フォルダ**リンク
+  (`https://drive.google.com/drive/folders/1K_zLZwgoUIAJtfjwfCU5Nv33k17R0O5T`、
+  ファイル名`iter_3000.pth`)のみで、単一ファイルの直接URLは存在しない。
+  従来のCell 4は`CHECKPOINT_URL = ""`という未設定のプレースホルダのまま
+  だった(次に必ず踏む失敗ポイント)。
+- `mmcv-full`はPyPIから削除・非推奨化されておらず、2026-08-25時点で
+  最新版1.7.2(2023-12-29リリース)がまだ取得可能なことをPyPI JSON APIで確認。
+
+**修正内容**(`notebooks/lineformer_colab.ipynb`):
+
+1. **Cell 4を全面書き換え**: (a) `mmcv-full`が求めるtorch/CUDAとの厳密な
+   適合を担保するため、`install.sh`が想定する組み合わせ
+   (`torch==1.13.1+cu117` / `torchvision==0.14.1+cu117`、PyTorchのcu117
+   wheel indexから明示pip install)を先に固定してから`mim install
+   mmcv-full`を実行 — Colabの既定torch/CUDAが日によって変わっても
+   ズレを起こさない。(b) `pip install -e mmdetection`でLineFormer同梱の
+   mmdetectionをeditable install(PyPI `mmdet`は使わない)。
+   (c) `install.sh`に列挙された残りの素のpip依存(chardet・scikit-image・
+   matplotlib・opencv-python・pillow・`scipy==1.9.3`・bresenham・tqdm)と、
+   checkpointダウンロード用の`gdown`を追加。
+2. **インストール直後の検証ブロックを同セルに追加**: `torch`・`mmcv`・
+   `mmdet`(LineFormer同梱mmdetectionのimport名)・`infer`(LineFormer自身の
+   モジュール)を順にimportし、成功したものは`OK: {label}
+   (version=...)`、失敗したものは`FAILED: {label} -- {例外型}: {メッセージ}`
+   を個別に印字。1つでも失敗すれば、どのモジュールで何が原因かを含む
+   `RuntimeError`で即座に停止し、以降のセルを実行させない(既存のCell 2の
+   `real_chart_bench`インストール確認と同じ「その場で大声で失敗する」規約
+   を踏襲)。torch/CUDAのバージョンドリフトが最も疑わしい原因である旨も
+   メッセージに含めた。
+3. **checkpointダウンロード経路の確認・修正**: 未設定の`CHECKPOINT_URL =
+   ""`を撤廃し、`gdown --folder`でGoogle Driveフォルダから取得する実装に
+   置き換え。フォルダ構造がそのまま複製されるため、`iter_3000.pth`を
+   `rglob`で探索して期待パスへ配置し、最終的にファイルサイズ付きで
+   `OK: checkpoint present at ...`を印字するか、見つからなければ移動先
+   リンクの確認を促す`RuntimeError`で停止するようにした。
+4. **Cell 12(`LineFormerModelRunner`)を修正**: `__init__`に`device`引数
+   (未指定時はCUDA利用可否から自動判定)を追加し、
+   `infer.load_model(config_path, checkpoint_path, device)`と3引数で
+   呼び出すよう修正。`get_dataseries(..., to_clean=True)`はREADMEの例
+   (`to_clean=False`)とあえて異なる値のままとした — LineFormer自身の
+   後処理を使うかどうかの選択であり、APIの必須要件ではないため。この
+   意図をコメントに明記。
+5. **Cell 3(markdown)を更新**: 「未検証の推測」という当初の注記を、
+   「LineFormerの実ソース(`install.sh`・`README.md`、2026-08-25取得)に
+   照らして検証済みだが、実Colab GPU環境ではまだ実行していない」という
+   正確な状態に書き換えた。
+
+**検証(このセッションからColabに実アクセスできないため、可能な範囲)**:
+notebookのJSON妥当性確認、および全コードセルからシェルマジック行
+(`!`・`%`始まりの行、複数行に渡る`\`継続を含む)を空文除去した上での
+`compile()`によるPython構文検証 — 全9コードセルがエラーなく通過。
+mmcv/mmdetection自体はmacOSにインストールできないため(§7.16の既知の
+制約)、torch/mmcv/mmdetのインストールと実推論そのものは今回もクリーン
+ルームテストの対象外 — これは**実Colab環境でしか検証できない残存リスク**
+として正直に明記する。pytest 216件・ruff・import-linterは本ノートブック
+以外に変更がないため全てgreenのまま(既存のnotebooks除外ルールにより
+ruffの対象外)。
+
+**スコープ上の正直な限界**: この修正はLineFormerの公開ソース
+(`install.sh`・`README.md`)との整合性を可能な限り高めたものであり、
+Colab実GPU環境での実行を100%保証するものではない。torch/CUDAの組み合わせ
+やGoogle Driveフォルダのダウンロード挙動はColab側の実行時条件に依存する
+ため、万一次回も失敗する場合はCell 4の検証ブロックが「何が・なぜ」失敗
+したかを即座に印字する設計にしてあるので、原因特定は大幅に容易になって
+いるはず。
+
 ---
 
 ## 参考文献・調査ソース
