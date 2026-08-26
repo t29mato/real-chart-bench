@@ -1649,3 +1649,91 @@ import-linterは全てgreen(本ノートブック以外への変更なし)。
 可用性、実際の推論結果の妥当性は、この環境からは引き続き検証不可能
 (§7.16/§7.35と同じ制約)。Cell 2の検証ブロックは今回も「何が・なぜ
 失敗したか」を即座に印字して停止する設計を維持している。
+
+---
+
+### 7.37 Colab 11回目実行の失敗修正: to_clean=Trueの誤用とエラー伝播の欠陥(2026-08-27、HQ優先割込み #31)
+
+**症状**: オーナーの11回目のColab実行は、インストール検証・30ペアの評価
+ループ完走まで到達したが、**全33図**(検証済み30ペア + 合成figure 3件、
+黒線のsyntheticも含む)が`RuntimeError: LineFormer worker subprocess
+failed: TypeError: 'NoneType' object is not subscriptable`で失敗し、
+`mean_summary_score: 0.0`が記録された結果JSONが出力された
+(`results-owner-run-2026-08-26.json`としてリポジトリ直下に配置)。
+
+**根本原因の特定**: LineFormerの実ソース(`infer.py`・`clean_chart.py`、
+2026-08-27取得)を1行ずつ精読して特定。worker scriptは
+`lineformer_infer.get_dataseries(img, to_clean=True)`を呼んでいたが、
+`to_clean=True`は内部で`get_clean_input(img, annot)`を呼び出し、これは
+PMCコンペティション形式の`annot`辞書
+(`annot['task6']['input']['task4_output']['axes']`等)に何段も深く
+アクセスする。本ノートブックは実世界の任意の図に対してこの`annot`を
+持っておらず構築もできないため、常に`annot=None`(デフォルト値、
+これまで一度も渡していなかった)のまま呼ばれており、この辞書アクセスが
+`TypeError: 'NoneType' object is not subscriptable`を**必ず**発生させる
+— 画像の内容に関係なく、合成figureも含め全件で同一のエラーになる
+という観測事実と完全に整合する。以前のバージョンのこのセルで
+`to_clean=True`を選んだのは「品質が上がるだけのはず」という推測コメント
+付きの判断だったが、LineFormerのREADMEの実例(`to_clean=False`)から
+逸脱するこの選択の実際の要求引数を検証していなかったのが誤り。
+`to_clean=False`(README実例通り)に修正。
+
+**副次的に発見した2件目のバグ**: `get_dataseries()`の実際の戻り値は
+「各lineごとの`{x:, y:}` **辞書**のリスト」(`infer.py`の docstring・
+`interpolate()`関数の実装で確認)であり、`(x, y)`の**タプル**ではない。
+worker scriptのJSON payload構築コード`for x, y in points`は、`points`が
+辞書のリストの場合、辞書のキー("x", "y"という文字列)をアンパックして
+しまい、`to_clean=True`のクラッシュが直った直後にこの誤変換で
+`ValueError: could not convert string to float: 'x'`という**新しい**
+クラッシュに置き換わっていたはずだった。両方まとめて修正しなければ
+オーナーの12回目実行がまた別の理由で即座に失敗する構造だったため、
+今回で両方修正。
+
+**HQ指示(2): エラー伝播の構造的欠陥への対応**。この失敗が11回の往復を
+要した実質的な理由は、根本原因の特定しにくさそのものよりも、**診断に
+必要な情報が構造的に握り潰されていたこと**にあった:
+`LineFormerModelRunner.extract()`は`result.stderr.strip().splitlines()[-1]`
+(stderrの最後の1行のみ)を`RuntimeError`のメッセージにしていたため、
+`evaluate_dataset.py`の`FigureResult.error = f"{type(exc).__name__}:
+{exc}"`(既存の共通usecase層コード、変更不要)を経由して結果JSONに載る
+`error`フィールドは`TypeError: 'NoneType' object is not subscriptable`
+の1行だけになり、どのファイルのどの行で発生したかが完全に失われていた。
+**対応**: (a) worker script自体に`try/except` + `traceback.print_exc()`
+を追加し、stderrに明確なマーカー付きで完全なトレースバックを出力する
+よう変更、(b) `LineFormerModelRunner.extract()`・Cell 2の`_check()`の
+両方で、`result.stderr`の**全文**を例外メッセージに含めるよう変更
+(最後の1行への切り詰めを廃止)。ローカルで実際にこの伝播ロジックを
+検証: `annot["task6"]`とほぼ同じ最小コードを持つダミーworkerスクリプトを
+サブプロセスとして実行し、旧ロジック(最終行のみ)が報告と一字一句同じ
+`TypeError: 'NoneType' object is not subscriptable`しか出さないのに対し、
+新ロジック(全文)は`annot["task6"]`の行番号まで含む完全なトレースバック
+を再現することを確認した。
+
+**HQ指示(3): 全図失敗時の書き込み拒否ガード**。Cell 6(評価結果の
+書き込みセル)に、`per_figure`の**全件**が`error`を持つ場合(1件も
+成功していない場合)は`mean_summary_score`を含む結果JSONを書き出さず
+`RuntimeError`で停止するガードを追加。動作中のハーネスが本当に0点を
+出した場合と、ハーネス自体が壊れて全滅した場合はJSON単体からは区別が
+つかず、後者を誤ってリーダーボードに載せる事故を構造的に防ぐ。少なくとも
+1件成功していれば(部分的失敗)ガードは発動せず、既存のskip-and-report
+方針(§7.33)通り動作を継続する。ローカルで両分岐(全滅/部分成功)を
+単体ロジックとして再現し、意図通りガードが発動/非発動することを確認。
+
+**検証**: ノートブックJSON妥当性、全9コードセル+埋め込みworkerスクリプト
+(82行に増加)の構文検証、実際のLineFormer戻り値形式(辞書のリスト)を
+模したダミーデータでの新payload構築ロジックの動作確認、旧ロジックが
+同じ入力で実際に`ValueError`を出すことの確認、stderr全文伝播ロジックの
+サブプロセスでの実地再現、全図失敗ガードの単体ロジック確認、いずれも
+実施しローカルで通過を確認。pytest 216件・ruff・import-linterは本
+ノートブック以外に変更がないため全てgreen。`evaluate_dataset.py`
+(usecase層、既存の共通コード)は変更していない — `FigureResult.error`が
+`str(exc)`をそのまま使う設計は正しく、問題は`exc`自身の中身が薄すぎた
+ことだった。
+
+**正直な残存リスク**: 今回の修正でLineFormerが実際に有効な推論結果を
+返すかどうか(checkpointの読み込み成否・GPU推論の数値的な妥当性等)は、
+mmcv-fullがmacOS向けwheelを持たないため引き続きこの環境からは検証
+不可能(§7.16と同じ制約)。ただし今回のエラー伝播修正により、万一
+次回も失敗する場合は完全なトレースバックが結果JSONの`error`フィールドに
+残るため、原因特定にオーナーの往復を追加で要する可能性は大幅に下がる
+はず。
