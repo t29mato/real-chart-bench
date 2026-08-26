@@ -1591,3 +1591,61 @@ wheel index(`.../cu117/torch1.13.0/index.html`)を`pip`の`-f`
 - ICDAR CHART-Infographics Competition (Task 6a/6b) — https://chartinfo.github.io/
 - OpenAlex technical documentation (Location object / license field) — https://docs.openalex.org/
 - PMC Open Access Subset — https://pmc.ncbi.nlm.nih.gov/tools/openftlist
+
+---
+
+### 7.36 Colab 9回目実行の失敗修正: --no-build-isolation と MPLBACKEND(2026-08-27、HQ優先割込み #31)
+
+**前進の確認**: オーナーの9回目のColab実行で、§7.35のuv製Python 3.10隔離
+環境化により`torch==1.13.1+cu117`・`mmcv-full==1.7.2`のインストールは
+成功し、Cell 2の自己診断検証ブロックも設計通り機能した(失敗箇所を
+その場で明確に印字)。残る失敗は2件、いずれも原因が明確だった。
+
+**失敗1: `pip install -e mmdetection`が`build_editable`中に
+`ModuleNotFoundError: No module named 'torch'`**。`torch`はCell 2の直前の
+ステップで`PY310_VENV`に確実にインストール済みだったにもかかわらず失敗。
+原因: `uv pip install -e`はデフォルトでPEP 517パッケージを**独立した
+ビルド専用環境**でビルドする(ターゲットvenvとは別)。`mmdetection`の
+`setup.py`はモジュールレベルで`import torch`しているため、ビルド環境に
+torchが無く失敗する。**ローカルで実際に再現・修正を確認**(2026-08-27):
+`setup.py`内で`import torch`する最小のダミーパッケージを作成し、
+`uv pip install -e`が同じ理由で失敗することを確認、`--no-build-isolation`
+を追加すると成功することを確認した(ビルドがターゲットvenv自身の
+既インストール済みパッケージを使うようになるため)。Cell 2の
+`-e mmdetection`インストールに`--no-build-isolation`を追加。
+
+**失敗2: `import infer`が`ValueError: 'module://matplotlib_inline.backend_inline'
+is not a valid value for backend`で失敗**。原因: ColabのJupyterカーネル
+プロセス自身が、IPythonの表示機構の一部である`matplotlib_inline`という
+バックエンドモジュール名を環境変数`MPLBACKEND`に設定しており、この
+環境変数はカーネルから起動される全てのサブプロセス(`PY310`ワーカー
+プロセスを含む)に**継承される**。`matplotlib_inline`はIPython専用の
+パッケージで`PY310_VENV`には(意図的に)インストールしていないため、
+`mmcv`/LineFormer経由で間接的にimportされる`matplotlib`がバックエンド名
+を解決できずimport時にクラッシュする。**ローカルで実際に再現・修正を
+確認**(2026-08-27): `MPLBACKEND`をその文字列に設定した状態で
+`import matplotlib.pyplot`を実行し、報告と一字一句同じ`ValueError`を
+再現。`MPLBACKEND=Agg`(ヘッドレス・非対話的なバックエンド — 対話的な
+workerスクリプトには本来これが適切)に上書きすると解消することを確認。
+
+**対応**: `PY310`を呼び出す全てのsubprocess呼び出し箇所
+(Cell 2の検証ブロック`_check()`、Cell 5の
+`LineFormerModelRunner.extract()`内の`subprocess.run()`)に、
+`env={**os.environ, "MPLBACKEND": "Agg"}`を明示的に渡すよう変更。
+Colabカーネル自身の環境変数に依存せず、常に上書きする。
+
+**検証**: HQ指示通り、ビルド分離まわりの問題は`uv pip install --dry-run`
+等でローカル再現可能な範囲を検証した(mmdetection自体はmmcv-fullが
+macOS向けwheelを持たないため実際にビルドできないが、`--no-build-
+isolation`が「ビルド時にターゲットvenvの既存パッケージを使う」という
+一般的な挙動としては、torchをimportする最小ダミーパッケージで完全に
+再現・修正確認済み)。MPLBACKEND問題は完全にPython標準ライブラリ+
+matplotlibのみで再現可能なため、実際の失敗メッセージと一字一句同じ
+エラーを再現した上で修正を確認した。ノートブックJSON妥当性、全9コード
+セル+埋め込みworkerスクリプトの構文検証、pytest 216件・ruff・
+import-linterは全てgreen(本ノートブック以外への変更なし)。
+
+**正直な残存リスク**: mmdetection自体の実際のビルド成功、torch.cuda
+可用性、実際の推論結果の妥当性は、この環境からは引き続き検証不可能
+(§7.16/§7.35と同じ制約)。Cell 2の検証ブロックは今回も「何が・なぜ
+失敗したか」を即座に印字して停止する設計を維持している。
