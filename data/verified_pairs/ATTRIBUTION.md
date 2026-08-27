@@ -24,6 +24,11 @@ underlying data (curve values) is unchanged either way.
 | [10.1038/s41598-018-28043-3](https://doi.org/10.1038/s41598-018-28043-3) | cc-by | `data/verified_pairs/images/18759/p04_embedded_4.jpg` | no |
 | [10.1038/s41598-019-39786-y](https://doi.org/10.1038/s41598-019-39786-y) | cc-by | `data/verified_pairs/crops/22102/fig3a.png` | yes |
 | [10.1038/s41598-019-39786-y](https://doi.org/10.1038/s41598-019-39786-y) | cc-by | `data/verified_pairs/crops/22102/fig3c.png` | yes |
+| [10.1038/s41598-020-65818-z](https://doi.org/10.1038/s41598-020-65818-z) | cc-by | `data/verified_pairs/crops/27759/fig16a.png` | yes |
+| [10.1038/s41598-020-65818-z](https://doi.org/10.1038/s41598-020-65818-z) | cc-by | `data/verified_pairs/crops/27759/fig16b.png` | yes |
+| [10.1038/s41598-020-65818-z](https://doi.org/10.1038/s41598-020-65818-z) | cc-by | `data/verified_pairs/images/27759/p06_embedded_7.jpg` | no |
+| [10.1038/s41598-020-65818-z](https://doi.org/10.1038/s41598-020-65818-z) | cc-by | `data/verified_pairs/images/27759/p07_embedded_8.jpg` | no |
+| [10.1038/s41598-020-65818-z](https://doi.org/10.1038/s41598-020-65818-z) | cc-by | `data/verified_pairs/images/27759/p10_embedded_11.jpg` | no |
 | [10.1038/srep13706](https://doi.org/10.1038/srep13706) | cc-by | `data/verified_pairs/images/5166/p07_embedded_6.jpg` | no |
 | [10.1038/srep18805](https://doi.org/10.1038/srep18805) | cc-by | `data/verified_pairs/images/17037/p07_embedded_7.jpg` | no |
 | [10.1038/srep19014](https://doi.org/10.1038/srep19014) | cc-by | `data/verified_pairs/images/17038/p05_embedded_5.jpg` | no |
@@ -44,3 +49,10 @@ underlying data (curve values) is unchanged either way.
 | [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4a.png` | yes |
 | [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4b.png` | yes |
 | [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4c.png` | yes |
+| [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig4a.png` | yes |
+| [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig4b.png` | yes |
+| [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig4c.png` | yes |
+| [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig6a.png` | yes |
+| [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig6c.png` | yes |
+| [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig8a.png` | yes |
+| [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig8b.png` | yes |

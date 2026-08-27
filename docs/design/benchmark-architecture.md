@@ -1792,3 +1792,78 @@ x_scaleは`results/*.json`自体には含まれない(`FigureResult`はfigure_id
 確認。pytest 225件(既存216件+新規9件)全てgreen、domain層カバレッジ
 100%不変(新規コードはusecase層でdomain層に変更なし)、ruff・
 import-linterともにgreen(usecase→domain方向の依存のみ、循環なし)。
+
+---
+
+### 7.39 検証済みペア30件 → 42件到達(2026-08-27〜28、HQ全力稼働指示・サブエージェント委譲)
+
+**背景**: §7.38と同じHQ全力稼働指示のうち「検証済みペアをさらに拡充」の
+部分。worktree隔離したサブエージェントに調査・登録作業を委譲し(コミット
+禁止・レビュー前提)、完了後に自分で内容をレビューした上でmainへ統合した。
+
+**新規VERIFIED12件**(既存30件+この節の12件=計42件、未使用だった576論文
+から新規2論文を採用):
+
+| paper | 内容 | 図数 | 特記事項 |
+|---|---|---|---|
+| 27759(Nature Sci Rep、DOI 10.1038/s41598-020-65818-z、Y-Al-B14ホウ化物熱電材料) | 電気伝導率(log-y、4系列)・Seebeck係数(4系列、本パネル+インセットだが同一量のため未クロップ)・熱伝導率(3系列、4系列中1系列は未デジタイズ)・パワーファクター(log-y、4系列)・ZT(3系列) | 5図 | 図16はa/b(パワーファクター/ZT)の2パネル画像を軸単位が異なるため個別クロップ |
+| 29352(Frontiers in Materials、DOI 10.3389/fmats.2020.569723、Bi2Te3/Bi0.5Sb1.5Te3のマイクロ波合成 vs 機械的合金化比較) | 電気伝導率・Seebeck係数・パワーファクター vs T(各2系列、3パネル縦積み画像を個別クロップ)、全熱伝導率・格子熱伝導率 vs T(各2系列、κ_elパネルは未デジタイズにつき正しくスキップ)、ZT vs T(各2系列、**横並び2パネル**画像を個別クロップ — 既存レジストリに無かった新しいクロップレイアウト) | 7図 | MW法とMA法のクロスオーバー挙動・非単調な形状(ピーク、U字カーブ)まで数値照合 |
+
+**ライセンス検証**: 両論文ともPDF本文を直接確認(§7.32の教訓通り、
+`papers.json`/OpenAlexの分類を鵜呑みにせず)。サブエージェントの報告後、
+自分でも独立に再検証した: `HttpPdfFetchAdapter`で両PDFを再取得し
+`pymupdf`でテキスト抽出、"creative commons"を検索した結果、
+- paper 27759: "This article is licensed under a Creative Commons
+  Attribution 4.0 International License"
+- paper 29352: "This is an open-access article distributed under the
+  terms of the Creative Commons Attribution License (CC BY)"
+
+をそれぞれ確認、NC/ND等の制限文言なし。OpenAlex APIでも両DOIとも
+`license: "cc-by"`(best_oa_location/primary_location一致)で補強確認。
+
+**数値証拠の抜き取り再検証**: figure_id=25217(paper 27759 Fig 7、電気伝導率
+log-y、4系列)について、`data/cache/ThermoelectricMaterials_curves.csv.gz`
+から該当DOIの4curveを自分で再抽出し、レジストリのevidence文に記載された
+x/y範囲(373-973K、0.235-288.4/3283-4616/11306-13316/18840-20223 S/m)と
+完全一致することを確認。該当画像(`p06_embedded_7.jpg`)も目視で、
+log-y軸・4系列(黒が他より2桁低い、との記載通り)が図と一致することを確認。
+画像ファイル12点(images/27759/ 3点、crops/27759/ 2点、crops/29352/ 7点)は
+いずれも0バイトでなく妥当なサイズであることも確認。
+
+**新規発見(登録せず、記録のみ、HQ判断待ち)**: paper 28438(Bulletin of
+the Polish Academy of Sciences、DOI 10.24425/bpasts.2020.131835)は
+`papers.json`/OpenAlexともに`license_id: "cc-by"`、出版社サイトもCC BY 4.0を
+謳っているが、**PDF全10ページ本文のどこにもライセンス文言が一切見当たらな
+かった**(サブエージェント報告、自分では未再検証)。§7.32のpaper 14482
+(実際はNC制限なのにOpenAlexがcc-byと誤分類)とは逆方向の食い違い
+(メタデータは楽観的、PDF内に確認できる記述がない)であり、数値・画像の
+不一致ではなく純粋なライセンス確認上のギャップのため、REJECTEDには登録
+せず、VERIFIED/REJECTEDいずれにも未登録のまま保留する。603論文コーパス
+全体の自動分類パイプラインの信頼性に関わる可能性がある事項であり、
+§7.32同様、自分の権限では単独で分類方針の見直しを開始しない。**HQに
+判断を仰ぐ**(候補として使うか、PDFのXMPメタデータや出版社サイト直接
+確認等の追加調査を行うか)。
+
+その他、`papers.json`のライセンスは確認したが数値照合まで手が回らな
+かった4論文(31631, 33853, 43691, 50775)のDOIをサブエージェントが記録
+済み — 将来の拡充時の候補プールとして再利用できる。
+
+**結果**: `data/verified_pairs/registry.json`は計51エントリ(VERIFIED 42、
+REJECTED 9)。`data/verified_pairs/ground_truth.json`・
+`data/verified_pairs/ATTRIBUTION.md`を再生成し整合性を維持(§7.33の
+「常に導出する」方針通り、手書き更新はしていない)。
+`scripts/eval/run_baselines.py`再実行(45図: 実画像42+合成3、
+`dataset_version`が自動的に`v0-eval-pilot-n42`に更新、
+`mean_summary_score=0.5918`、30件時の0.517から上昇)。`site/index.html`も
+最新の`scripts/leaderboard/generate.py`(§7.38の図タイプ別内訳機能込み)で
+再生成。
+
+**作業プロセス上の注記**: サブエージェントはworktree隔離環境で作業し、
+コミット・pushは一切行わなかった(指示通り)。差分の大部分(542行)は
+新規12件本体ではなく、既存39件を`json.dump(indent=2)`スタイルへ再整形した
+副作用(配列を複数行に展開)だったため、統合前に新旧の全39エントリを
+Pythonでパース・突合し、**内容面での差分がゼロ**(キー追加のみ、削除・
+変更なし)であることを機械的に確認してから採用した。
+
+**テスト**: レジストリ拡充はデータ変更のみのため既存225テストに変更なし、
+すべてgreenを再確認。ruff・import-linterもgreen。
