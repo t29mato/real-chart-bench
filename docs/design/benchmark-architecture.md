@@ -1737,3 +1737,58 @@ mmcv-fullがmacOS向けwheelを持たないため引き続きこの環境から�
 次回も失敗する場合は完全なトレースバックが結果JSONの`error`フィールドに
 残るため、原因特定にオーナーの往復を追加で要する可能性は大幅に下がる
 はず。
+
+---
+
+### 7.38 リーダーボード表示整備: 図タイプ別内訳(2026-08-27、HQ全力稼働指示)
+
+**背景**: HQ全力稼働指示(オーナー指示、約2時間フル並列稼働)のうち
+「リーダーボードの表示整備(モデル別・図タイプ別の内訳)」に対応。
+「検証済みペアを20→30件へ拡充」は既に§7.32で完了済みであることを
+着手前に確認し、HQに30件からのさらなる拡充で良いか確認を取った上で、
+別途サブエージェントに拡充作業を並行委譲した(結果は別セクションで
+後日報告)。本節はリーダーボード整備の部分。
+
+**設計**: 「図タイプ」の分類は、既存のデータから新たな収集パイプラインを
+追加せずに導出できる、かつ既知の弱点(§7.22/§7.32で文書化済み: naive-cv
+baselineは黒/灰色系列を検出できない、log軸は評価上の既知の難所)を
+そのまま可視化できる粒度として、以下の3分類を採用した:
+- `synthetic`: 合成figure(figure_idが`synthetic-`始まり)
+- `real-linear-x`: 実figureのうちx軸が線形スケール
+- `real-log-x`: 実figureのうちx軸が対数スケール
+
+x_scaleは`results/*.json`自体には含まれない(`FigureResult`はfigure_id・
+スコア群のみ、design: evaluate_dataset.py参照)ため、
+`data/verified_pairs/registry.json`(既にコミット済み)の
+`VerifiedPairing.x_scale`と`f"{paper_id}-{figure_id}"`キーで突き合わせる
+構成にした。新しいデータ収集は一切不要。
+
+**実装**(クリーンアーキテクチャ・TDD準拠):
+- `src/real_chart_bench/usecase/build_leaderboard_breakdown.py`(新規):
+  `categorize_figure()`(1件のfigure_idをカテゴリ文字列へ分類)・
+  `build_model_breakdown()`(1モデルの結果を図タイプ別に集計、
+  カテゴリごとの平均スコアと件数を返す)。既存の
+  `usecase/build_leaderboard.py`と同じ設計方針(純粋関数、ファイルI/O・
+  HTML生成を含まない、単体テスト可能)を踏襲。レジストリに存在しない
+  figure_id参照(将来的なレジストリの再分類等)は`real-unknown`へ
+  フォールバックし、リーダーボード生成全体をクラッシュさせない防御を
+  含む。
+- `tests/usecase/test_build_leaderboard_breakdown.py`(新規、9件): 実装前に
+  作成(TDD)。分類ロジック単体・複数figureの平均集計・カテゴリの
+  決定的ソート順・pending結果(`per_figure`キー無し)や空`per_figure`での
+  空内訳、をカバー。
+- `scripts/leaderboard/generate.py`: レジストリを読み込み
+  `paper_id-figure_id`キーの辞書を構築、各scored行に「Breakdown」列を
+  追加し、`<details><summary>by figure type</summary>...</details>`で
+  折りたたみ式の内訳テーブル(カテゴリ・平均スコア・件数)を表示。
+  pending行はBreakdown列も含めて既存のcolspanメッセージ内に収まる
+  (colspanを3→4に調整)。
+
+**検証**: `python scripts/leaderboard/generate.py`を実行し、
+`site/index.html`の実際の出力を確認 — naive-cv-v0の内訳が
+`real-linear-x: n=29, mean=0.492` / `real-log-x: n=1, mean=0.775` /
+`synthetic: n=3, mean=0.665`となり、合計n=33・全体平均0.517
+(`results/naive-cv-v0.json`の`mean_summary_score`)と整合することを
+確認。pytest 225件(既存216件+新規9件)全てgreen、domain層カバレッジ
+100%不変(新規コードはusecase層でdomain層に変更なし)、ruff・
+import-linterともにgreen(usecase→domain方向の依存のみ、循環なし)。

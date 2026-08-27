@@ -22,12 +22,16 @@
     padding: 0.6rem 1rem; border-radius: 4px; margin-bottom: 1rem;
     font-variant-numeric: tabular-nums;
   }
+  td details { font-size: 0.85em; }
+  td details table { margin-top: 0.4rem; width: auto; min-width: 14rem; }
+  td details th, td details td { padding: 0.25rem 0.5rem; }
+  td details summary { cursor: pointer; color: #1a5fb4; }
 </style>
 </head>
 <body>
 <h1>real-chart-bench leaderboard (v0)</h1>
 <p class="version-banner">📌 <strong>Latest evaluated set: v0-eval-pilot-n30</strong>
-(most recent run: 2026-08-21T21:12:44.396346+00:00 UTC). Scores below may come from different runs against
+(most recent run: 2026-08-23T03:52:30.172911+00:00 UTC). Scores below may come from different runs against
 different verified-pair counts as the registry grows over time -- always check each row's
 own <strong>Dataset</strong>/<strong>Run at</strong> columns before comparing scores across
 models; do not compare a row's score against a different dataset_version as if they were
@@ -42,11 +46,13 @@ achromatic markers).</p>
 <table>
 <thead><tr>
 <th>Rank</th><th>Model</th><th>Mean score</th><th>#figures</th>
-<th>Dataset</th><th>Run at (UTC)</th>
+<th>Dataset</th><th>Run at (UTC)</th><th>Breakdown</th>
 </tr></thead>
 <tbody>
-<tr><td>1</td><td>Naive CV (hue-bucket baseline)</td><td class="score">0.517</td><td>33</td><td>v0-eval-pilot-n30</td><td>2026-08-21T21:12:44.396346+00:00</td></tr>
-<tr class="pending"><td>2</td><td>LineFormer (pretrained, ICDAR2023)</td><td class="score">—</td><td colspan="3">pending external run — mmcv/mmdetection have no macOS wheels and fail to build from source locally (see design §7.16); run notebooks/lineformer_colab.ipynb on Google Colab's free tier to produce results/lineformer-pretrained.json</td></tr>
+<tr><td>1</td><td>Naive CV (hue-bucket baseline)</td><td class="score">0.517</td><td>33</td><td>v0-eval-pilot-n30</td><td>2026-08-23T03:52:30.172911+00:00</td><td><details><summary>by figure type</summary><table><thead><tr><th>Type</th><th>Mean</th><th>#</th></tr></thead><tbody><tr><td>Real figures (linear x-axis)</td><td class="score">0.492</td><td>29</td></tr>
+<tr><td>Real figures (log x-axis)</td><td class="score">0.775</td><td>1</td></tr>
+<tr><td>Synthetic fixtures</td><td class="score">0.665</td><td>3</td></tr></tbody></table></details></td></tr>
+<tr class="pending"><td>2</td><td>LineFormer (pretrained, ICDAR2023)</td><td class="score">—</td><td colspan="4">pending external run — mmcv/mmdetection have no macOS wheels and fail to build from source locally (see design §7.16); run notebooks/lineformer_colab.ipynb on Google Colab's free tier to produce results/lineformer-pretrained.json</td></tr>
 </tbody>
 </table>
 </body>
