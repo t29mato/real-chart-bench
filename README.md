@@ -22,7 +22,7 @@ Existing chart-extraction evaluations (LineEX, LineFormer, etc.) rely on **synth
 | **Evaluation harness** | Live. Pure-domain metrics (`src/real_chart_bench/domain/metrics.py`, `matching.py`, `evaluation.py`) + a naive-CV baseline — see [Evaluate your own model](#evaluate-your-own-model) below. |
 | **Leaderboard** | Live, auto-deployed from `results/*.json` on every push — <https://t29mato.github.io/real-chart-bench/> |
 | **LLM baselines (Claude/GPT/Gemini)** | Adapter scaffold implemented (`src/real_chart_bench/usecase/llm_client.py`), execution gated on API-cost owner approval — not yet run. |
-| **LineFormer baseline** | Implemented as a self-contained Google Colab notebook (`notebooks/lineformer_colab.ipynb`, mmcv/mmdetection have no macOS wheels — see design §7.16) — pending an owner run. |
+| **LineFormer baseline** | **Live — first method with a measured real-paper-figure score.** Run via a self-contained Google Colab notebook (`notebooks/lineformer_colab.ipynb`, mmcv/mmdetection have no macOS wheels — see design §7.16): mean score 0.647 overall (42 real figures 0.627, 3 synthetic fixtures 0.917) — see [`results/lineformer-pretrained.json`](results/lineformer-pretrained.json) and the [leaderboard](https://t29mato.github.io/real-chart-bench/) for the per-figure-type breakdown. |
 
 ## Evaluate your own model
 
@@ -120,7 +120,7 @@ See [`AGENTS.md`](AGENTS.md) for conventions (clean architecture, TDD) if you're
 - [x] Public leaderboard (GitHub Pages, auto-deployed)
 - [x] Verified real-image pairs (growing — see [Status](#status))
 - [ ] LLM baselines (Claude/GPT/Gemini) — scaffolded, pending owner approval to run
-- [ ] LineFormer baseline — notebook ready, pending an owner Colab run
+- [x] LineFormer baseline — first real-paper-figure score on the leaderboard: 0.627 (42 real figures)
 - [ ] Automated leaderboard submission (currently PR-based)
 - [ ] Full automatic image↔figure pairing (currently manually verified only)
 
