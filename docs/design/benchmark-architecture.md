@@ -2050,3 +2050,64 @@ manifest(`data/manifest/v0`)に無ければ、それらのパネルは今回は�
 
 **テスト**: データ追加・修正のみでコード変更なし、既存225テスト・ruff・
 import-linter全てgreen。
+
+### 7.43 検証済みペア42件 → 111件到達(2026-08-30、HQ全力稼働指示・worktree分離サブエージェント委譲)
+
+**背景**: 「最低100件」というオーナー要求に対し、後段レビューでの一部却下を
+見込んだバッファを持たせるため、新規69件(目標65〜70件)のVERIFIEDエントリを
+worktree分離サブエージェントに委譲し、レビュー後にここへマージした。
+§7.39と同じ検証手順(PDF再取得・pymupdfテキスト抽出でのライセンス文言確認、
+`data/cache/ThermoelectricMaterials_curves.csv.gz`との数値突き合わせ)を
+未使用の8論文に適用。
+
+**新規VERIFIED69件、8論文**(全てCC BY 4.0を実PDF本文で確認、OpenAlexキャッシュ
+とも一致):
+
+| paper | 誌・DOI | 新規件数 | 内容 |
+|---|---|---|---|
+| 18869 | Nature Commun, 10.1038/s41467-018-04958-3 | 5 | ZrCoBi1-xSnx半ホイスラー: 電気伝導率・パワーファクター(3a/c)、熱伝導率(log-y, 4b)・格子熱伝導率(4c)・ZT(4e)。Seebeck係数(3b)は軸ブレーク(y軸に非連続な区切り記号)があり単一線形較正と矛盾するため不採用 |
+| 44283 | Frontiers Chem, 10.3389/fchem.2014.00106 | 11 | SrSi2系合金(Al/Ge/Ca/Ba置換)の電気抵抗率・Seebeck係数・熱伝導率・ZT、主図+インセットZTを2エントリに分離 |
+| 10939 | J Electron Mater, 10.1007/s11664-015-4242-2 | 11 | Ba8Cu4.8Si41.2クラスレート、HP/SPS焼結条件比較(Fig3/4の4パネル×2 + Fig5の3パネル、Fig5aは数値スケール不整合を検出し不採用) |
+| 18668 | Sci Rep, 10.1038/srep43262 | 12 | SnS(1-x)Se(x)、押し方向平行/垂直の6+6パネル(電気伝導率はlog-y) |
+| 36342 | J Adv Ceram, 10.1007/s40145-021-0480-3 | 6 | Ag/La共ドープSnTe、電気伝導率・Seebeck係数・パワーファクター・熱伝導率・格子熱伝導率・ZT |
+| 28331 | J Adv Ceram, 10.1007/s40145-020-0382-9 | 12 | Lu0.1Bi1.9Te3-xSex半ホイスラー、本系列4パネル+再現性検証3パネル×2 |
+| 46278 | Front Energy Res, 10.3389/fenrg.2014.00009 | 6 | BaZrCeYMO3プロトン伝導体、log(σ) vs 1000/TのArrhenius プロット(y軸ラベルが"log σ"で数値そのものがlog10値 -- y_scale="log"・y_rangeを真のσ値域で表現する解釈を採用、通常の10^nラベル式log軸と数学的に同一) |
+| 3733 | Mater Renew Sustain Energy, 10.1007/s40243-014-0026-5 | 6 | Cu2Se系、キャリア濃度・Seebeck係数・抵抗率・Hall移動度・熱伝導率・ZT |
+
+**新たに検出したユニットラベル不整合(記録のみ、登録は数値の実測magnitude一致で判断)**:
+paper 10939の`figure_id=1535`(Fig5a)は他パネルと同じ`unit_y="ohm*m"`
+ラベルにも関わらず、生値が5〜7桁大きく(素の値が図の`uOhm cm`表示と
+直接一致してしまう=変換不要)、他の全パネル(`x1e8`変換が必要)と
+矛盾していたため不採用とした。同様にpaper 44283の`figure_id=38971`
+(Fig3A)では、通常なら`x1e8`変換が必要な`ohm*m`ラベルの生値が、
+なぜか`mOhm cm`表示と直接(変換係数x1相当で)一致しており、この場合は
+数値magnitudeが画像と一致することを確認できたため登録したが、
+Starrydata側のunit_yタグ付けに一貫性の問題がある可能性を示す事例として
+ここに記録する(§7.32のライセンス分類誤り発見と同種、「メタデータを
+鵜呑みにしない」の実践)。
+
+**副次的に発見したコードバグ1件を修正**: `scripts/eval/run_baselines.py`の
+`_dataset_item_for()`が、`panel_label`が非nullの全エントリに対して
+無条件で`PyMuPdfPanelSplitter`を再実行していたが、直近のPR #6
+(§7.42、2026-08-30)でpaper 17037・47998の`image_path`が既に単一パネル
+切り出し済みのクロップ画像へ張り替えられた際、ドキュメント目的で
+`panel_label`は残されたままだった。この状態で`run_baselines.py`を実行すると
+`KeyError`でクラッシュする(§7.39時点の最終成功run、2026-08-27はPR #6より前
+のため、このリグレッションは一度も実行検証されていなかった)。
+`image_path`に`/`を含む(=既に確定した単一パネル切り出し済み)エントリでは
+`panel_label`があっても再分割をスキップするよう修正。データではなくコード側の
+バグであり、既存レジストリエントリは無改変。
+
+**結果**: `data/verified_pairs/registry.json`は計120エントリ(VERIFIED 111、
+REJECTED 9)。`data/verified_pairs/ground_truth.json`を全111 VERIFIEDエントリ分
+再生成(既存42件分は生成スクリプトを新旧比較しbyte-for-byte一致を確認、
+新規69件分を追加)。`ATTRIBUTION.md`も生成スクリプトで再生成(111ファイル分)。
+`run_baselines.py`再実行(114図: 実画像111+合成3、`dataset_version`が
+自動的に`"v0-eval-pilot-n111"`に更新、`mean_summary_score=0.722`、42件時の
+0.592から上昇 -- 追加分が概ね彩色マーカー付きの読み取りやすい多系列図に
+偏ったための素直な結果であり、個々のスコア分布(0.66〜0.98、極端な0/1なし)
+を確認し不正な値でないことを確認した)。`site/index.html`のバージョン
+バナーも自動的に`v0-eval-pilot-n111`に更新された。
+
+**テスト**: pytest 225 passed(不変)、domain層カバレッジ100%、ruff clean、
+import-linter clean。

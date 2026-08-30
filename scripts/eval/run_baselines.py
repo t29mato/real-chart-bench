@@ -99,7 +99,15 @@ def _dataset_item_for(pairing: VerifiedPairing) -> DatasetItem:
     image_path = _resolve_image_path(pairing)
     image_bytes = image_path.read_bytes()
 
-    if pairing.panel_label is not None:
+    # panel_label triggers PanelSplitter only for a bare-filename image_path
+    # (a composite multi-panel raw image that still needs splitting). A "/"
+    # image_path is already a dedicated single-panel crop (see
+    # _resolve_image_path's docstring) -- panel_label on those entries is
+    # left in place purely as documentation of which panel the crop shows
+    # (2026-08-30 correction, design §7.42: paper 17037/47998 were
+    # repointed to single-panel crops but kept panel_label for that reason),
+    # so splitting again here would look up a stale/wrong sub-panel.
+    if pairing.panel_label is not None and "/" not in pairing.image_path:
         splitter = PyMuPdfPanelSplitter()
         panels = {p.label: p for p in splitter.split(image_bytes)}
         image_bytes = panels[pairing.panel_label].image_bytes
