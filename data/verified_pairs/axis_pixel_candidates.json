@@ -5,15 +5,19 @@
       "generated_at": "2026-08-30",
       "method": "Each of 42 verified_pairs images was shown independently to claude-opus-5 and claude-fable-5, asked to read the smallest/largest tick label on each axis and the pixel coordinate of that tick, then cross-checked its own answer via pixel-level dark-line/tick profiling (not just a single vision read). Agreement across the two independent models: 42/42 identical tick label values; pixel-position disagreement averaged 0.030% and maxed 0.22% of the relevant image dimension (~1-3px). This is a strong *consistency* signal, not proof of correctness -- a 10-image subset was also spot-checked visually by overlaying both models' picks on the source image.",
       "status_values": {
-        "llm_candidate": "Both models agree on tick labels; pixel positions are the mean of the two models' estimates. Not yet human-verified."
+        "llm_candidate": "Both models agree on tick labels; pixel positions are the mean of the two models' estimates. Not yet human-verified.",
+        "owner_reviewed": "The repo owner visually spot-checked this entry's overlay (both models' picks rendered on the source image) and confirmed it looks correct. Still LLM-generated, not independently re-measured by a human."
       },
       "known_caveats": [
         "crops/17044/fig2a.png: main-plot x-axis tick labels are cropped out of the image; the 0-300 range was inferred from the co-located fig2b (identical frame) and the inset's shared temperature axis, not read directly.",
         "crops/21682/fig4a.png and fig4b.png: each crop shows a sliver of the neighboring panel's heading letter bleeding in at the edge ('b' in fig4a, 'c' in fig4b) -- this is just crop-boundary bleed from the source figure's per-panel heading placement, not a data/metadata error; fig4b.png's actual content matches the registry's 'panel b' evidence.",
         "images/47998/p08_embedded_7.jpg: 5-panel figure; panel (a) has no numeric y-axis tick labels (Intensity a.u.) so panel (b) was used instead.",
         "crops/5904/corrected_fig5.png: the source figure is rotated 90 degrees; pixel coordinates are reported in image-pixel orientation (see this entry's notes), not the plot's own x/y orientation.",
-        "Images without an explicit panel note but with more than one panel in frame (images/5166, images/18759, images/17037) had panel (a) selected by default since no panel was specified to the judges."
-      ]
+        "Images without an explicit panel note but with more than one panel in frame (images/5166, images/18759, images/17037) had panel (a) selected by default since no panel was specified to the judges.",
+        "images/17037, images/47998: the initial judging pass (before per-panel labels were cross-checked against registry.json) picked the wrong panel for these two composite images (registry.json specifies panel 'd' and 'c' respectively, but panel 'a' and 'b' were judged instead). Fixed by re-cropping to the correct single panel and re-judging; see each entry's notes.",
+        "crops/17044/fig2a.png: excluded from owner_reviewed pending a decision on how to handle images whose axis is only recoverable via a sibling panel (see https://github.com/t29mato/real-chart-bench/issues/5)."
+      ],
+      "updated_at": "2026-08-30"
     }
   },
   {
@@ -52,43 +56,42 @@
       "左枠(x=115.5)はラベル350より左(≈330相当)。",
       "Left frame (x=115.5) and right frame carry ticks; 500 coincides with the right frame line (x=989.5)."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "17037",
     "figure_id": "20736",
-    "image_path": "data/verified_pairs/images/17037/p07_embedded_7.jpg",
+    "image_path": "data/verified_pairs/crops/17037/fig6d.png",
     "panel_label": "d",
-    "x_min_label": 0,
-    "x_max_label": 10,
+    "x_min_label": 30,
+    "x_max_label": 210,
     "y_min_label": 0,
-    "y_max_label": 12000,
+    "y_max_label": 8,
     "x_scale": "linear",
     "y_scale": "linear",
     "pixel_bbox_mean": {
-      "x_min_px": 100.0,
-      "x_max_px": 510.0,
-      "y_min_px": 364.75,
-      "y_max_px": 80.5
+      "x_min_px": 151.75,
+      "x_max_px": 542.0,
+      "y_min_px": 369.0,
+      "y_max_px": 74.0
     },
     "model_estimates": {
       "claude-opus-5": {
-        "x_min_px": 100.0,
-        "x_max_px": 510.0,
-        "y_min_px": 365.0,
-        "y_max_px": 80.5
+        "x_min_px": 152,
+        "x_max_px": 542,
+        "y_min_px": 369,
+        "y_max_px": 74
       },
       "claude-fable-5": {
-        "x_min_px": 100.0,
-        "x_max_px": 510.0,
-        "y_min_px": 364.5,
-        "y_max_px": 80.5
+        "x_min_px": 151.5,
+        "x_max_px": 542,
+        "y_min_px": 369,
+        "y_max_px": 74
       }
     },
     "model_disagreement_px": 0.5,
     "notes": [
-      "画像内に独立した4パネル(a)(b)(c)(d)あり。左上の(a) ΔV vs ΔT(枠 x:100-550.5, y:56.5-388)を対象とした。(b)は左右2つのy軸(Output power / Output voltage)を持つ二重軸プロット、(c)はOutput power vs Load resistance、(d)はVoltage vs Time。",
-      "Four panels (a)-(d), each an independent coordinate system (panel b additionally has dual y axes). Panel (a) (top-left, Delta-V vs Delta-T) was targeted as no panel was specified."
+      "Panel selection corrected: registry.json's panel_label is 'd', but the original LLM judging pass (before per-panel labels were cross-checked) picked panel (a) instead. Re-cropped to the single panel (crops/17037/fig6d.png) and re-judged. Also corrected the smallest x label from an assumed 0 to the actually-printed 30 (0 is unlabeled, though the left spine does extrapolate to it; Fable's x_min_px here is derived from its own reported tick geometry, not a direct re-read)."
     ],
     "status": "llm_candidate"
   },
@@ -128,7 +131,7 @@
       "y軸ラベルは0.0, 5.0x10^3, 1.0x10^4 ... 3.5x10^4 表記。y_max_labelは3.5x10^4=35000。x目盛りは枠の外(下)側。枠 x:118.5-729.5。",
       "Y labels displayed in scientific notation (0.0 to 3.5x10^4); numeric values used."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "17040",
@@ -166,7 +169,7 @@
       "Single plot frame (x=49-402, y=35-559) used. The right side carries two secondary axis titles (V_th (V) and G_CNP (x10^-4 Ohm^-1)) but they have no numeric tick labels in this crop, so the left axis was used. A legend box sits inside the plot.",
       "主パネル(a)を採用。画像右端に隣接パネルの軸ラベル断片(V_bg(V), G_CNP)が写り込んでいるが座標系としては1つ。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "17044",
@@ -239,7 +242,7 @@
     },
     "model_disagreement_px": 0.0,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "17044",
@@ -274,12 +277,12 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "18759",
     "figure_id": "12217",
-    "image_path": "data/verified_pairs/images/18759/p04_embedded_4.jpg",
+    "image_path": "data/verified_pairs/crops/18759/fig3a.png",
     "panel_label": "a",
     "x_min_label": 200,
     "x_max_label": 500,
@@ -310,7 +313,8 @@
     "model_disagreement_px": 0.5,
     "notes": [
       "画像内に独立した2パネルあり。左の(a) Electrical conductivity(枠 x:118.5-803.5, y:17.5-496.5)を対象とした。右の(b) Seebeck coefficient は別座標系(枠 x≈941-1625, y≈16-493, x:300-500, y:-200-0)。",
-      "Two panels present: (a) electrical conductivity vs T (left) and (b) Seebeck coefficient vs T (right), each with its own coordinate system. Panel (a) was targeted as no panel was specified."
+      "Two panels present: (a) electrical conductivity vs T (left) and (b) Seebeck coefficient vs T (right), each with its own coordinate system. Panel (a) was targeted as no panel was specified.",
+      "Re-cropped to the single panel matching registry.json's panel_label (crop offset from the original composite image was (0,0), so the previously-judged pixel positions are unchanged)."
     ],
     "status": "llm_candidate"
   },
@@ -347,7 +351,7 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "21682",
@@ -385,7 +389,7 @@
       "座標系は1つのみだが、画像右上のパネル記号は\"c\"(登録上はpanel b)。y軸は反転しており最小値-400が上端側(y=56)、最大値0が下端側(y=281)。y=0の位置には全幅の水平線があり、プロット枠の下辺(y=310)はさらに下でx目盛りはそこにある。右枠(x=224)はラベル300(x=200)より右に延びている。",
       "Single full panel (panel b) in the crop; only a sliver of panel c (its letter 'c' and rotated y-label) appears at the right edge. Y axis is inverted: negative values increase upward, so -400 is at the top (y=56) and 0 near the bottom (y=281); the 0 gridline (y=281.5), not the bottom frame (y=310), is the 0 tick."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "22102",
@@ -420,7 +424,7 @@
     },
     "model_disagreement_px": 0.0,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "22102",
@@ -455,7 +459,7 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "27759",
@@ -490,7 +494,7 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "27759",
@@ -528,7 +532,7 @@
       "Main plot (frame x=124-995, y=16-653) plus an INSET with its own independent axes (inset frame x=311-668, y=180-488; inset x 400-1000 K, y -175..-50 uV/K). Selected the main plot.",
       "main+inset構成。メインパネルを採用。insetはSeebeck係数 -175〜-50 vs Temperature 400-1000の拡大図。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "27759",
@@ -565,7 +569,7 @@
     "notes": [
       "Single panel. Frame x=118-994, y=17-722; y extremes lie on the top/bottom frame, x extremes do not."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "27759",
@@ -603,7 +607,7 @@
       "Single panel, y-axis is LOGARITHMIC (decade ticks 10^-8 .. 10^-3 at y = 684, 551, 418, 285, 152, 19.5). Frame x=157-978, y=19-684.",
       "y軸は対数軸(10^-8〜10^-3)。10^-3は上枠線、10^-8は下枠線に一致。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "27759",
@@ -641,7 +645,7 @@
       "Single panel. Frame x=161-994, y=41-715; note y=0.00 is at px 683, NOT at the bottom frame (715).",
       "軸範囲は0.00より下(下枠線y=715)まで伸びており、0.00目盛りは枠内y=682にある。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "29352",
@@ -676,7 +680,7 @@
     },
     "model_disagreement_px": 1.0,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "29352",
@@ -714,7 +718,7 @@
       "Single panel (labeled B). Frame x=151-914, y=29-649. x=550 coincides with the right frame; x=300 does not.",
       "x=550は右枠線、y=-170は下枠線に一致する目盛り。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "29352",
@@ -751,7 +755,7 @@
     "notes": [
       "Single panel (labeled C). Frame x=151-914, y=52-673; neither axis extreme label sits on a frame edge."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "29352",
@@ -789,7 +793,7 @@
       "Panel A only. The crop bottom edge clips the 'B' label of the following panel (~y=790), but no second axis system is present. Frame x=180-944, y=32-652.",
       "画像最下部に次パネル(B)のラベル断片が写るが、座標系はパネル(A)の1つ。x=550は右枠線、y=1.6/0.8は上下枠線に一致。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "29352",
@@ -826,7 +830,7 @@
     "notes": [
       "Single panel (labeled C). Frame x=163-939, y=38-671."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "29352",
@@ -863,7 +867,7 @@
     "notes": [
       "Single panel (labeled A). Frame x=125-862, y=30-632."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "29352",
@@ -900,7 +904,7 @@
     "notes": [
       "Single panel (labeled B). Frame x=156-885, y=38-633."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "34286",
@@ -938,7 +942,7 @@
       "枠(x:95.5-378.5, y:19.5-229.5)はラベル範囲より外側に広い。主目盛りの間に副目盛りあり。",
       "Tick marks are very short (1-2 px darkening on the axis line); positions taken from darkened pixels on the frame."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "34286",
@@ -975,7 +979,7 @@
     "notes": [
       "枠(x:72.5-355, y:19.9-229.8)。y=1.4は上枠と一致、y=0.0は下枠より上。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "4173",
@@ -1010,7 +1014,7 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "4173",
@@ -1045,7 +1049,7 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "4176",
@@ -1082,7 +1086,7 @@
     "notes": [
       "Single panel. Plot frame is x=88-481, y=24-317; note neither extreme label sits on the frame edge (y=0 is at 295, not the bottom frame 317). Minor ticks at 305/315/325 are unlabeled."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "4176",
@@ -1120,7 +1124,7 @@
       "Single panel. Frame x=91-484, y=12-304. y extremes coincide with the top/bottom frame; x extremes do not (frame corners are unlabeled minor ticks).",
       "y=50は上枠線、y=-20は下枠線に一致する目盛り。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "43697",
@@ -1155,7 +1159,7 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "446",
@@ -1190,7 +1194,7 @@
     },
     "model_disagreement_px": 0.0,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "446",
@@ -1227,7 +1231,7 @@
     "notes": [
       "x軸の左枠(x=255)は目盛りラベル0より左(=-50相当)。ラベル付き主目盛りは355,554,753,954,1154,1353。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "446",
@@ -1264,7 +1268,7 @@
     "notes": [
       "y軸下枠(y=820)はラベル0.2(748)より下に延びている。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "47534",
@@ -1299,43 +1303,42 @@
     },
     "model_disagreement_px": 2.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "47998",
     "figure_id": "50803",
-    "image_path": "data/verified_pairs/images/47998/p08_embedded_7.jpg",
+    "image_path": "data/verified_pairs/crops/47998/fig3c.png",
     "panel_label": "c",
-    "x_min_label": 500,
+    "x_min_label": 300,
     "x_max_label": 800,
-    "y_min_label": 0.0,
-    "y_max_label": 0.12,
+    "y_min_label": 600,
+    "y_max_label": 2100,
     "x_scale": "linear",
     "y_scale": "linear",
     "pixel_bbox_mean": {
-      "x_min_px": 817.5,
-      "x_max_px": 1275.0,
-      "y_min_px": 434.0,
-      "y_max_px": 38.0
+      "x_min_px": 118.0,
+      "x_max_px": 651.0,
+      "y_min_px": 411.0,
+      "y_max_px": 59.0
     },
     "model_estimates": {
       "claude-opus-5": {
-        "x_min_px": 818,
-        "x_max_px": 1275,
-        "y_min_px": 434,
-        "y_max_px": 38
+        "x_min_px": 118,
+        "x_max_px": 651,
+        "y_min_px": 411,
+        "y_max_px": 59
       },
       "claude-fable-5": {
-        "x_min_px": 817,
-        "x_max_px": 1275,
-        "y_min_px": 434,
-        "y_max_px": 38
+        "x_min_px": 118,
+        "x_max_px": 651,
+        "y_min_px": 411,
+        "y_max_px": 59
       }
     },
-    "model_disagreement_px": 1,
+    "model_disagreement_px": 0,
     "notes": [
-      "5 independent panels (a)-(e). Panel (a) (XPS O 1s, frame x=70-605 y=36-434) is first but its y-axis is 'Intensity (a.u.)' with NO numeric tick labels, so it is uncalibratable; selected panel (b) (sigma vs Temperature, frame x=771-1315 y=37-434) instead. Others: (c) Conductivity 300-800degC x=1457-1992, (d) log-scale Conductivity x=145-1247 y=574-974, (e) FTIR x=1461-1992.",
-      "5パネル構成(a)-(e)。最初のパネル(a)はXPSスペクトルでy軸に数値目盛りが無いため、数値軸を両方持つ最初のパネル(b) (σ vs Temperature) を採用。"
+      "Panel selection corrected: registry.json's panel_label is 'c', but the original LLM judging pass picked panel (b) instead. Re-cropped to the single panel (crops/47998/fig3c.png) and re-judged. Also corrected the smallest y label from an assumed 300 (which is actually just the tick step) to the actually-printed 600."
     ],
     "status": "llm_candidate"
   },
@@ -1372,12 +1375,12 @@
     },
     "model_disagreement_px": 0.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "5166",
     "figure_id": "23909",
-    "image_path": "data/verified_pairs/images/5166/p07_embedded_6.jpg",
+    "image_path": "data/verified_pairs/crops/5166/fig5a.png",
     "panel_label": "a",
     "x_min_label": 200,
     "x_max_label": 600,
@@ -1408,7 +1411,8 @@
     "model_disagreement_px": 0,
     "notes": [
       "2 independent panels stacked vertically: (a) kappa_ph vs Temperature (top) and (b) kappa_ph vs Number of Layers (bottom). Selected panel (a). Panel (a) is an L-shaped axis (no top/right frame); ticks point outward.",
-      "2パネル構成(a)(b)。上段パネル(a) (Temperature vs κ_ph) を採用。下段(b)はNumber of Layers 1-4 vs κ_ph 0-5。"
+      "2パネル構成(a)(b)。上段パネル(a) (Temperature vs κ_ph) を採用。下段(b)はNumber of Layers 1-4 vs κ_ph 0-5。",
+      "Re-cropped to the single panel matching registry.json's panel_label (crop offset from the original composite image was (0,0), so the previously-judged pixel positions are unchanged)."
     ],
     "status": "llm_candidate"
   },
@@ -1445,7 +1449,7 @@
     },
     "model_disagreement_px": 1.5,
     "notes": [],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "5902",
@@ -1482,7 +1486,7 @@
     "notes": [
       "右枠(x=1610)はラベル300(1586.5)より右に延びている。目盛りは枠の外側に描かれている。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "5904",
@@ -1520,7 +1524,7 @@
       "Single panel, but the whole figure is ROTATED 90 degrees in the image. Values are reported in image-pixel orientation: the horizontal image direction carries the S [uV/K] scale (0 at right px=1030, 2 at left px=123 - i.e. a DECREASING horizontal axis), and the vertical image direction carries the T [K] scale (0 at bottom px=1442, 300 at top px=46). If the plot's own x-axis (T) is wanted, it corresponds to the vertical pixel direction. Frame: x=31-1076, y=44-1443.",
       "図全体が90度回転している。画像の水平(下辺)軸はS[μV/K]で左が2・右が0、画像の垂直軸はT[K]で下が0・上が300(ラベルは右側)。ここでは画像の水平軸をx、垂直軸をyとして記載。"
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   },
   {
     "paper_id": "83",
@@ -1558,6 +1562,6 @@
       "スキャン画像で枠は左辺(x≈156)と下辺(y≈727.5)のみのL字型。主目盛りの中間に副目盛りあり。",
       "Scanned/noisy figure; minor ticks lie between labeled majors (labels every second tick)."
     ],
-    "status": "llm_candidate"
+    "status": "owner_reviewed"
   }
 ]
