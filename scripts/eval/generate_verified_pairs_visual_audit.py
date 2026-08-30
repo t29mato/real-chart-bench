@@ -10,22 +10,28 @@ this produces one Markdown section with:
    confirm the calibration lines actually land on the printed tick marks,
 3. the digitized ground-truth curves (from `ground_truth.json`) re-plotted.
    Starrydata stores every curve in SI units, but papers almost always
-   display a rescaled unit (uV/K, S/cm, mOhm.cm, ...). When axis pixel
-   candidates are available, the printed axis's own tick *values* (not
-   just their pixel positions) let us derive the exact SI -> paper-display
-   conversion factor with no unit-string guessing: divide the printed tick
-   value by the SI-unit registry x_range/y_range at that same point. The
-   re-plot is drawn in the paper's own units and should look identical in
-   shape and axis numbers to panel 1. Where no axis pixel candidate exists
-   yet, the re-plot falls back to raw SI units and is labeled as such.
+   display a rescaled unit (uV/K, S/cm, mOhm.cm, ...). Two sources are
+   tried, in order of trustworthiness:
 
-A derived conversion factor is trusted only when it agrees at both the min
-and max end of the axis (checked independently -- see `_derive_factor`);
-a disagreement usually means the registry's x_range/y_range and the axis
-pixel candidate's tick labels don't actually describe the same axis
-extent (e.g. a mismatched panel, or a genuine mis-read by one of the two
-methods) and is surfaced as a top-of-file "needs attention" flag rather
-than silently applied.
+   a. **axis-pixel-derived** (primary): when `axis_pixel_candidates.json`
+      has a matching entry, the printed axis's own tick *values* (not just
+      their pixel positions) let us derive the exact SI -> paper-display
+      factor with no unit-string guessing: divide the printed tick value
+      by the SI-unit registry x_range/y_range at that same point. Trusted
+      only when it agrees independently at both the min and max end of the
+      axis (see `_derive_factor`); a disagreement is surfaced as a
+      top-of-file "needs attention" flag rather than silently applied.
+   b. **evidence-text-derived** (fallback, only when (a) is unavailable):
+      most entries' `evidence` field already states the exact factor a
+      human/agent verified against the image while writing the entry
+      (e.g. "Converting GT y to the chart's uOhm cm units (x1e8)"). A
+      narrow regex looks for that specific phrasing. This is *not*
+      independently cross-checked the way (a) is -- it's trusting text
+      that was already validated once, not re-deriving it -- so it's
+      labeled distinctly ("evidence-derived, unverified") in the output.
+
+   Where neither source applies, the re-plot falls back to raw SI units
+   and is labeled as such.
 
 This is a review aid, not a scoring tool (see `run_baselines.py` / the
 domain metrics for that) -- it never modifies registry.json or
@@ -44,6 +50,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import matplotlib
@@ -65,6 +72,43 @@ MARKDOWN_PATH = AUDIT_DIR / "visual-audit.md"
 
 _COLORS = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 _FACTOR_AGREEMENT_TOL = 0.03  # 3% relative disagreement between endpoint-derived factors
+
+# Matches the "(xN)" / "(divide by N)" / "(/N)" phrasing evidence texts use
+# when documenting the y-axis unit conversion they manually verified against
+# the source image, e.g. "Converting GT y to the chart's uOhm cm units
+# (x1e8): ...". Only ever describes the *y* axis in this corpus (x is
+# almost always Temperature/K, unconverted) -- see the module docstring.
+_EVIDENCE_FACTOR_RE = re.compile(
+    r"\(x(?P<mult>1e-?\d+|\d+(?:\.\d+)?)\)"
+    r"|\(divide by (?P<div>1e-?\d+|\d+(?:\.\d+)?)\)"
+    r"|\((?:/|÷)\s*(?P<div2>1e-?\d+|\d+(?:\.\d+)?)\)",
+    re.IGNORECASE,
+)
+
+
+def _evidence_text_factor(evidence: str) -> dict | None:
+    """Fallback factor source when no axis-pixel data exists for an entry:
+    parse the explicit conversion factor most evidence texts already state
+    (see AGENTS.md's evidence-style convention -- "state the actual numbers
+    you cross-checked"). Unlike `_derive_factor`, this is NOT independently
+    re-verified here, just trusting text a human/agent already validated
+    once against the image -- callers must label it as such.
+    """
+    m = _EVIDENCE_FACTOR_RE.search(evidence)
+    if not m:
+        return None
+    if m.group("mult") is not None:
+        factor = float(m.group("mult"))
+    else:
+        divisor = float(m.group("div") or m.group("div2"))
+        factor = 1.0 / divisor
+    return {
+        "kind": "multiplicative",
+        "factor": factor,
+        "offset": None,
+        "confident": None,  # not independently cross-checked -- see docstring
+        "detail": f"parsed from evidence text: {m.group(0)}",
+    }
 
 
 def _slug(entry: dict) -> str:
@@ -290,6 +334,7 @@ def main() -> None:
 
     rows = []
     n_with_axis_data = 0
+    n_with_evidence_text_factor = 0
     attention = []  # entries whose derived factor disagreed at the two endpoints
 
     for entry in verified:
@@ -299,29 +344,41 @@ def main() -> None:
         if axp is not None and axp.get("status") == "excluded":
             axp = None
 
-        k_x, k_y, off_x, off_y, converted = 1.0, 1.0, 0.0, 0.0, False
+        k_x, k_y, off_x, off_y = 1.0, 1.0, 0.0, 0.0
         factor_detail = None
+        factor_source = "none"
         overlay_path = None
 
         if axp is not None:
             n_with_axis_data += 1
+            factor_source = "axis-pixel"
             fx = _derive_factor(entry["x_range"], axp["x_min_label"], axp["x_max_label"])
             fy = _derive_factor(entry["y_range"], axp["y_min_label"], axp["y_max_label"])
             factor_detail = {"x": fx, "y": fy}
             k_x, off_x = fx["factor"], (fx["offset"] or 0.0)
             k_y, off_y = fy["factor"], (fy["offset"] or 0.0)
-            converted = True
             if fx["confident"] is False or fy["confident"] is False:
                 attention.append((entry, fx, fy))
 
             overlay_path = OVERLAYS_DIR / f"{slug}.png"
             _render_pixel_overlay(entry, axp, overlay_path)
+        else:
+            # x is unconverted either way (always Temperature/K in this
+            # corpus); only y benefits from the evidence-text fallback.
+            fy = _evidence_text_factor(entry["evidence"])
+            if fy is not None:
+                n_with_evidence_text_factor += 1
+                factor_source = "evidence-text"
+                factor_detail = {"x": None, "y": fy}
+                k_y = fy["factor"]
 
         plot_path = PLOTS_DIR / f"{slug}.png"
         warning = _render_ground_truth_plot(
-            entry, curves, plot_path, k_x, k_y, off_x, off_y, converted
+            entry, curves, plot_path, k_x, k_y, off_x, off_y, factor_source != "none"
         )
-        rows.append((entry, curves, plot_path, overlay_path, axp, factor_detail, warning))
+        rows.append(
+            (entry, curves, plot_path, overlay_path, axp, factor_detail, factor_source, warning)
+        )
 
     lines: list[str] = []
     lines.append("# Verified Pairs Visual Audit")
@@ -351,6 +408,12 @@ def main() -> None:
         f"- Entries with axis-pixel ground truth (unit-converted + calibration-checkable): "
         f"**{n_with_axis_data}** / {len(verified)}"
     )
+    lines.append(
+        f"- Entries additionally unit-converted from evidence text (unverified fallback, "
+        f"y-axis only): **{n_with_evidence_text_factor}** / {len(verified)}"
+    )
+    n_raw_si = len(verified) - n_with_axis_data - n_with_evidence_text_factor
+    lines.append(f"- Entries still shown in raw SI units (no conversion source): {n_raw_si}")
     lines.append(f"- log-y entries: {n_log_y}")
     n_render_warnings = sum(1 for *_, w in rows if w)
     lines.append(f"- Entries with a re-plot rendering warning: {n_render_warnings}")
@@ -383,14 +446,16 @@ def main() -> None:
 
     lines.append("## Index")
     lines.append("")
-    for entry, _curves, _plot_path, _overlay_path, axp, _factor_detail, warning in rows:
+    for entry, _curves, _plot_path, _overlay_path, axp, _fd, factor_source, warning in rows:
         anchor = _slug(entry).lower()
         flags = ""
         if warning:
             flags += " ⚠️render"
-        if axp is None:
-            flags += " 🚫noaxis"
-        elif axp.get("status") == "llm_candidate":
+        if factor_source == "none":
+            flags += " 🚫noconversion"
+        elif factor_source == "evidence-text":
+            flags += " 📝text-derived"
+        elif axp is not None and axp.get("status") == "llm_candidate":
             flags += " 🟡unverified-axis"
         lines.append(
             f"- [ ] [{entry['paper_id']} / fig {entry['figure_reference']}]"
@@ -400,7 +465,7 @@ def main() -> None:
     lines.append("---")
     lines.append("")
 
-    for entry, curves, plot_path, overlay_path, axp, factor_detail, warning in rows:
+    for entry, curves, plot_path, overlay_path, axp, factor_detail, factor_source, warning in rows:
         slug = _slug(entry)
         anchor = slug.lower()
         paper = papers_by_id.get(entry["paper_id"], {})
@@ -416,20 +481,13 @@ def main() -> None:
         if warning:
             lines.append(f"> ⚠️ **{warning}**")
             lines.append("")
-        if axp is None:
-            lines.append(
-                "> 🚫 No axis-pixel ground truth for this entry yet -- re-plot below is "
-                "raw SI units (unconverted), and there's no pixel-calibration overlay to check."
-            )
-            lines.append("")
-        else:
+        def _describe(f: dict) -> str:
+            if f["kind"] == "additive":
+                return f"+{f['offset']:.6g} (degC/K-style offset)"
+            return f"x{f['factor']:.6g}"
+
+        if factor_source == "axis-pixel":
             fx, fy = factor_detail["x"], factor_detail["y"]
-
-            def _describe(f: dict) -> str:
-                if f["kind"] == "additive":
-                    return f"+{f['offset']:.6g} (degC/K-style offset)"
-                return f"x{f['factor']:.6g}"
-
             conf_note = "✅ confirmed at both axis endpoints" if (
                 fx["confident"] and fy["confident"]
             ) else "⚠️ see 'needs attention' section above"
@@ -437,6 +495,25 @@ def main() -> None:
                 f"> Axis-pixel status: **{axp['status']}** "
                 f"(model disagreement {axp.get('model_disagreement_px', 0):.2g}px). "
                 f"x: {_describe(fx)}, y: {_describe(fy)} -- {conf_note}."
+            )
+            lines.append("")
+        elif factor_source == "evidence-text":
+            fy = factor_detail["y"]
+            lines.append(
+                f"> 📝 No axis-pixel ground truth for this entry -- y converted from a factor "
+                f"**parsed out of the evidence text** instead (y: {_describe(fy)}, "
+                f"{fy['detail']}). This was validated once by whoever wrote the entry but is "
+                f"**not independently re-checked here** -- treat with a bit less confidence "
+                f"than the axis-pixel-derived entries above. x-axis is unconverted (raw SI == "
+                f"the paper's units for temperature in this domain)."
+            )
+            lines.append("")
+        else:
+            lines.append(
+                "> 🚫 No axis-pixel ground truth and no parseable evidence-text factor for "
+                "this entry -- re-plot below is raw SI units (unconverted), which may look "
+                "nothing like the original chart's axis numbers even though the underlying "
+                "data is correct (compare curve *shape*, not axis labels)."
             )
             lines.append("")
 
@@ -483,7 +560,9 @@ def main() -> None:
     MARKDOWN_PATH.write_text("\n".join(lines))
     print(
         f"wrote {MARKDOWN_PATH} ({len(verified)} entries, "
-        f"{n_with_axis_data} with axis-pixel data, {len(attention)} flagged for attention)"
+        f"{n_with_axis_data} with axis-pixel data, "
+        f"{n_with_evidence_text_factor} with evidence-text-derived factor, "
+        f"{len(attention)} flagged for attention)"
     )
 
 
