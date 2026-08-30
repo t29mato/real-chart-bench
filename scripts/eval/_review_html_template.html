@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Verified Pairs Review</title>
+<style>
+  :root {
+    --bg: #1b1d22; --panel: #24272e; --border: #383c46; --text: #e6e8ee;
+    --muted: #9aa0ac; --accent: #5b9dff; --ok: #37c273; --bad: #ef5f5f;
+    --warn: #e0a83e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh; overflow: hidden;
+  }
+  .app { display: flex; height: 100vh; }
+  .sidebar {
+    width: 300px; flex-shrink: 0; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; background: var(--panel);
+  }
+  .sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-header h1 { font-size: 14px; margin: 0 0 6px; }
+  .progress { font-size: 12px; color: var(--muted); }
+  .progress-bar {
+    height: 4px; background: var(--border); border-radius: 2px;
+    margin-top: 6px; overflow: hidden;
+  }
+  .progress-bar-fill { height: 100%; background: var(--ok); transition: width .2s; }
+  .filters {
+    display: flex; gap: 6px; padding: 8px 14px;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .filters button {
+    background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 12px; padding: 3px 9px; font-size: 11px; cursor: pointer;
+  }
+  .filters button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .list { flex: 1; overflow-y: auto; }
+  .list-item {
+    padding: 8px 14px; cursor: pointer; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+  }
+  .list-item:hover { background: #2c303a; }
+  .list-item.selected { background: #313850; }
+  .list-item .status-dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--border); flex-shrink: 0;
+  }
+  .list-item .status-dot.ok { background: var(--ok); }
+  .list-item .status-dot.flagged { background: var(--bad); }
+  .list-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-item .flags { font-size: 11px; opacity: .8; }
+  .main { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  .topbar h2 { font-size: 16px; margin: 0; }
+  .topbar .doi { font-size: 12px; color: var(--muted); }
+  .nav-buttons button, .topbar-actions button {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; margin-left: 6px;
+  }
+  .nav-buttons button:hover, .topbar-actions button:hover { border-color: var(--accent); }
+  .content { padding: 16px 20px; flex: 1; }
+  .images {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;
+  }
+  .images figure {
+    margin: 0; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px;
+  }
+  .images img { width: 100%; display: block; border-radius: 4px; background: #fff; }
+  .images figcaption {
+    font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center;
+  }
+  .meta {
+    margin-top: 16px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; font-size: 13px;
+  }
+  .meta table { width: 100%; border-collapse: collapse; }
+  .meta td { padding: 3px 8px 3px 0; vertical-align: top; }
+  .meta td.k { color: var(--muted); white-space: nowrap; width: 1%; }
+  .evidence {
+    margin-top: 12px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.5;
+  }
+  .warn-banner {
+    background: #4a3418; border: 1px solid var(--warn); color: #f0c878;
+    padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+  }
+  .attn-banner {
+    background: #402424; border: 1px solid var(--bad); color: #f0a0a0;
+    padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+  }
+  .review-panel {
+    margin-top: 16px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px;
+  }
+  .review-buttons { display: flex; gap: 8px; margin-bottom: 10px; }
+  .review-buttons button {
+    flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer;
+  }
+  .review-buttons button.ok.active {
+    background: var(--ok); border-color: var(--ok); color: #06231a; font-weight: 600;
+  }
+  .review-buttons button.flag.active {
+    background: var(--bad); border-color: var(--bad); color: #2a0a0a; font-weight: 600;
+  }
+  .review-panel textarea {
+    width: 100%; min-height: 70px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px; font-size: 13px;
+    font-family: inherit; resize: vertical;
+  }
+  .review-panel textarea::placeholder { color: #666; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  kbd { background: #333; border-radius: 3px; padding: 1px 5px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Verified Pairs Review</h1>
+      <div class="progress" id="progressText"></div>
+      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+    </div>
+    <div class="filters">
+      <button data-filter="all" class="active">全件</button>
+      <button data-filter="unreviewed">未確認</button>
+      <button data-filter="ok">OK</button>
+      <button data-filter="flagged">要修正</button>
+      <button data-filter="attention">⚠️軸不一致</button>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h2 id="title"></h2>
+        <div class="doi" id="doiLine"></div>
+      </div>
+      <div style="display:flex; align-items:center;">
+        <div class="nav-buttons">
+          <button id="prevBtn">◀ 前 (←)</button>
+          <button id="nextBtn">次 (→) ▶</button>
+        </div>
+        <div class="topbar-actions">
+          <button id="exportBtn">JSONエクスポート</button>
+        </div>
+      </div>
+    </div>
+    <div class="content">
+      <div id="banners"></div>
+      <div class="images" id="images"></div>
+      <div class="meta" id="meta"></div>
+      <div class="evidence" id="evidence"></div>
+      <div class="review-panel">
+        <div class="review-buttons">
+          <button id="okBtn" class="ok">✅ OK(<kbd>O</kbd>)</button>
+          <button id="flagBtn" class="flag">🚩 要修正(<kbd>F</kbd>)</button>
+        </div>
+        <textarea id="noteInput" placeholder="間違っている点のメモ(例: y軸が読み取れていない、曲線の対応が逆、など)"></textarea>
+        <div class="hint">
+          メモとステータスはブラウザのlocalStorageに自動保存されます。
+          <kbd>←</kbd>/<kbd>→</kbd> で前後移動、<kbd>O</kbd> でOK、<kbd>F</kbd> で要修正。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const ENTRIES = __ENTRIES_JSON__;
+const STORAGE_KEY = "rcb_verified_pairs_review_v1";
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveState(state) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { console.warn("localStorage unavailable:", e); }
+}
+let state = loadState();
+let currentIndex = 0;
+let filter = "all";
+
+function entryState(id) { return state[id] || { status: null, note: "" }; }
+function setEntryState(id, patch) {
+  state[id] = Object.assign(entryState(id), patch);
+  saveState(state);
+  renderList();
+  renderProgress();
+}
+
+function filteredEntries() {
+  return ENTRIES.filter(e => {
+    const s = entryState(e.id);
+    if (filter === "unreviewed") return !s.status;
+    if (filter === "ok") return s.status === "ok";
+    if (filter === "flagged") return s.status === "flagged";
+    if (filter === "attention") return e.needs_attention;
+    return true;
+  });
+}
+
+function renderProgress() {
+  const reviewed = ENTRIES.filter(e => entryState(e.id).status).length;
+  document.getElementById("progressText").textContent =
+    `${reviewed} / ${ENTRIES.length} 確認済み`;
+  document.getElementById("progressFill").style.width =
+    (ENTRIES.length ? (100 * reviewed / ENTRIES.length) : 0) + "%";
+}
+
+function renderList() {
+  const list = document.getElementById("list");
+  const items = filteredEntries();
+  list.innerHTML = "";
+  items.forEach(e => {
+    const s = entryState(e.id);
+    const div = document.createElement("div");
+    div.className = "list-item" + (e.id === currentEntry().id ? " selected" : "");
+    const dot = document.createElement("div");
+    dot.className = "status-dot" + (s.status ? " " + s.status : "");
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = `${e.paper_id} / fig ${e.figure_reference}`;
+    const flags = document.createElement("div");
+    flags.className = "flags";
+    flags.textContent = (e.needs_attention ? "⚠️" : "") + (e.warning ? "🟡" : "");
+    div.appendChild(dot); div.appendChild(label); div.appendChild(flags);
+    div.onclick = () => { currentIndex = ENTRIES.indexOf(e); render(); };
+    list.appendChild(div);
+  });
+}
+
+function currentEntry() { return ENTRIES[currentIndex]; }
+
+function render() {
+  const e = currentEntry();
+  document.getElementById("title").textContent = `${e.paper_id} — Figure ${e.figure_reference}`;
+  document.getElementById("doiLine").innerHTML =
+    `<a href="https://doi.org/${e.doi}" target="_blank" style="color:inherit">${e.doi}</a>` +
+    ` ・ ${e.license_id} ・ verified ${e.verified_at}`;
+
+  const banners = document.getElementById("banners");
+  banners.innerHTML = "";
+  if (e.warning) {
+    const b = document.createElement("div");
+    b.className = "warn-banner";
+    b.textContent = "⚠️ " + e.warning;
+    banners.appendChild(b);
+  }
+  if (e.needs_attention) {
+    const b = document.createElement("div");
+    b.className = "attn-banner";
+    b.textContent =
+      "⚠️ 軸ピクセルGTとregistryの範囲が単純な係数で一致しません" +
+      "(良性の場合が多いですが要確認)。";
+    banners.appendChild(b);
+  }
+
+  const images = document.getElementById("images");
+  images.innerHTML = "";
+  const figs = [["original", "元図", e.img]];
+  if (e.overlay) figs.push(["overlay", "軸ピクセル較正オーバーレイ", e.overlay]);
+  figs.push(["plot", "ground truth 再プロット", e.plot]);
+  figs.forEach(([key, label, src]) => {
+    const fig = document.createElement("figure");
+    const img = document.createElement("img");
+    img.src = src; img.loading = "lazy";
+    const cap = document.createElement("figcaption");
+    cap.textContent = label;
+    fig.appendChild(img); fig.appendChild(cap);
+    images.appendChild(fig);
+  });
+
+  document.getElementById("meta").innerHTML = `
+    <table>
+      <tr><td class="k">x_range (SI)</td><td>${JSON.stringify(e.x_range)} (${e.x_scale})</td></tr>
+      <tr><td class="k">y_range (SI)</td><td>${JSON.stringify(e.y_range)} (${e.y_scale})</td></tr>
+      <tr><td class="k">曲線数</td><td>${e.n_curves}</td></tr>
+      <tr><td class="k">単位変換</td><td>${e.factor_summary}</td></tr>
+      <tr><td class="k">axis-pixel status</td><td>${e.axp_status || "(none)"}</td></tr>
+    </table>`;
+  document.getElementById("evidence").textContent = "evidence: " + e.evidence;
+
+  const s = entryState(e.id);
+  document.getElementById("okBtn").classList.toggle("active", s.status === "ok");
+  document.getElementById("flagBtn").classList.toggle("active", s.status === "flagged");
+  document.getElementById("noteInput").value = s.note || "";
+
+  renderList();
+  renderProgress();
+  document.getElementById("prevBtn").disabled = currentIndex <= 0;
+  document.getElementById("nextBtn").disabled = currentIndex >= ENTRIES.length - 1;
+}
+
+document.getElementById("prevBtn").onclick = () => {
+  if (currentIndex > 0) { currentIndex--; render(); }
+};
+document.getElementById("nextBtn").onclick = () => {
+  if (currentIndex < ENTRIES.length - 1) { currentIndex++; render(); }
+};
+document.getElementById("okBtn").onclick = () => {
+  const e = currentEntry();
+  const s = entryState(e.id);
+  setEntryState(e.id, { status: s.status === "ok" ? null : "ok" });
+  render();
+};
+document.getElementById("flagBtn").onclick = () => {
+  const e = currentEntry();
+  const s = entryState(e.id);
+  setEntryState(e.id, { status: s.status === "flagged" ? null : "flagged" });
+  render();
+};
+document.getElementById("noteInput").addEventListener("input", (ev) => {
+  setEntryState(currentEntry().id, { note: ev.target.value });
+});
+document.querySelectorAll(".filters button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".filters button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    filter = btn.dataset.filter;
+    const items = filteredEntries();
+    if (items.length) currentIndex = ENTRIES.indexOf(items[0]);
+    render();
+  };
+});
+document.getElementById("exportBtn").onclick = () => {
+  const out = ENTRIES.map(e => ({
+    id: e.id, paper_id: e.paper_id, figure_reference: e.figure_reference,
+    status: entryState(e.id).status, note: entryState(e.id).note
+  })).filter(r => r.status || r.note);
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "verified_pairs_review_" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+};
+document.addEventListener("keydown", (ev) => {
+  if (ev.target.tagName === "TEXTAREA") return;
+  if (ev.key === "ArrowLeft") document.getElementById("prevBtn").click();
+  else if (ev.key === "ArrowRight") document.getElementById("nextBtn").click();
+  else if (ev.key.toLowerCase() === "o") document.getElementById("okBtn").click();
+  else if (ev.key.toLowerCase() === "f") document.getElementById("flagBtn").click();
+});
+
+render();
+</script>
+</body>
+</html>

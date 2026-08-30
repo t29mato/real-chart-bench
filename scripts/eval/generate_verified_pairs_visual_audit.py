@@ -69,6 +69,7 @@ AUDIT_DIR = REPO_ROOT / "data/verified_pairs/audit"
 PLOTS_DIR = AUDIT_DIR / "plots"
 OVERLAYS_DIR = AUDIT_DIR / "overlays"
 MARKDOWN_PATH = AUDIT_DIR / "visual-audit.md"
+REVIEW_HTML_PATH = AUDIT_DIR / "review.html"
 
 _COLORS = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 _FACTOR_AGREEMENT_TOL = 0.03  # 3% relative disagreement between endpoint-derived factors
@@ -362,6 +363,83 @@ def _render_pixel_overlay(entry: dict, axp: dict, out_path: Path) -> None:
     plt.close(fig)
 
 
+def _write_review_html(
+    rows: list[tuple], papers_by_id: dict, attention_keys: set[tuple[str, str]]
+) -> None:
+    """Writes a single self-contained HTML page for one-by-one manual review.
+
+    Plain local file, not an Artifact -- opened directly via file:// in a
+    browser, so none of the Artifact sandbox's constraints apply (no size
+    cap beyond being a reasonable local file, no CSP blocking localStorage
+    or downloads). Images are referenced by path relative to this file
+    (which lives in AUDIT_DIR alongside plots/ and overlays/), not
+    embedded, since embedding ~330 images as data URIs would bloat a single
+    HTML file for no benefit when the images already sit right next to it
+    on disk.
+
+    Review state (OK / flagged + a free-text note per entry, for "this one
+    looks wrong, here's why") is kept in the browser's localStorage, keyed
+    by entry id, so it survives reloads without needing a backend -- plus
+    an Export button that downloads the current state as JSON, since
+    localStorage for file:// pages is Chrome-reliable but not guaranteed
+    across every browser.
+    """
+    entries = []
+    for entry, curves, plot_path, overlay_path, axp, factor_detail, factor_source, warning in rows:
+        slug = _slug(entry)
+        anchor = slug.lower()
+        paper = papers_by_id.get(entry["paper_id"], {})
+        img_rel = os.path.relpath(REPO_ROOT / entry["image_path"], AUDIT_DIR)
+        plot_rel = os.path.relpath(plot_path, AUDIT_DIR)
+        overlay_rel = os.path.relpath(overlay_path, AUDIT_DIR) if overlay_path else None
+
+        if factor_source == "axis-pixel":
+            fx, fy = factor_detail["x"], factor_detail["y"]
+
+            def _short(f: dict) -> str:
+                if f["kind"] == "additive":
+                    return f"+{f['offset']:.4g}"
+                if f["kind"] in ("log10", "indeterminate"):
+                    return "raw SI"
+                return f"×{f['factor']:.4g}"
+
+            factor_summary = f"x: {_short(fx)}, y: {_short(fy)} (axis-pixel derived)"
+        elif factor_source == "evidence-text":
+            fy = factor_detail["y"]
+            factor_summary = f"y: ×{fy['factor']:.4g} (evidence-text, unverified)"
+        else:
+            factor_summary = "raw SI (no conversion source)"
+
+        entries.append(
+            {
+                "id": anchor,
+                "paper_id": entry["paper_id"],
+                "figure_reference": entry["figure_reference"],
+                "doi": paper.get("doi", "?"),
+                "license_id": entry.get("license_id", "?"),
+                "x_range": entry["x_range"],
+                "y_range": entry["y_range"],
+                "x_scale": entry.get("x_scale", "linear"),
+                "y_scale": entry.get("y_scale", "linear"),
+                "verified_at": entry.get("verified_at", "?"),
+                "evidence": entry["evidence"],
+                "n_curves": len(curves),
+                "img": img_rel,
+                "overlay": overlay_rel,
+                "plot": plot_rel,
+                "warning": warning,
+                "axp_status": axp["status"] if axp else None,
+                "factor_summary": factor_summary,
+                "needs_attention": (entry["paper_id"], entry["figure_id"]) in attention_keys,
+            }
+        )
+
+    data_json = json.dumps(entries, ensure_ascii=False)
+    template = (Path(__file__).parent / "_review_html_template.html").read_text()
+    html = template.replace("__ENTRIES_JSON__", data_json)
+    REVIEW_HTML_PATH.write_text(html)
+
+
 def main() -> None:
     registry = json.loads(REGISTRY_PATH.read_text())
     ground_truth = json.loads(GROUND_TRUTH_PATH.read_text())
@@ -631,8 +709,12 @@ def main() -> None:
         lines.append("")
 
     MARKDOWN_PATH.write_text("\n".join(lines))
+
+    attention_keys = {(e["paper_id"], e["figure_id"]) for e, _fx, _fy in attention}
+    _write_review_html(rows, papers_by_id, attention_keys)
+
     print(
-        f"wrote {MARKDOWN_PATH} ({len(verified)} entries, "
+        f"wrote {MARKDOWN_PATH} and {REVIEW_HTML_PATH} ({len(verified)} entries, "
         f"{n_with_axis_data} with axis-pixel data, "
         f"{n_with_evidence_text_factor} with evidence-text-derived factor, "
         f"{len(attention)} flagged for attention)"
