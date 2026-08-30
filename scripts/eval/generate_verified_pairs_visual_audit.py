@@ -116,21 +116,29 @@ def _slug(entry: dict) -> str:
     return f"{entry['paper_id']}_{entry['figure_id']}_{ref}"
 
 
-def _derive_factor(reg_range: list[float], label_min: float, label_max: float) -> dict:
+def _derive_factor(
+    reg_range: list[float], label_min: float, label_max: float, scale: str = "linear"
+) -> dict:
     """Derive the SI -> paper-display relationship for one axis.
 
     Most properties in this domain (resistivity, conductivity, Seebeck
     coefficient, ...) rescale multiplicatively: display = k * SI. Temperature
     is the one common exception -- degC vs K is *additive* (degC = K -
     273.15), which a multiplicative-factor fit will always misreport as
-    "disagreement" even when both numbers are correct. This function checks
-    both hypotheses and reports whichever one actually fits.
+    "disagreement" even when both numbers are correct. A third pattern shows
+    up on a handful of log-y Arrhenius plots (e.g. paper 46278, design 7.42):
+    the axis prints the raw log10 value itself (-1, -2, ... -6) instead of
+    decade labels (10^-1, 10^-2, ...) -- display = log10(SI), not a linear
+    relationship at all, so neither the multiplicative nor additive fit
+    applies (and the negative label values on a physically-positive quantity
+    are the tell). This function checks all three and reports whichever one
+    actually fits.
 
-    Returns a dict with `kind` ("multiplicative" | "additive" | "indeterminate"),
-    `factor` (the multiplicative k, always populated for applying to a plot,
-    1.0 when the fit is additive-only or indeterminate), `offset` (populated
-    only when `kind == "additive"`), `confident` (bool), and `detail` (str
-    explaining the cross-check).
+    Returns a dict with `kind` ("multiplicative" | "additive" | "log10" |
+    "indeterminate"), `factor` (the multiplicative k, always populated for
+    applying to a plot, 1.0 when the fit isn't multiplicative), `offset`
+    (populated only when `kind == "additive"`), `confident` (bool), and
+    `detail` (str explaining the cross-check).
     """
     lo, hi = reg_range
     span = hi - lo
@@ -141,6 +149,28 @@ def _derive_factor(reg_range: list[float], label_min: float, label_max: float) -
             "offset": None,
             "confident": False,
             "detail": "degenerate registry range (span=0)",
+        }
+
+    if scale == "log" and lo > 0 and (label_min < 0 or label_max < 0):
+        import math
+
+        fit = abs(math.log10(lo) - label_min) < 0.5 and abs(math.log10(hi) - label_max) < 0.5
+        return {
+            "kind": "log10",
+            "factor": 1.0,
+            "offset": None,
+            "confident": True if fit else None,
+            "detail": (
+                f"axis prints raw log10 values ({label_min:g}..{label_max:g}) against a "
+                f"positive-SI log-scale range ({lo:g}..{hi:g}) -- not a linear factor, "
+                f"design 7.42's known pattern"
+                + (
+                    ""
+                    if fit
+                    else " (log10(range) doesn't match the printed values though -- "
+                    "check manually)"
+                )
+            ),
         }
 
     k_span = (label_max - label_min) / span
@@ -192,12 +222,20 @@ def _derive_factor(reg_range: list[float], label_min: float, label_max: float) -
             ),
         }
 
+    # Neither hypothesis fit. This is very often just the "registry range is
+    # a hair wider than the outermost printed label" pattern (e.g. axis
+    # framed to 900 to leave room for a data point at 865, only 300-800
+    # labeled) rather than an actual unit-space bug -- but a wrong best-
+    # effort factor would visibly *distort* the re-plot's axis, which reads
+    # as worse than not converting at all. Fall back to raw SI (factor=1)
+    # rather than force a number neither check could confirm; the mismatch
+    # is still surfaced via `confident=False` for the "needs attention" list.
     return {
         "kind": "indeterminate",
-        "factor": mult_factor,
+        "factor": 1.0,
         "offset": None,
         "confident": False,
-        "detail": mult_detail,
+        "detail": mult_detail + " (unreliable -- re-plot uses raw SI instead of this factor)",
     }
 
 
@@ -277,30 +315,37 @@ def _render_pixel_overlay(entry: dict, axp: dict, out_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(5, 5 * h / w if w else 5), dpi=110)
     ax.imshow(img)
     bbox = axp["pixel_bbox_mean"]
-    ax.axvline(bbox["x_min_px"], color="lime", linewidth=1, linestyle="--")
-    ax.axvline(bbox["x_max_px"], color="lime", linewidth=1, linestyle="--")
-    ax.axhline(bbox["y_min_px"], color="magenta", linewidth=1, linestyle="--")
-    ax.axhline(bbox["y_max_px"], color="magenta", linewidth=1, linestyle="--")
-    ax.text(
-        bbox["x_min_px"], h * 0.02, str(axp["x_min_label"]),
-        color="lime", fontsize=7, ha="center", va="top", rotation=90,
-        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
-    )
-    ax.text(
-        bbox["x_max_px"], h * 0.02, str(axp["x_max_label"]),
-        color="lime", fontsize=7, ha="center", va="top", rotation=90,
-        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
-    )
-    ax.text(
-        w * 0.02, bbox["y_min_px"], str(axp["y_min_label"]),
-        color="magenta", fontsize=7, ha="left", va="center",
-        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
-    )
-    ax.text(
-        w * 0.02, bbox["y_max_px"], str(axp["y_max_label"]),
-        color="magenta", fontsize=7, ha="left", va="center",
-        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
-    )
+
+    def _vline(px, label):
+        if px is None:
+            return
+        ax.axvline(px, color="lime", linewidth=1, linestyle="--")
+        ax.text(
+            px, h * 0.02, str(label),
+            color="lime", fontsize=7, ha="center", va="top", rotation=90,
+            bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
+        )
+
+    def _hline(px, label):
+        if px is None:
+            return
+        ax.axhline(px, color="magenta", linewidth=1, linestyle="--")
+        ax.text(
+            w * 0.02, px, str(label),
+            color="magenta", fontsize=7, ha="left", va="center",
+            bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
+        )
+
+    _vline(bbox["x_min_px"], axp["x_min_label"])
+    _vline(bbox["x_max_px"], axp["x_max_label"])
+    _hline(bbox["y_min_px"], axp["y_min_label"])
+    _hline(bbox["y_max_px"], axp["y_max_label"])
+    if bbox["x_min_px"] is None and bbox["x_max_px"] is None:
+        ax.text(
+            w * 0.5, h * 0.5, "x-axis not visible\nin this crop",
+            color="yellow", fontsize=9, ha="center", va="center",
+            bbox={"facecolor": "black", "alpha": 0.6, "pad": 2},
+        )
     disagreement = axp.get("model_disagreement_px", 0)
     legend_handles = [
         Patch(color="lime", label="x tick (min/max)"),
@@ -352,8 +397,25 @@ def main() -> None:
         if axp is not None:
             n_with_axis_data += 1
             factor_source = "axis-pixel"
-            fx = _derive_factor(entry["x_range"], axp["x_min_label"], axp["x_max_label"])
-            fy = _derive_factor(entry["y_range"], axp["y_min_label"], axp["y_max_label"])
+            no_label = {
+                "kind": "indeterminate",
+                "factor": 1.0,
+                "offset": None,
+                "confident": None,
+                "detail": "no printed label for this axis in the source crop (see notes)",
+            }
+            x_scale = entry.get("x_scale", "linear")
+            y_scale = entry.get("y_scale", "linear")
+            fx = (
+                _derive_factor(entry["x_range"], axp["x_min_label"], axp["x_max_label"], x_scale)
+                if axp["x_min_label"] is not None and axp["x_max_label"] is not None
+                else no_label
+            )
+            fy = (
+                _derive_factor(entry["y_range"], axp["y_min_label"], axp["y_max_label"], y_scale)
+                if axp["y_min_label"] is not None and axp["y_max_label"] is not None
+                else no_label
+            )
             factor_detail = {"x": fx, "y": fy}
             k_x, off_x = fx["factor"], (fx["offset"] or 0.0)
             k_y, off_y = fy["factor"], (fy["offset"] or 0.0)
@@ -484,16 +546,27 @@ def main() -> None:
         def _describe(f: dict) -> str:
             if f["kind"] == "additive":
                 return f"+{f['offset']:.6g} (degC/K-style offset)"
+            if f["kind"] == "log10":
+                return "n/a (raw-log10-printed axis, see note)"
+            if f["kind"] == "indeterminate":
+                if f["confident"] is False:
+                    return "raw SI (unreliable factor, see 'needs attention' above)"
+                return "n/a (no label)"
             return f"x{f['factor']:.6g}"
 
         if factor_source == "axis-pixel":
             fx, fy = factor_detail["x"], factor_detail["y"]
-            conf_note = "✅ confirmed at both axis endpoints" if (
-                fx["confident"] and fy["confident"]
-            ) else "⚠️ see 'needs attention' section above"
+            if fx["confident"] is False or fy["confident"] is False:
+                conf_note = "⚠️ see 'needs attention' section above"
+            elif fx["confident"] and fy["confident"]:
+                conf_note = "✅ confirmed at both axis endpoints"
+            else:
+                conf_note = "ℹ️ not a simple linear factor on one axis (see above)"
+            disagreement_px = axp.get("model_disagreement_px")
+            disagreement_str = f"{disagreement_px:.2g}px" if disagreement_px is not None else "n/a"
             lines.append(
                 f"> Axis-pixel status: **{axp['status']}** "
-                f"(model disagreement {axp.get('model_disagreement_px', 0):.2g}px). "
+                f"(model disagreement {disagreement_str}). "
                 f"x: {_describe(fx)}, y: {_describe(fy)} -- {conf_note}."
             )
             lines.append("")
