@@ -15,7 +15,7 @@
         "crops/5904/corrected_fig5.png: the source figure is rotated 90 degrees; pixel coordinates are reported in image-pixel orientation (see this entry's notes), not the plot's own x/y orientation.",
         "Images without an explicit panel note but with more than one panel in frame (images/5166, images/18759, images/17037) had panel (a) selected by default since no panel was specified to the judges.",
         "images/17037, images/47998: the initial judging pass (before per-panel labels were cross-checked against registry.json) picked the wrong panel for these two composite images (registry.json specifies panel 'd' and 'c' respectively, but panel 'a' and 'b' were judged instead). Fixed by re-cropping to the correct single panel and re-judging; see each entry's notes.",
-        "crops/17044/fig2a.png: excluded from owner_reviewed pending a decision on how to handle images whose axis is only recoverable via a sibling panel (see https://github.com/t29mato/real-chart-bench/issues/5)."
+        "crops/17044/fig2a.png: status is \"excluded\" (see that entry's excluded_reason and design doc §7.42), not scored as GT. Not deleted -- kept in this file as a documented hard case for future PDF-level extraction work (shared/inherited axis across sibling panels)."
       ],
       "updated_at": "2026-08-30"
     }
@@ -207,7 +207,8 @@
       "右下にinset(ρ vs Temperature, y対数軸, 上側にTemperature(K)軸)が重なっている。対象は外側メインプロット(枠 x=111.5-707.5, y=14.5-491.5)。メインプロットのx目盛りラベルは画像下端で切れて読めないため、同一図のfig2b(枠位置・目盛り位置が完全一致, ラベル0/50/.../300)およびinsetの温度レンジから0-300Kと判断した。x目盛りは111.5,210.5,310.5,409.5,509.5,608.5,707.5の7本。",
       "Inset (rho vs Temperature, log y-scale) at lower right; main plot targeted. Main x-axis tick labels are cropped out of the image; x values (0-300 K, major ticks every 50 K) inferred from the 7 major ticks and alignment with the inset's shared Temperature axis / shaded band."
     ],
-    "status": "llm_candidate"
+    "status": "excluded",
+    "excluded_reason": "Main-plot x-axis tick labels are not printed anywhere in this image (only recoverable by cross-referencing the sibling panel fig2b.png, a shared/inherited-axis layout). A single-image axis-detection benchmark should not require cross-referencing another image, so this entry is excluded from GT scope rather than scored. See docs/design/benchmark-architecture.md §7.42 and https://github.com/t29mato/real-chart-bench/issues/5."
   },
   {
     "paper_id": "17044",
