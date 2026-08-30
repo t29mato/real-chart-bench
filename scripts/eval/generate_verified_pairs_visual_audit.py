@@ -1,17 +1,41 @@
 """Generate a Markdown visual audit of every verified_pairs entry.
 
 For each `status == "verified"` entry in `data/verified_pairs/registry.json`,
-renders a plot of the digitized ground-truth curves (from
-`data/verified_pairs/ground_truth.json`) using the entry's own axis
-calibration (`x_range`/`y_range`/`x_scale`/`y_scale`), and places it next to
-the original chart crop plus the entry's metadata and evidence text in one
-Markdown file. Intended for a human to eyeball each pair and confirm the
-digitized curve actually matches what the original chart shows -- this is a
-review aid, not a scoring tool (see `run_baselines.py` / the domain metrics
-for that).
+this produces one Markdown section with:
+
+1. the original chart crop,
+2. (when `data/verified_pairs/axis_pixel_candidates.json` has a matching
+   entry) a **pixel-calibration overlay** -- the original image with the
+   LLM-judged tick pixel positions drawn on top, so a human can visually
+   confirm the calibration lines actually land on the printed tick marks,
+3. the digitized ground-truth curves (from `ground_truth.json`) re-plotted.
+   Starrydata stores every curve in SI units, but papers almost always
+   display a rescaled unit (uV/K, S/cm, mOhm.cm, ...). When axis pixel
+   candidates are available, the printed axis's own tick *values* (not
+   just their pixel positions) let us derive the exact SI -> paper-display
+   conversion factor with no unit-string guessing: divide the printed tick
+   value by the SI-unit registry x_range/y_range at that same point. The
+   re-plot is drawn in the paper's own units and should look identical in
+   shape and axis numbers to panel 1. Where no axis pixel candidate exists
+   yet, the re-plot falls back to raw SI units and is labeled as such.
+
+A derived conversion factor is trusted only when it agrees at both the min
+and max end of the axis (checked independently -- see `_derive_factor`);
+a disagreement usually means the registry's x_range/y_range and the axis
+pixel candidate's tick labels don't actually describe the same axis
+extent (e.g. a mismatched panel, or a genuine mis-read by one of the two
+methods) and is surfaced as a top-of-file "needs attention" flag rather
+than silently applied.
+
+This is a review aid, not a scoring tool (see `run_baselines.py` / the
+domain metrics for that) -- it never modifies registry.json or
+ground_truth.json, both stay in their SI-unit, "always derive" form used
+by the evaluation harness (design 7.33); this script only re-expresses a
+copy of the curve data for human eyeballing.
 
 Output is written under `data/verified_pairs/audit/` (gitignored --
-regeneratable from committed registry.json + ground_truth.json + images).
+regeneratable from committed registry.json + ground_truth.json +
+axis_pixel_candidates.json + images).
 
 Usage: python scripts/eval/generate_verified_pairs_visual_audit.py
 """
@@ -26,16 +50,21 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.patches import Patch  # noqa: E402
+from PIL import Image  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = REPO_ROOT / "data/verified_pairs/registry.json"
 GROUND_TRUTH_PATH = REPO_ROOT / "data/verified_pairs/ground_truth.json"
 PAPERS_PATH = REPO_ROOT / "data/manifest/v0/papers.json"
+AXIS_PIXEL_CANDIDATES_PATH = REPO_ROOT / "data/verified_pairs/axis_pixel_candidates.json"
 AUDIT_DIR = REPO_ROOT / "data/verified_pairs/audit"
 PLOTS_DIR = AUDIT_DIR / "plots"
+OVERLAYS_DIR = AUDIT_DIR / "overlays"
 MARKDOWN_PATH = AUDIT_DIR / "visual-audit.md"
 
 _COLORS = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+_FACTOR_AGREEMENT_TOL = 0.03  # 3% relative disagreement between endpoint-derived factors
 
 
 def _slug(entry: dict) -> str:
@@ -43,8 +72,108 @@ def _slug(entry: dict) -> str:
     return f"{entry['paper_id']}_{entry['figure_id']}_{ref}"
 
 
-def _render_ground_truth_plot(entry: dict, curves: list[dict], out_path: Path) -> str | None:
-    """Returns a warning string if anything looked off (e.g. dropped points), else None."""
+def _derive_factor(reg_range: list[float], label_min: float, label_max: float) -> dict:
+    """Derive the SI -> paper-display relationship for one axis.
+
+    Most properties in this domain (resistivity, conductivity, Seebeck
+    coefficient, ...) rescale multiplicatively: display = k * SI. Temperature
+    is the one common exception -- degC vs K is *additive* (degC = K -
+    273.15), which a multiplicative-factor fit will always misreport as
+    "disagreement" even when both numbers are correct. This function checks
+    both hypotheses and reports whichever one actually fits.
+
+    Returns a dict with `kind` ("multiplicative" | "additive" | "indeterminate"),
+    `factor` (the multiplicative k, always populated for applying to a plot,
+    1.0 when the fit is additive-only or indeterminate), `offset` (populated
+    only when `kind == "additive"`), `confident` (bool), and `detail` (str
+    explaining the cross-check).
+    """
+    lo, hi = reg_range
+    span = hi - lo
+    if span == 0:
+        return {
+            "kind": "indeterminate",
+            "factor": 1.0,
+            "offset": None,
+            "confident": False,
+            "detail": "degenerate registry range (span=0)",
+        }
+
+    k_span = (label_max - label_min) / span
+    k_lo = (label_min / lo) if lo != 0 else None
+    k_hi = (label_max / hi) if hi != 0 else None
+    endpoint_ks = [k for k in (k_lo, k_hi) if k is not None]
+
+    mult_factor, mult_agree, mult_detail = None, False, None
+    if len(endpoint_ks) == 2:
+        a, b = endpoint_ks
+        denom = max(abs(a), abs(b), 1e-30)
+        mult_agree = abs(a - b) / denom <= _FACTOR_AGREEMENT_TOL
+        mult_factor = (a + b) / 2 if mult_agree else k_span
+        mult_detail = f"k_min={a:.6g}, k_max={b:.6g}, k_span={k_span:.6g}"
+    elif len(endpoint_ks) == 1:
+        (k,) = endpoint_ks
+        denom = max(abs(k), abs(k_span), 1e-30)
+        mult_agree = abs(k - k_span) / denom <= _FACTOR_AGREEMENT_TOL
+        mult_factor = k if mult_agree else k_span
+        mult_detail = f"k_endpoint={k:.6g}, k_span={k_span:.6g}"
+    else:
+        mult_factor, mult_detail = k_span, f"k_span={k_span:.6g} (both range endpoints are 0)"
+
+    if mult_agree:
+        return {
+            "kind": "multiplicative",
+            "factor": mult_factor,
+            "offset": None,
+            "confident": True,
+            "detail": mult_detail,
+        }
+
+    # multiplicative fit failed -- check whether it's actually additive
+    # (display = SI + offset), the degC-vs-K signature.
+    offset_lo = label_min - lo
+    offset_hi = label_max - hi
+    offset_denom = max(abs(offset_lo), abs(offset_hi), 1.0)
+    additive_agree = abs(offset_lo - offset_hi) / offset_denom <= _FACTOR_AGREEMENT_TOL * 3
+    if additive_agree:
+        return {
+            "kind": "additive",
+            "factor": 1.0,
+            "offset": (offset_lo + offset_hi) / 2,
+            "confident": True,
+            "detail": (
+                f"offset_min={offset_lo:.6g}, offset_max={offset_hi:.6g} "
+                f"(fits display = SI + offset, e.g. degC = K - 273.15, "
+                f"not a unit-scale mismatch)"
+            ),
+        }
+
+    return {
+        "kind": "indeterminate",
+        "factor": mult_factor,
+        "offset": None,
+        "confident": False,
+        "detail": mult_detail,
+    }
+
+
+def _render_ground_truth_plot(
+    entry: dict,
+    curves: list[dict],
+    out_path: Path,
+    k_x: float,
+    k_y: float,
+    off_x: float,
+    off_y: float,
+    converted: bool,
+) -> str | None:
+    """Re-plot the ground-truth curves as `value * k + offset` per axis.
+
+    `offset` is non-zero only for an additive axis relationship (e.g. degC =
+    K - 273.15); it's applied after the multiplicative factor so both can
+    combine, though in practice only one of the two is ever non-trivial for
+    a given axis in this domain. Returns a warning string, if any.
+    """
     warning = None
     fig, ax = plt.subplots(figsize=(5, 3.6), dpi=110)
     x_scale = entry.get("x_scale", "linear")
@@ -60,6 +189,8 @@ def _render_ground_truth_plot(entry: dict, curves: list[dict], out_path: Path) -
         if x_scale == "log":
             pairs = [(x, y) for x, y in zip(xs, ys) if x > 0]
             xs, ys = ([p[0] for p in pairs], [p[1] for p in pairs])
+        xs = [x * k_x + off_x for x in xs]
+        ys = [y * k_y + off_y for y in ys]
         color = _COLORS[i % len(_COLORS)]
         label = curve.get("prop_y", f"curve {i}")
         if sum(1 for c in curves if c.get("prop_y") == label) > 1:
@@ -71,43 +202,126 @@ def _render_ground_truth_plot(entry: dict, curves: list[dict], out_path: Path) -
 
     ax.set_xscale(x_scale)
     ax.set_yscale(y_scale)
-    x_range = entry["x_range"]
-    y_range = entry["y_range"]
+    x_range = [v * k_x + off_x for v in entry["x_range"]]
+    y_range = [v * k_y + off_y for v in entry["y_range"]]
     try:
         ax.set_xlim(x_range)
         ax.set_ylim(y_range)
     except ValueError:
-        pass  # e.g. non-positive limit on a log axis; let matplotlib autoscale instead
+        pass
     unit_x = curves[0].get("unit_x", "") if curves else ""
     unit_y = curves[0].get("unit_y", "") if curves else ""
     prop_x = curves[0].get("prop_x", "x") if curves else "x"
-    ax.set_xlabel(f"{prop_x} ({unit_x})" if unit_x else prop_x)
-    ax.set_ylabel(unit_y or "y")
+    x_suffix = "" if k_x == 1 and off_x == 0 else f" x{k_x:.4g}+{off_x:.4g}"
+    y_suffix = "" if k_y == 1 and off_y == 0 else f" x{k_y:.4g}+{off_y:.4g}"
+    ax.set_xlabel(f"{prop_x} ({unit_x}{x_suffix})" if unit_x else prop_x)
+    ax.set_ylabel(f"{unit_y}{y_suffix}" if unit_y else "y")
     ax.legend(fontsize=6, loc="best")
-    ax.set_title(f"ground truth: {len(curves)} curve(s)", fontsize=9)
+    title = "ground truth, paper units" if converted else "ground truth, RAW SI units (unconverted)"
+    ax.set_title(f"{title} -- {len(curves)} curve(s)", fontsize=8)
     fig.tight_layout()
     fig.savefig(out_path)
     plt.close(fig)
     return warning
 
 
+def _render_pixel_overlay(entry: dict, axp: dict, out_path: Path) -> None:
+    """Draw the axis_pixel_candidates tick pixel positions on top of the source image."""
+    img_path = REPO_ROOT / entry["image_path"]
+    img = Image.open(img_path)
+    w, h = img.size
+    fig, ax = plt.subplots(figsize=(5, 5 * h / w if w else 5), dpi=110)
+    ax.imshow(img)
+    bbox = axp["pixel_bbox_mean"]
+    ax.axvline(bbox["x_min_px"], color="lime", linewidth=1, linestyle="--")
+    ax.axvline(bbox["x_max_px"], color="lime", linewidth=1, linestyle="--")
+    ax.axhline(bbox["y_min_px"], color="magenta", linewidth=1, linestyle="--")
+    ax.axhline(bbox["y_max_px"], color="magenta", linewidth=1, linestyle="--")
+    ax.text(
+        bbox["x_min_px"], h * 0.02, str(axp["x_min_label"]),
+        color="lime", fontsize=7, ha="center", va="top", rotation=90,
+        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
+    )
+    ax.text(
+        bbox["x_max_px"], h * 0.02, str(axp["x_max_label"]),
+        color="lime", fontsize=7, ha="center", va="top", rotation=90,
+        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
+    )
+    ax.text(
+        w * 0.02, bbox["y_min_px"], str(axp["y_min_label"]),
+        color="magenta", fontsize=7, ha="left", va="center",
+        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
+    )
+    ax.text(
+        w * 0.02, bbox["y_max_px"], str(axp["y_max_label"]),
+        color="magenta", fontsize=7, ha="left", va="center",
+        bbox={"facecolor": "black", "alpha": 0.5, "pad": 0.5},
+    )
+    disagreement = axp.get("model_disagreement_px", 0)
+    legend_handles = [
+        Patch(color="lime", label="x tick (min/max)"),
+        Patch(color="magenta", label="y tick (min/max)"),
+    ]
+    ax.legend(handles=legend_handles, fontsize=6, loc="lower right")
+    ax.set_title(
+        f"pixel calibration -- {axp['status']}, model disagreement {disagreement:.2g}px",
+        fontsize=8,
+    )
+    ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
 def main() -> None:
     registry = json.loads(REGISTRY_PATH.read_text())
     ground_truth = json.loads(GROUND_TRUTH_PATH.read_text())
     papers_by_id = {p["paper_id"]: p for p in json.loads(PAPERS_PATH.read_text())}
+    axis_candidates_raw = json.loads(AXIS_PIXEL_CANDIDATES_PATH.read_text())
+    axp_by_key = {
+        (a["paper_id"], a["figure_id"]): a for a in axis_candidates_raw if "_meta" not in a
+    }
 
     verified = [e for e in registry if e["status"] == "verified"]
     verified.sort(key=lambda e: (e["paper_id"], e["figure_reference"]))
 
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    OVERLAYS_DIR.mkdir(parents=True, exist_ok=True)
 
     rows = []
+    n_with_axis_data = 0
+    attention = []  # entries whose derived factor disagreed at the two endpoints
+
     for entry in verified:
         curves = ground_truth.get(entry["figure_id"], [])
         slug = _slug(entry)
+        axp = axp_by_key.get((entry["paper_id"], entry["figure_id"]))
+        if axp is not None and axp.get("status") == "excluded":
+            axp = None
+
+        k_x, k_y, off_x, off_y, converted = 1.0, 1.0, 0.0, 0.0, False
+        factor_detail = None
+        overlay_path = None
+
+        if axp is not None:
+            n_with_axis_data += 1
+            fx = _derive_factor(entry["x_range"], axp["x_min_label"], axp["x_max_label"])
+            fy = _derive_factor(entry["y_range"], axp["y_min_label"], axp["y_max_label"])
+            factor_detail = {"x": fx, "y": fy}
+            k_x, off_x = fx["factor"], (fx["offset"] or 0.0)
+            k_y, off_y = fy["factor"], (fy["offset"] or 0.0)
+            converted = True
+            if fx["confident"] is False or fy["confident"] is False:
+                attention.append((entry, fx, fy))
+
+            overlay_path = OVERLAYS_DIR / f"{slug}.png"
+            _render_pixel_overlay(entry, axp, overlay_path)
+
         plot_path = PLOTS_DIR / f"{slug}.png"
-        warning = _render_ground_truth_plot(entry, curves, plot_path)
-        rows.append((entry, curves, plot_path, warning))
+        warning = _render_ground_truth_plot(
+            entry, curves, plot_path, k_x, k_y, off_x, off_y, converted
+        )
+        rows.append((entry, curves, plot_path, overlay_path, axp, factor_detail, warning))
 
     lines: list[str] = []
     lines.append("# Verified Pairs Visual Audit")
@@ -115,37 +329,78 @@ def main() -> None:
     lines.append(
         f"Generated from `data/verified_pairs/registry.json` "
         f"({len(verified)} `status=\"verified\"` entries) + "
-        f"`data/verified_pairs/ground_truth.json`. Regenerate with "
+        f"`data/verified_pairs/ground_truth.json` + "
+        f"`data/verified_pairs/axis_pixel_candidates.json`. Regenerate with "
         f"`python scripts/eval/generate_verified_pairs_visual_audit.py`."
     )
     lines.append("")
     lines.append(
-        "For each entry: **left = original chart crop**, **right = the digitized "
-        "ground-truth curve(s) re-plotted** using the entry's own `x_range`/`y_range`/"
-        "scale. Check the box once you've confirmed the right plot's shape, series "
-        "count, and value ranges actually match the left image."
+        "Each entry shows, left to right: **(1) the original chart crop**, "
+        "**(2) the pixel-calibration overlay** (green = x-axis tick pixel positions, "
+        "magenta = y-axis tick pixel positions, from `axis_pixel_candidates.json` -- "
+        "only present for entries that have axis-pixel ground truth), and "
+        "**(3) the digitized ground-truth curve(s) re-plotted in the paper's own "
+        "display units** (derived from the axis-pixel tick label values, not guessed -- "
+        "see the module docstring). Where no axis-pixel data exists yet, (2) is omitted "
+        "and (3) falls back to raw SI units, clearly labeled."
     )
     lines.append("")
     n_log_y = sum(1 for e in verified if e.get("y_scale") == "log")
     lines.append(f"- Total verified entries: **{len(verified)}**")
+    lines.append(
+        f"- Entries with axis-pixel ground truth (unit-converted + calibration-checkable): "
+        f"**{n_with_axis_data}** / {len(verified)}"
+    )
     lines.append(f"- log-y entries: {n_log_y}")
-    n_warnings = sum(1 for *_, w in rows if w)
-    lines.append(f"- Entries with a rendering warning (see ⚠️ below): {n_warnings}")
+    n_render_warnings = sum(1 for *_, w in rows if w)
+    lines.append(f"- Entries with a re-plot rendering warning: {n_render_warnings}")
+    lines.append(f"- Entries with a factor-agreement mismatch (see below): {len(attention)}")
     lines.append("")
+
+    if attention:
+        lines.append("## ⚠️ Needs attention: axis range / tick label disagreement")
+        lines.append("")
+        lines.append(
+            "For these entries, the registry's `x_range`/`y_range` and the axis-pixel "
+            "candidate's tick label values don't scale by a single consistent factor at "
+            "both the min and max end. This usually means one of the two doesn't actually "
+            "describe the same axis extent (mismatched panel, a misread tick, or the "
+            "registry range extending past the outermost printed tick) -- **not "
+            "necessarily an error**, but worth a manual look. The re-plot below still uses "
+            "a best-effort factor (the whole-range ratio) so it's in the right ballpark."
+        )
+        lines.append("")
+        for entry, fx, fy in attention:
+            anchor = _slug(entry).lower()
+            lines.append(
+                f"- [ ] [{entry['paper_id']} / fig {entry['figure_reference']}](#{anchor})"
+            )
+            if fx["confident"] is False:
+                lines.append(f"  - x-axis: {fx['detail']}")
+            if fy["confident"] is False:
+                lines.append(f"  - y-axis: {fy['detail']}")
+        lines.append("")
+
     lines.append("## Index")
     lines.append("")
-    for entry, _curves, _plot_path, warning in rows:
+    for entry, _curves, _plot_path, _overlay_path, axp, _factor_detail, warning in rows:
         anchor = _slug(entry).lower()
-        flag = " ⚠️" if warning else ""
+        flags = ""
+        if warning:
+            flags += " ⚠️render"
+        if axp is None:
+            flags += " 🚫noaxis"
+        elif axp.get("status") == "llm_candidate":
+            flags += " 🟡unverified-axis"
         lines.append(
             f"- [ ] [{entry['paper_id']} / fig {entry['figure_reference']}]"
-            f"(#{anchor}){flag}"
+            f"(#{anchor}){flags}"
         )
     lines.append("")
     lines.append("---")
     lines.append("")
 
-    for entry, curves, plot_path, warning in rows:
+    for entry, curves, plot_path, overlay_path, axp, factor_detail, warning in rows:
         slug = _slug(entry)
         anchor = slug.lower()
         paper = papers_by_id.get(entry["paper_id"], {})
@@ -161,13 +416,37 @@ def main() -> None:
         if warning:
             lines.append(f"> ⚠️ **{warning}**")
             lines.append("")
+        if axp is None:
+            lines.append(
+                "> 🚫 No axis-pixel ground truth for this entry yet -- re-plot below is "
+                "raw SI units (unconverted), and there's no pixel-calibration overlay to check."
+            )
+            lines.append("")
+        else:
+            fx, fy = factor_detail["x"], factor_detail["y"]
+
+            def _describe(f: dict) -> str:
+                if f["kind"] == "additive":
+                    return f"+{f['offset']:.6g} (degC/K-style offset)"
+                return f"x{f['factor']:.6g}"
+
+            conf_note = "✅ confirmed at both axis endpoints" if (
+                fx["confident"] and fy["confident"]
+            ) else "⚠️ see 'needs attention' section above"
+            lines.append(
+                f"> Axis-pixel status: **{axp['status']}** "
+                f"(model disagreement {axp.get('model_disagreement_px', 0):.2g}px). "
+                f"x: {_describe(fx)}, y: {_describe(fy)} -- {conf_note}."
+            )
+            lines.append("")
+
+        x_scale = entry.get("x_scale", "linear")
+        y_scale = entry.get("y_scale", "linear")
         lines.append(
-            "| paper_id | figure_id | DOI | license | x_range | y_range | scale | "
+            "| paper_id | figure_id | DOI | license | x_range (SI) | y_range (SI) | scale | "
             "verified_at |"
         )
         lines.append("|---|---|---|---|---|---|---|---|")
-        x_scale = entry.get("x_scale", "linear")
-        y_scale = entry.get("y_scale", "linear")
         lines.append(
             f"| {entry['paper_id']} | {entry['figure_id']} | "
             f"[{doi}](https://doi.org/{doi}) | {entry.get('license_id', '?')} | "
@@ -179,11 +458,19 @@ def main() -> None:
         lines.append("")
         lines.append("<table><tr>")
         lines.append(
-            f'<td width="50%"><b>original chart</b><br>'
+            f'<td width="33%"><b>original chart</b><br>'
             f'<img src="{img_rel}" width="100%"></td>'
         )
+        if overlay_path is not None:
+            overlay_rel = os.path.relpath(overlay_path, AUDIT_DIR)
+            lines.append(
+                f'<td width="33%"><b>pixel-calibration overlay</b><br>'
+                f'<img src="{overlay_rel}" width="100%"></td>'
+            )
+        else:
+            lines.append('<td width="33%"><b>pixel-calibration overlay</b><br>(not available)</td>')
         lines.append(
-            f'<td width="50%"><b>digitized ground truth (re-plotted)</b><br>'
+            f'<td width="33%"><b>digitized ground truth (re-plotted)</b><br>'
             f'<img src="{plot_rel}" width="100%"></td>'
         )
         lines.append("</tr></table>")
@@ -194,7 +481,10 @@ def main() -> None:
         lines.append("")
 
     MARKDOWN_PATH.write_text("\n".join(lines))
-    print(f"wrote {MARKDOWN_PATH} ({len(verified)} entries, {len(rows)} plots in {PLOTS_DIR})")
+    print(
+        f"wrote {MARKDOWN_PATH} ({len(verified)} entries, "
+        f"{n_with_axis_data} with axis-pixel data, {len(attention)} flagged for attention)"
+    )
 
 
 if __name__ == "__main__":
