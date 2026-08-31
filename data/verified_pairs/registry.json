@@ -1313,13 +1313,13 @@
     ],
     "y_range": [
       -0.00011,
-      -2e-05
+      -3e-05
     ],
     "x_scale": "linear",
     "status": "verified",
     "verified_at": "2026-08-30",
     "license_id": "cc-by",
-    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1), all negative -- n-type), n=10-13 points, same 4 samples as figure_id=1527. x-range matches. Converting GT y to the chart's uV/K units (x1e6): HP680 -92.9 to -46.7, HP720 -93.7 to -56.5, HP760 -99.8 to -44.7, HP800 -100.1 to -42.2 -- all 4 tightly clustered in the -40 to -100 uV/K band matching the chart's visibly near-overlapping 4 series (axis -20 to -110 uV/K), including the shared non-monotonic dip-then-rise shape above ~750K."
+    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1), all negative -- n-type), n=10-13 points, same 4 samples as figure_id=1527. x-range matches. Converting GT y to the chart's uV/K units (x1e6): HP680 -92.9 to -46.7, HP720 -93.7 to -56.5, HP760 -99.8 to -44.7, HP800 -100.1 to -42.2 -- all 4 tightly clustered in the -40 to -100 uV/K band matching the chart's visibly near-overlapping 4 series (axis -20 to -110 uV/K), including the shared non-monotonic dip-then-rise shape above ~750K. [2026-08-31 CORRECTION #2: owner spot-checked this entry via the review web UI and flagged the y-axis as still mismatched after the 2026-08-30 unit fix. Investigation found the unit was already correct (V/K -- the 2026-08-30 fix targeted a different bug and doesn't apply here), but the upper bound's value was wrong: axis_pixel_candidates.json (two independent vision-model reads, cross-checked directly against the image) confirms the topmost printed y-axis label is -30 uV/K, not -20 uV/K as originally transcribed -- the original evidence text's claim of '-20 to -110 uV/K' was a misread of the printed axis. Corrected y_range[1] from -2e-05 to -3e-05 (-30 uV/K, matching -110/-30 exactly via the standard x1e6 factor). Confirmed by direct image inspection: the '-30' label sits essentially at the plot frame's top edge, leaving no room for a further '-20' tick above it.]"
   },
   {
     "paper_id": "10939",
@@ -1333,13 +1333,13 @@
     ],
     "y_range": [
       0.4,
-      1.4
+      0.9
     ],
     "x_scale": "linear",
     "status": "verified",
     "verified_at": "2026-08-30",
     "license_id": "cc-by",
-    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Thermal conductivity/W*m^(-1)*K^(-1), the phonon/lattice component kappa_ph), n=9-10 points, same 4 samples. x-range 419-874K matches the chart's 400-900K axis. y-values (already SI, matches chart's 0.4-0.9-range-shown-on-a-0.4-1.4 axis) with exact ordering: HP680 0.50-0.62, HP720 0.45-0.60, HP760 0.49-0.67, HP800 0.49-0.81 (highest, distinctive early peak at ~520K reaching ~0.81) -- exact match on magnitude and HP800's visibly distinct high early peak."
+    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Thermal conductivity/W*m^(-1)*K^(-1), the phonon/lattice component kappa_ph), n=9-10 points, same 4 samples. x-range 419-874K matches the chart's 400-900K axis. y-values (already SI, matches chart's 0.4-0.9-range-shown-on-a-0.4-1.4 axis) with exact ordering: HP680 0.50-0.62, HP720 0.45-0.60, HP760 0.49-0.67, HP800 0.49-0.81 (highest, distinctive early peak at ~520K reaching ~0.81) -- exact match on magnitude and HP800's visibly distinct high early peak. [2026-08-31 CORRECTION: the original evidence text's own aside ('0.4-0.9-range-shown-on-a-0.4-1.4 axis') already flagged the inconsistency but kept the wider 1.4 value. axis_pixel_candidates.json (two independent vision-model reads) confirms the topmost fully-visible printed y-axis label is 0.8, with the crop cutting off partway through the next gridline ('0.9') -- there is no '1.0'..'1.4' region visible anywhere in this crop; projecting the label-to-pixel scale confirms 1.4 would fall far above the image's top edge. Corrected y_range[1] from 1.4 to 0.9 (nearest defensible value: past the confirmed 0.8 label, at the partially-visible next gridline, comfortably containing the actual GT data's max of 0.811).]"
   },
   {
     "paper_id": "10939",
@@ -1453,13 +1453,13 @@
     ],
     "y_range": [
       -0.00011,
-      -2e-05
+      -3e-05
     ],
     "x_scale": "linear",
     "status": "verified",
     "verified_at": "2026-08-30",
     "license_id": "cc-by",
-    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1), all negative) comparing the best sample from each method (SPS680, HP680, SPS820, HP800). x-range 293-873K matches the chart's 300-900K axis. Converting GT y to uV/K (x1e6): SPS680 -90.1 to -38.7, HP680 -92.5 to -45.3, SPS820 -89.4 to -32.8, HP800 -99.8 to -41.7 -- all 4 in the -30 to -100 uV/K band matching the chart's -20 to -110 axis, with HP800 (blue dotted square) visibly reaching the most negative extreme, matching its lowest GT minimum."
+    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1), all negative) comparing the best sample from each method (SPS680, HP680, SPS820, HP800). x-range 293-873K matches the chart's 300-900K axis. Converting GT y to uV/K (x1e6): SPS680 -90.1 to -38.7, HP680 -92.5 to -45.3, SPS820 -89.4 to -32.8, HP800 -99.8 to -41.7 -- all 4 in the -30 to -100 uV/K band matching the chart's -20 to -110 axis, with HP800 (blue dotted square) visibly reaching the most negative extreme, matching its lowest GT minimum. [2026-08-31 CORRECTION: same bug and fix as figure_id=1528 (shares the same axis convention, same paper) -- axis_pixel_candidates.json confirms the printed y-axis max is -30 uV/K, not -20. Corrected y_range[1] from -2e-05 to -3e-05.]"
   },
   {
     "paper_id": "10939",
@@ -1493,13 +1493,13 @@
     ],
     "y_range": [
       0.0,
-      0.3
+      0.35
     ],
     "x_scale": "linear",
     "status": "verified",
     "verified_at": "2026-08-30",
     "license_id": "cc-by",
-    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=ZT/dimensionless) for the same best-of-method comparison. x-range matches the chart's 400-900K axis. y-values match the chart's 0-0.30 ZT axis: SPS680 0.048-0.167, HP680 0.085-0.184, SPS820 0.048-0.178, HP800 0.091-0.301 (highest, matches the chart's clearly top-most blue-dotted-square curve reaching ~0.30) -- exact match on magnitude and HP800 being the standout highest curve."
+    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=ZT/dimensionless) for the same best-of-method comparison. x-range matches the chart's 400-900K axis. y-values match the chart's 0-0.30 ZT axis: SPS680 0.048-0.167, HP680 0.085-0.184, SPS820 0.048-0.178, HP800 0.091-0.301 (highest, matches the chart's clearly top-most blue-dotted-square curve reaching ~0.30) -- exact match on magnitude and HP800 being the standout highest curve. [2026-08-31 CORRECTION: the opposite direction of the 1529/1528 bugs -- here the registry range was too NARROW. Direct image inspection (same physical right-hand ZT axis as the sibling fig3d/figure_id=1530 panel, which already correctly used 0.35) shows the axis printed max is 0.35 (partially visible at the crop's top edge), and the actual GT curve data reaches 0.3008, already exceeding the previously-registered 0.3 ceiling. Corrected y_range[1] from 0.3 to 0.35.]"
   },
   {
     "paper_id": "18668",
