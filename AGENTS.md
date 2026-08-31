@@ -65,6 +65,19 @@ ranges, zero-overlap, etc.) rather than only the happy path.
   `docs/design/benchmark-architecture.md` §7.19/§7.21/§7.27 for the full rationale
   ("reliability over quantity" is a deliberate, repeatedly-reaffirmed project policy,
   not something to relax for convenience).
+- **Every new `x_range`/`y_range` needs an independent axis-pixel cross-check at the
+  same time it's added, not as a later retrofit.** design §7.45 found 4 wrong-value
+  bugs (not unit bugs — the SI unit was right, but the numeric endpoint didn't match
+  what's actually printed on the axis) that survived undetected until
+  `axis_pixel_candidates.json` (design §7.42/§7.44) was retrofitted on much later and
+  cross-checked against it. The root cause wasn't that a human/LLM transcribed the
+  value by hand — it's that nothing was captured *to compare it against* at
+  verification time, so a misread had nothing to contradict it. When adding a VERIFIED
+  entry, also add its `axis_pixel_candidates.json` entry (smallest/largest printed
+  tick label + pixel position per axis, `status: "llm_candidate"`) in the same change,
+  so `x_range`/`y_range` always has an independent second reading on record from day
+  one — see `scripts/eval/generate_verified_pairs_visual_audit.py`'s `_derive_factor`
+  for how that comparison gets used downstream.
 - **`data/raw/`, `data/cache/`, `data/pilot/`, `data/hf_dataset/`, `data/eval/`** are
   gitignored (regeneratable/large). **`data/manifest/`, `data/verified_pairs/`** are
   committed (small, curated). Don't flip either of these without a good reason recorded
