@@ -149,6 +149,54 @@ class TestDimensionlessAndMissingUnit:
         assert _approx(si_to_display_factor("", ""), 1.0)
 
 
+class TestRealWorldNotationVariants:
+    """Regression cases from cross-checking two independent vision-model
+    reads of all 111 verified_pairs axis labels (2026-09-01): every
+    disagreement between the two passes turned out to be a parser gap, not
+    an actual reading disagreement -- these lock in the fixes."""
+
+    def test_omega_symbol_for_ohm(self):
+        assert _approx(si_to_display_factor("ohm*m", "MΩ·cm"), 1e-4)
+
+    def test_omega_with_micro_prefix(self):
+        assert _approx(si_to_display_factor("ohm*m", "μΩcm"), 1e8)
+
+    def test_omega_inverse_space_separated(self):
+        assert _approx(
+            si_to_display_factor("ohm^(-1)*m^(-1)", "Ω^-1 cm^-1"), 0.01
+        )
+
+    def test_space_separated_implicit_multiplication(self):
+        assert _approx(
+            si_to_display_factor("W*m^(-1)*K^(-1)", "W m^-1 K^-1"), 1.0
+        )
+
+    def test_space_separated_micro_volt_kelvin(self):
+        assert _approx(si_to_display_factor("V*K^(-1)", "μV K^-1"), 1e6)
+
+    def test_mobility_space_separated(self):
+        assert _approx(
+            si_to_display_factor("m^2*V^(-1)*s^(-1)", "cm^2 V^-1 s^-1"), 1e4
+        )
+
+    def test_degree_celsius_is_dimensionally_kelvin(self):
+        # For span/scale comparisons (not absolute-value conversion) a
+        # degree Celsius is the same size as a Kelvin -- the offset between
+        # the two scales is a separate, additive concern (see
+        # generate_verified_pairs_visual_audit.py's `_derive_factor`, which
+        # already handles degC-vs-K as an additive relationship). This
+        # module only judges *dimension* + *multiplicative scale*.
+        assert _approx(si_to_display_factor("K", "degC"), 1.0)
+        assert _approx(si_to_display_factor("K", "°C"), 1.0)
+
+    def test_times_sign_decade_multiplier(self):
+        assert _approx(si_to_display_factor("ohm^(-1)*m^(-1)", "×10^4 S·m^-1"), 1e-4)
+
+    def test_siemens_directly_adjacent_to_next_unit_no_separator(self):
+        # "Scm^-1" (no space/operator between S and cm) -- S/cm
+        assert _approx(si_to_display_factor("ohm^(-1)*m^(-1)", "Scm^-1"), 0.01)
+
+
 class TestIncompatibleOrUnparseableUnits:
     def test_incompatible_dimensions_raises(self):
         with pytest.raises(IncompatibleUnitsError):

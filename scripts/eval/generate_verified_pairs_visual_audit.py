@@ -51,6 +51,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -61,6 +62,14 @@ from matplotlib.patches import Patch  # noqa: E402
 from PIL import Image  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from real_chart_bench.domain.unit_conversion import (  # noqa: E402
+    IncompatibleUnitsError,
+    UnitParseError,
+    si_to_display_factor,
+)
+
 REGISTRY_PATH = REPO_ROOT / "data/verified_pairs/registry.json"
 GROUND_TRUTH_PATH = REPO_ROOT / "data/verified_pairs/ground_truth.json"
 PAPERS_PATH = REPO_ROOT / "data/manifest/v0/papers.json"
@@ -363,6 +372,41 @@ def _render_pixel_overlay(entry: dict, axp: dict, out_path: Path) -> None:
     plt.close(fig)
 
 
+def _dimensional_unit_check(
+    si_unit: str | None, printed_unit: str | None, numeric_factor: float, factor_source: str
+) -> str | None:
+    """Cross-checks the axis-pixel/evidence-text-derived numeric SI->display
+    factor against one predicted purely from the two unit *names*
+    (dimensional analysis, `unit_conversion.si_to_display_factor`) -- a
+    second, independent verification route for exactly the kind of
+    "Starrydata's raw value doesn't actually match physical reality" or
+    "registry's calibration doesn't match the stated unit" bug that a
+    numeric-tick-only check can't see (see design 7.46). Returns a short
+    human-readable verdict string, or None if the check isn't applicable
+    (no printed unit captured, or no SI unit on record).
+    """
+    if not printed_unit or not si_unit:
+        return None
+    try:
+        predicted = si_to_display_factor(si_unit, printed_unit)
+    except IncompatibleUnitsError as exc:
+        return f"⚠️ dimension mismatch: {exc}"
+    except UnitParseError:
+        return None  # printed unit text too irregular to parse -- not a finding
+
+    if factor_source == "none" or numeric_factor == 1.0:
+        return (
+            f"ℹ️ dimensional analysis predicts ×{predicted:.4g} "
+            f"(no independent numeric factor to compare against)"
+        )
+    if abs(predicted / numeric_factor - 1) <= 0.05:
+        return f"✅ confirmed by dimensional analysis (×{predicted:.4g})"
+    return (
+        f"⚠️ dimensional analysis predicts ×{predicted:.4g} but the axis-pixel/"
+        f"evidence-derived factor is ×{numeric_factor:.4g} -- worth a second look"
+    )
+
+
 def _write_review_html(
     rows: list[tuple], papers_by_id: dict, attention_keys: set[tuple[str, str]]
 ) -> None:
@@ -419,6 +463,10 @@ def _write_review_html(
         y_range_display = [v * k_y + off_y for v in entry["y_range"]]
         is_converted = (k_x, off_x, k_y, off_y) != (1.0, 0.0, 1.0, 0.0)
 
+        printed_y_unit = axp.get("y_axis_unit") if axp else None
+        si_unit_y = curves[0].get("unit_y") if curves else None
+        unit_check = _dimensional_unit_check(si_unit_y, printed_y_unit, k_y, factor_source)
+
         entries.append(
             {
                 "id": anchor,
@@ -441,6 +489,8 @@ def _write_review_html(
                 "warning": warning,
                 "axp_status": axp["status"] if axp else None,
                 "factor_summary": factor_summary,
+                "printed_y_unit": printed_y_unit,
+                "unit_check": unit_check,
                 "needs_attention": (entry["paper_id"], entry["figure_id"]) in attention_keys,
             }
         )

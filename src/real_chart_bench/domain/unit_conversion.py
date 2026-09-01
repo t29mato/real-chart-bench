@@ -59,13 +59,13 @@ _PREFIXES: list[tuple[str, float]] = [
 # separate base -- it is meter with a fixed extra 1e-2 scale, handled by the
 # normal prefix mechanism (rather than a distinct dimension) so "cm" and
 # "m" always compare as the same physical length.
-_CASE_INSENSITIVE_BASES = ("ohm",)
+_CASE_INSENSITIVE_BASES = ("ohm", "Ω")
 _CASE_SENSITIVE_BASES = ("V", "W", "K", "s", "m")
 
 
 def _match_base(token_lower: str, token: str) -> str | None:
     for base in _CASE_INSENSITIVE_BASES:
-        if token_lower == base:
+        if token_lower == base.lower():
             return "ohm"
     for base in _CASE_SENSITIVE_BASES:
         if token == base:
@@ -117,6 +117,11 @@ def _normalize(text: str) -> str:
     # into "^-1" first, then remove any parens still remaining.
     text = re.sub(r"\^\((-?\d+)\)", r"^\1", text)
     text = text.replace("(", "").replace(")", "")
+    # Degree Celsius/old-style degree-Kelvin are dimensionally Kelvin for
+    # span/scale purposes (see TestRealWorldNotationVariants for why the
+    # absolute-value offset is a separate, additive concern this module
+    # doesn't need to handle).
+    text = text.replace("°C", "K").replace("degC", "K").replace("°K", "K")
     return text.strip()
 
 
@@ -155,7 +160,10 @@ def _lex_chunk(chunk: str) -> list[tuple[str, int]]:
     i = 0
     n = len(chunk)
     while i < n:
-        if chunk[i] == "S" and (i + 1 == n or chunk[i + 1] in "^"):
+        # Bare capital "S" is always siemens in this domain -- no prefix
+        # or other base symbol starts with "S", so there's no ambiguity to
+        # guard against (unlike "m", which is also the meter symbol).
+        if chunk[i] == "S":
             exp, j = _match_exponent(chunk, i + 1)
             terms.append(("ohm", -exp))  # S = ohm^-1
             i = j
@@ -207,7 +215,7 @@ def _split_terms(text: str) -> list[tuple[str, int]]:
         return []
 
     decade_terms: list[tuple[str, int]] = []
-    decade_match = re.match(r"^10\^?(-?\d+)\s+(.*)$", text)
+    decade_match = re.match(r"^[×x]?10\^?(-?\d+)\s+(.*)$", text)
     if decade_match:
         exponent = int(decade_match.group(1))
         decade_terms = [(f"__decade__{exponent}", 1)]
@@ -224,8 +232,11 @@ def _split_terms(text: str) -> list[tuple[str, int]]:
             continue
         if not piece:
             continue
-        for base, exp in _lex_chunk(piece):
-            all_terms.append((base, exp * sign))
+        # Whitespace between unit factors is implicit multiplication (e.g.
+        # "W m^-1 K^-1"), same as an explicit "*" would be.
+        for sub_piece in piece.split():
+            for base, exp in _lex_chunk(sub_piece):
+                all_terms.append((base, exp * sign))
     return all_terms
 
 

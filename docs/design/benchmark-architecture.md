@@ -2291,3 +2291,59 @@ x_range/y_rangeにも拡張する余地がある)。
 
 **テスト**: pytest 225 passed(不変)、domain層カバレッジ100%、ruff clean、
 import-linter clean。
+
+### 7.46 軸単位テキストの構造化取得 + 次元解析によるStarrydata独立検証(2026-09-01、オーナー提案)
+
+**背景**: オーナーから「既存の正解データについても、物理量と単位をLLMで取得して
+おいてほしい。そうすればStarrydataの値がSI単位でも、単位変換して正しさを
+確認しやすくなる」との提案。design 7.42/7.44の`axis_pixel_candidates.json`は
+目盛りの数値とピクセル位置のみを記録しており、「軸に何の単位が印字されているか」
+はテキスト化されていなかった。
+
+**単位次元解析パーサー(TDD)**: `src/real_chart_bench/domain/unit_conversion.py`
+を新設。`si_to_display_factor(si_unit, display_unit)`は、Starrydataの固定SI表記
+(`ground_truth.json`の`unit_y`、例: `"ohm*m"`, `"V*K^(-1)"`)と、人間が書く表示
+単位(例: `"uOhm*cm"`, `"S/cm"`, `"10^4 S/m"`, ユニコード上付き文字)の両方を
+{基本単位: 指数}の次元表現+SI相対スケールへ変換し、両者の物理次元が一致するかを
+検証した上でSI→表示単位の変換係数を返す。次元が食い違えば`IncompatibleUnitsError`
+(それ自体がバグの兆候)、パース不能なら`UnitParseError`を返す。ケルビンには
+接頭辞を付けない(このドメインでmilli-Kelvinはあり得ないため、"mK"は常に
+"m*K"の意味と解釈)、SはOhm^-1に畳み込む等、テストファースト(33ケース)で
+実装、domain層カバレッジ100%を維持。
+
+**111件全数の軸単位テキスト取得**: design 7.44と同じ「2つの独立したモデルに
+よるクロスチェック」手法(claude-opus-5 と claude-fable-5、互いの結果を
+参照させない)で、全111件の画像から軸ラベル全体(物理量記号+単位)を読み取った。
+
+**結果**: 2パスの単位テキストを次元解析パーサーで比較した結果、**物理次元の
+真の不一致はゼロ件**(表記揺れ — 上付き文字/キャレット、Ω記号、空白区切りの
+暗黙の乗算、℃/K表記等 — による見かけ上の不一致はパーサー側を頑健化して解消)。
+これは、Starrydataの生データの単位が(このデータセットの範囲では)物理的に
+妥当であることの独立した傍証となる。
+
+**軸ピクセル数値由来の係数との突き合わせで1件、記録方式の不整合を発見**:
+paper 5904(figure_id=13761)は画像全体が90度回転している既知のケース
+(design当時のevidenceに記載済み)。`axis_pixel_candidates.json`の当該
+エントリは目盛りラベル・ピクセル位置を**画像のピクセル方向**(横=Seebeck係数、
+縦=温度)で記録しており、`registry.json`の**チャート上の意味**(x=温度、
+y=Seebeck係数)とは軸が入れ替わっていた。単純に比較すると約150倍の不一致に
+見えるが、これはデータの誤りではなく記録方式の制約による偽陽性であり、
+`registry.json`の値自体は実データと既に整合済み(design当時に確認済み)。
+このエントリの`axis_pixel_candidates.json`ステータスを`excluded`に変更し、
+自動クロスチェック対象から外した(ピクセル値自体は人間が見る分には有用な
+ため保持)。他に新規の実データバグは見つからなかった。
+
+**監査ツールへの統合**: `generate_verified_pairs_visual_audit.py`が
+`axis_pixel_candidates.json`の新フィールド(`x_axis_unit`/`y_axis_unit`等)と
+`unit_conversion.si_to_display_factor`を使い、各エントリのy軸について
+「軸ピクセルの数値から導出した変換係数」と「単位名から次元解析で予測した
+変換係数」を独立に突き合わせ、一致すれば「✅ confirmed by dimensional
+analysis」、5%を超えて乖離すれば警告を表示するようにした
+(`review.html`のメタ情報テーブル、Markdown両方に反映)。
+
+**結果**: 111件中109件が軸ピクセルデータを保持(5904除外分を反映)。次元解析が
+可能だった約100件中、確認できた不一致はゼロ(前述の5904のケースを除く)。
+
+**テスト**: pytest 258 passed(unit_conversion.pyのテスト33件を含む)、
+domain層カバレッジ100%、ruff clean、import-linter clean。
+`data/verified_pairs/audit/`はgitignore対象のためコミットしていない。
