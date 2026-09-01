@@ -393,6 +393,8 @@ def _write_review_html(
         plot_rel = os.path.relpath(plot_path, AUDIT_DIR)
         overlay_rel = os.path.relpath(overlay_path, AUDIT_DIR) if overlay_path else None
 
+        k_x = k_y = 1.0
+        off_x = off_y = 0.0
         if factor_source == "axis-pixel":
             fx, fy = factor_detail["x"], factor_detail["y"]
 
@@ -404,11 +406,18 @@ def _write_review_html(
                 return f"×{f['factor']:.4g}"
 
             factor_summary = f"x: {_short(fx)}, y: {_short(fy)} (axis-pixel derived)"
+            k_x, off_x = fx["factor"], (fx["offset"] or 0.0)
+            k_y, off_y = fy["factor"], (fy["offset"] or 0.0)
         elif factor_source == "evidence-text":
             fy = factor_detail["y"]
             factor_summary = f"y: ×{fy['factor']:.4g} (evidence-text, unverified)"
+            k_y = fy["factor"]
         else:
             factor_summary = "raw SI (no conversion source)"
+
+        x_range_display = [v * k_x + off_x for v in entry["x_range"]]
+        y_range_display = [v * k_y + off_y for v in entry["y_range"]]
+        is_converted = (k_x, off_x, k_y, off_y) != (1.0, 0.0, 1.0, 0.0)
 
         entries.append(
             {
@@ -419,6 +428,8 @@ def _write_review_html(
                 "license_id": entry.get("license_id", "?"),
                 "x_range": entry["x_range"],
                 "y_range": entry["y_range"],
+                "x_range_display": x_range_display if is_converted else None,
+                "y_range_display": y_range_display if is_converted else None,
                 "x_scale": entry.get("x_scale", "linear"),
                 "y_scale": entry.get("y_scale", "linear"),
                 "verified_at": entry.get("verified_at", "?"),

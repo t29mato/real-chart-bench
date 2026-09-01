@@ -276,10 +276,17 @@ function render() {
     images.appendChild(fig);
   });
 
+  const fmtRange = (r) => r ? r.map(v => v.toPrecision(4)).join(" .. ") : null;
   document.getElementById("meta").innerHTML = `
     <table>
       <tr><td class="k">x_range (SI)</td><td>${JSON.stringify(e.x_range)} (${e.x_scale})</td></tr>
+      <tr><td class="k">x_range (論文単位)</td><td>${
+        e.x_range_display ? fmtRange(e.x_range_display) + " (元図と同じ数字で比較可)" : "-- (SIのまま、変換なし)"
+      }</td></tr>
       <tr><td class="k">y_range (SI)</td><td>${JSON.stringify(e.y_range)} (${e.y_scale})</td></tr>
+      <tr><td class="k">y_range (論文単位)</td><td>${
+        e.y_range_display ? fmtRange(e.y_range_display) + " (元図と同じ数字で比較可)" : "-- (SIのまま、変換なし)"
+      }</td></tr>
       <tr><td class="k">曲線数</td><td>${e.n_curves}</td></tr>
       <tr><td class="k">単位変換</td><td>${e.factor_summary}</td></tr>
       <tr><td class="k">axis-pixel status</td><td>${e.axp_status || "(none)"}</td></tr>
