@@ -11,7 +11,28 @@
 
 ## Why
 
-Existing chart-extraction evaluations (LineEX, LineFormer, etc.) rely on **synthetic charts**. Real experimental figures in scientific papers are messier: overlapping markers, log scales, poor scan quality, dense legends, inconsistent image orientation. This benchmark collects **real charts from open-access papers** (license-checked for redistribution, CC BY 4.0 basis) and evaluates how well existing models — LLMs (Claude, GPT, Gemini), dedicated models (LineFormer, …), and classic tools — recover the underlying XY data, against ground truth from [Starrydata](https://starrydata.wordpress.com/)'s human-digitized curves.
+Existing chart-extraction evaluations (LineEX, LineFormer, etc.) rely on **synthetic charts**. Real experimental figures in scientific papers are messier: overlapping markers, log scales, poor scan quality, dense legends, inconsistent image orientation. This benchmark collects **real charts from open-access papers** (license-checked for redistribution, CC BY 4.0 basis) and evaluates how well existing models — LLMs (Claude, GPT, Gemini), dedicated models (LineFormer, …), and classic tools — recover the underlying XY data, against ground truth from **Starrydata**'s human-digitized curves — the published, citable dataset, not the starrydata2.org service or its API — so this benchmark depends only on data anyone can download and re-check. Cite: [Katsura et al., *STAM: Methods* 5(1), 2025](https://doi.org/10.1080/27660400.2025.2506976) for the database, and the [figshare snapshot](https://figshare.com/projects/Starrydata_datasets/155129) (CC BY 4.0) for the data itself. Note that figshare publishes a *new dated snapshot each month*, each with its own DOI (the most recent verified at the time of writing is [`10.6084/m9.figshare.33399463.v1`](https://doi.org/10.6084/m9.figshare.33399463.v1), 2026-08-31) — there is no single permanent dataset DOI, so exact reproducibility requires pinning a snapshot.
+
+## Task definition
+
+**v0 — curve tracing, given calibration.** You are handed the chart image
+*and* its axis calibration (`x_range`, `y_range`, and `x_scale`/`y_scale`,
+linear or log, independently per axis). Your job is to return the XY data of
+each plotted series. You never read tick labels and never convert units —
+just map pixels into the given range. This mirrors the second half of the
+CHART-Infographics task 6a/6b split (design §3.1).
+
+**v1 — end-to-end, axis reading included (planned, not yet live).** Same
+figures, but the calibration is *not* given: a method must read the axes
+itself and return data in the paper's printed units. This is the task
+general-purpose VLMs are actually being asked to do in practice, and it is
+where a direct comparison against VLM-based digitizers becomes meaningful.
+The v0 task stays available and scored separately — a method that is strong
+at tracing but weak at axis reading should be visible as exactly that.
+
+Being explicit because the repository name promises more than v0 delivers:
+**today's leaderboard numbers are v0 numbers**, and a v0 score is not an
+end-to-end chart-understanding score.
 
 ## Status
 
@@ -50,9 +71,8 @@ class ModelRunnerPort(Protocol):
 
 `ExtractionTask` gives you the chart image (`image_bytes`) plus the *given* axis
 calibration (`x_range`, `y_range`, `x_scale`/`y_scale` — linear or log,
-independently per axis). v0 scope is curve-tracing given calibration, not
-full chart understanding including reading tick labels (design §3.1, mirrors
-CHART-Infographics' task 6a/6b split). Return one `Curve` per detected series
+independently per axis) — see [Task definition](#task-definition) for the v0
+scope and the planned v1 end-to-end task. Return one `Curve` per detected series
 in data space (whatever unit the given calibration implies — you never need
 to know or convert units yourself, just map pixels to the given range); the
 harness handles matching and scoring.
@@ -137,7 +157,18 @@ See [`AGENTS.md`](AGENTS.md) for conventions (clean architecture, TDD) if you're
 - [x] LineFormer baseline — first real-paper-figure score on the leaderboard: 0.627 (42 real figures)
 - [ ] Automated leaderboard submission (currently PR-based)
 - [ ] Full automatic image↔figure pairing (currently manually verified only)
+- [ ] Human ceiling: independently re-digitize a stratified subset and publish the annotator-to-annotator agreement as a leaderboard row, so the ground truth's own error bar is visible next to every model score
+- [ ] Ground-truth issue export: figures where the ground truth itself is confirmed wrong, exported with Starrydata identifiers so the upstream dataset can be corrected
+- [ ] v1 task: end-to-end extraction with axis reading included (see [Task definition](#task-definition))
+
+## Citation
+
+If you use this benchmark, cite it via [`CITATION.cff`](CITATION.cff) (GitHub's
+"Cite this repository" button reads it). If you use the ground-truth data,
+please **also** cite the Starrydata dataset and paper listed in that file's
+`references` — the curves are theirs, this repository only pairs them with
+source figures and scores methods against them.
 
 ## License
 
-Code: TBD. Ground-truth data (`data/manifest/v0/`, `data/verified_pairs/`) and the figure crops committed under `data/verified_pairs/crops/`: **CC BY 4.0**, checked per-paper before inclusion (see [`data/verified_pairs/registry.json`](data/verified_pairs/registry.json)'s `license_id` field on every entry, and design §7.1/§7.2/§7.30 for the classification methodology).
+Code: **MIT** (see [`LICENSE`](LICENSE)). Ground-truth data (`data/manifest/v0/`, `data/verified_pairs/`) and the figure crops committed under `data/verified_pairs/crops/`: **CC BY 4.0**, checked per-paper before inclusion (see [`data/verified_pairs/registry.json`](data/verified_pairs/registry.json)'s `license_id` field on every entry, and design §7.1/§7.2/§7.30 for the classification methodology).

@@ -1,0 +1,116 @@
+# CITATION.cff for real-chart-bench
+#
+# type: dataset — chosen over "software" because the primary citable artifact
+# this repository produces is the benchmark dataset (real paper figures paired
+# with Starrydata-derived ground-truth XY curves, plus a manifest/registry of
+# that data). The evaluation harness (CLI, metrics code) exists to build and
+# score that dataset, not the other way around — third parties will mostly
+# want to cite "the benchmark dataset we evaluated against," not "the CLI
+# tool we ran." CFF permits only one top-level `type`; the harness/code
+# aspect is still discoverable via `repository-code` below.
+#
+# `license` lists both because this repository is deliberately dual-licensed
+# by artifact type: the CODE is MIT (owner decision, 2026-09-02 — see LICENSE),
+# and the DATA (data/manifest/v0/, data/verified_pairs/, including the figure
+# crops) is CC BY 4.0, inherited from the Starrydata dataset and from each
+# figure's CC BY 4.0 source paper. Citing this work does not let you relicense
+# the data under MIT.
+cff-version: 1.2.0
+message: >-
+  If you use real-chart-bench, please cite it using the metadata in this
+  file. If you use the ground-truth chart data, please also cite the
+  Starrydata dataset and paper listed under `references`.
+type: dataset
+license:
+  - MIT
+  - CC-BY-4.0
+title: "real-chart-bench"
+abstract: >-
+  An open benchmark for chart data extraction — built from real experimental
+  charts in open-access papers.
+authors:
+  - given-names: Tomoya
+    family-names: Mato
+    alias: t29mato
+    email: tomoya.matou@gmail.com
+    orcid: "https://orcid.org/0000-0002-0918-6468"
+repository-code: "https://github.com/t29mato/real-chart-bench"
+version: 0.0.1
+date-released: "2026-09-02"
+keywords:
+  - chart-data-extraction
+  - benchmark
+  - data-visualization
+  - materials-science
+  - thermoelectric-materials
+  - llm-evaluation
+references:
+  - type: article
+    title: "Starrydata: from published plots to shared materials data"
+    authors:
+      - given-names: Yukari
+        family-names: Katsura
+      - given-names: Masaya
+        family-names: Kumagai
+      - given-names: Tomoya
+        family-names: Mato
+      - given-names: Yu
+        family-names: Takada
+      - given-names: Yuki
+        family-names: Ando
+      - given-names: Erina
+        family-names: Fujita
+      - given-names: Fumikazu
+        family-names: Hosono
+      - given-names: Eiji
+        family-names: Koyama
+      - given-names: Farhan
+        family-names: Mudasar
+      - given-names: "Ton Nu Thanh"
+        family-names: Phuong
+      - given-names: Naoto
+        family-names: Saito
+      - given-names: Yoshihiro
+        family-names: Sakamoto
+      - given-names: Atsumi
+        family-names: Tanaka
+      - given-names: Dewi
+        family-names: Yana
+      - given-names: Kaoru
+        family-names: Kimura
+      - given-names: Koji
+        family-names: Tsuda
+      - given-names: Masahiko
+        family-names: Demura
+    journal: "Science and Technology of Advanced Materials: Methods"
+    volume: 5
+    issue: 1
+    year: 2025
+    doi: "10.1080/27660400.2025.2506976"
+    url: "https://doi.org/10.1080/27660400.2025.2506976"
+    license: "CC-BY-4.0"
+    notes: >-
+      Canonical paper for the Starrydata / Starrydata2 database, the source
+      of this benchmark's human-digitized ground-truth XY curves.
+  - type: data
+    title: "20260901_starrydata2"
+    authors:
+      - given-names: Tomoya
+        family-names: Mato
+      - given-names: Masaya
+        family-names: Kumagai
+      - given-names: Yukari
+        family-names: Katsura
+    date-released: "2026-08-31"
+    doi: "10.6084/m9.figshare.33399463.v1"
+    url: "https://doi.org/10.6084/m9.figshare.33399463.v1"
+    license: "CC-BY-4.0"
+    notes: >-
+      Monthly-archived snapshot of the Starrydata2 dataset on figshare
+      (project "Starrydata datasets", https://figshare.com/projects/Starrydata_datasets/155129).
+      The figshare project publishes a new dated snapshot on this cadence,
+      each with its own DOI; this is the most recent snapshot verified at
+      the time this file was written (2026-09-02). Pin to the specific
+      snapshot DOI that matches the data actually ingested by this
+      benchmark's collection pipeline if reproducibility of exact figures
+      is required — see docs/design/benchmark-architecture.md.
