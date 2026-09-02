@@ -258,6 +258,8 @@ def _render_ground_truth_plot(
     off_x: float,
     off_y: float,
     converted: bool,
+    printed_x_unit: str | None = None,
+    printed_y_unit: str | None = None,
 ) -> str | None:
     """Re-plot the ground-truth curves as `value * k + offset` per axis.
 
@@ -265,6 +267,14 @@ def _render_ground_truth_plot(
     K - 273.15); it's applied after the multiplicative factor so both can
     combine, though in practice only one of the two is ever non-trivial for
     a given axis in this domain. Returns a warning string, if any.
+
+    `printed_x_unit`/`printed_y_unit` (from axis_pixel_candidates.json's
+    design-7.46 fields, when captured) are the *actual unit text printed on
+    the original chart's axis*, e.g. "μV/K" -- when available, the axis
+    label uses that directly, since it's what the human is comparing
+    against. Without it, the label falls back to Starrydata's raw SI unit
+    name plus the applied factor as a suffix (still correct, just less
+    immediately legible).
     """
     warning = None
     fig, ax = plt.subplots(figsize=(5, 3.6), dpi=110)
@@ -304,10 +314,18 @@ def _render_ground_truth_plot(
     unit_x = curves[0].get("unit_x", "") if curves else ""
     unit_y = curves[0].get("unit_y", "") if curves else ""
     prop_x = curves[0].get("prop_x", "x") if curves else "x"
-    x_suffix = "" if k_x == 1 and off_x == 0 else f" x{k_x:.4g}+{off_x:.4g}"
-    y_suffix = "" if k_y == 1 and off_y == 0 else f" x{k_y:.4g}+{off_y:.4g}"
-    ax.set_xlabel(f"{prop_x} ({unit_x}{x_suffix})" if unit_x else prop_x)
-    ax.set_ylabel(f"{unit_y}{y_suffix}" if unit_y else "y")
+
+    if printed_x_unit:
+        ax.set_xlabel(f"{prop_x} ({printed_x_unit})")
+    else:
+        x_suffix = "" if k_x == 1 and off_x == 0 else f" x{k_x:.4g}+{off_x:.4g}"
+        ax.set_xlabel(f"{prop_x} ({unit_x}{x_suffix})" if unit_x else prop_x)
+
+    if printed_y_unit:
+        ax.set_ylabel(printed_y_unit)
+    else:
+        y_suffix = "" if k_y == 1 and off_y == 0 else f" x{k_y:.4g}+{off_y:.4g}"
+        ax.set_ylabel(f"{unit_y}{y_suffix}" if unit_y else "y")
     ax.legend(fontsize=6, loc="best")
     title = "ground truth, paper units" if converted else "ground truth, RAW SI units (unconverted)"
     ax.set_title(f"{title} -- {len(curves)} curve(s)", fontsize=8)
@@ -574,8 +592,34 @@ def main() -> None:
                 k_y = fy["factor"]
 
         plot_path = PLOTS_DIR / f"{slug}.png"
+        # Only label the axis with the printed unit text when a conversion
+        # matching that exact unit was actually applied (kind in
+        # multiplicative/additive) -- for "log10"/"indeterminate" factors
+        # k_x/k_y stay 1 (unconverted), so the printed unit wouldn't
+        # actually describe what's plotted.
+        printed_x_unit = printed_y_unit = None
+        if axp is not None and factor_detail is not None:
+            fx, fy = factor_detail["x"], factor_detail["y"]
+            if fx["kind"] in ("multiplicative", "additive"):
+                printed_x_unit = axp.get("x_axis_unit")
+            if fy["kind"] in ("multiplicative", "additive"):
+                printed_y_unit = axp.get("y_axis_unit")
+            # "-" means dimensionless -- not a real unit string to print.
+            if printed_x_unit == "-":
+                printed_x_unit = None
+            if printed_y_unit == "-":
+                printed_y_unit = None
         warning = _render_ground_truth_plot(
-            entry, curves, plot_path, k_x, k_y, off_x, off_y, factor_source != "none"
+            entry,
+            curves,
+            plot_path,
+            k_x,
+            k_y,
+            off_x,
+            off_y,
+            factor_source != "none",
+            printed_x_unit,
+            printed_y_unit,
         )
         rows.append(
             (entry, curves, plot_path, overlay_path, axp, factor_detail, factor_source, warning)
