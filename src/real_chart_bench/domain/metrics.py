@@ -26,7 +26,25 @@ from real_chart_bench.domain.curve import Curve, ScaleType
 # matrices) well-behaved.
 WORST_CASE_DISTANCE = 1.0
 
-_ZERO_RANGE_EPSILON = 1e-12
+# A "this range/difference is essentially zero" tolerance, used only to
+# guard against dividing by (or comparing against) a near-zero span --
+# never meant as a domain-meaningful noise tolerance. Scaled *relative* to
+# the magnitude of the values actually being compared (design §7.47):
+# ground_truth curves in this benchmark are stored in whatever unit gives
+# the best match to the paper's own axis, which varies entry to entry from
+# SI magnitudes (~1e-5) to a paper's display units (~1e3) -- a fixed
+# absolute epsilon calibrated to one scale is meaningless (too loose) at
+# the other, and can even turn a negligible floating-point-scale residual
+# into a wildly inflated normalized error by dividing by a near-zero span
+# that "looks" nonzero only because it's expressed in large-magnitude
+# units.
+_RELATIVE_EPSILON = 1e-9
+
+
+def _is_negligible(span: float, *reference_values: float) -> bool:
+    scale = max((abs(v) for v in reference_values), default=0.0)
+    tolerance = _RELATIVE_EPSILON * scale if scale > 0.0 else _RELATIVE_EPSILON
+    return abs(span) <= tolerance
 
 
 @dataclass(frozen=True)
@@ -66,7 +84,7 @@ def _to_x_space(curve: Curve, x_scale: ScaleType) -> np.ndarray:
 
 
 def _overlap_ratio(gt_lo: float, gt_hi: float, pred_lo: float, pred_hi: float) -> float:
-    if gt_hi - gt_lo <= _ZERO_RANGE_EPSILON:
+    if _is_negligible(gt_hi - gt_lo, gt_lo, gt_hi):
         # Ground truth is effectively a single x-point: coverage is binary.
         return 1.0 if pred_lo <= gt_lo <= pred_hi else 0.0
     overlap_lo = max(gt_lo, pred_lo)
@@ -103,13 +121,15 @@ class NormalizedYDistanceMetric:
         pred_y_interp = np.interp(gt_x, pred_x, pred_y)
         gt_y_range = float(gt_y.max() - gt_y.min())
 
-        if gt_y_range <= _ZERO_RANGE_EPSILON:
+        if _is_negligible(gt_y_range, *gt_y.tolist()):
             # Flat (or single-point) ground truth: normalized error is
-            # undefined by division, so fall back to an exact-match check.
-            point_errors = np.where(
-                np.abs(pred_y_interp - gt_y) <= _ZERO_RANGE_EPSILON,
-                0.0,
-                WORST_CASE_DISTANCE,
+            # undefined by division, so fall back to an exact-match check
+            # (still scale-relative, per point -- see _is_negligible).
+            point_errors = np.array(
+                [
+                    0.0 if _is_negligible(p - g, p, g) else WORST_CASE_DISTANCE
+                    for p, g in zip(pred_y_interp.tolist(), gt_y.tolist())
+                ]
             )
         else:
             point_errors = np.abs(pred_y_interp - gt_y) / gt_y_range

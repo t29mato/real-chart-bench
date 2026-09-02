@@ -108,6 +108,50 @@ def test_log_scale_with_non_positive_x_raises(metric):
         metric.compare(valid_curve, curve_with_zero_x)
 
 
+def test_zero_y_range_fallback_triggers_at_any_absolute_scale(metric):
+    # design §7.47: ground_truth curves can be stored in SI units (~1e-5) or
+    # a paper's own display units (~1e3, post-conversion) depending on the
+    # entry, so the "flat curve" fallback (guarding the normal branch's
+    # division by gt_y_range) must trigger consistently either way, not
+    # only at the small absolute magnitudes the original epsilon assumed.
+    ground_truth_small = Curve(x_values=(0.0, 1.0), y_values=(3e-5, 3e-5))
+    ground_truth_large = Curve(x_values=(0.0, 1.0), y_values=(3000.0, 3000.0))
+
+    for gt in (ground_truth_small, ground_truth_large):
+        exact = metric.compare(gt, gt)  # predicted == ground_truth
+        assert exact.mean_normalized_error == pytest.approx(0.0)
+
+
+def test_negligible_residual_is_flat_regardless_of_absolute_scale(metric):
+    # The concrete bug a fixed *absolute* epsilon causes at large scale: a
+    # residual that's utterly negligible *relative to the curve's own
+    # magnitude* (here, 2e-6 out of ~3000, a 0.00007% wobble -- reasonably
+    # attributable to floating-point noise from a unit conversion, not a
+    # real physical difference) must still be treated as "flat ground
+    # truth" and *not* divided into a hugely inflated error. A fixed 1e-12
+    # absolute threshold fails this at this magnitude (2e-6 > 1e-12).
+    ground_truth = Curve(x_values=(0.0, 1.0), y_values=(3000.0, 3000.0 + 2e-6))
+    predicted = Curve(x_values=(0.0, 1.0), y_values=(3000.0, 3000.0))
+
+    result = metric.compare(predicted, ground_truth)
+
+    assert result.mean_normalized_error == pytest.approx(0.0)
+
+
+def test_relative_epsilon_does_not_swallow_a_real_percent_scale_difference(metric):
+    # Guards the *other* direction of design §7.47's fix: making the
+    # "essentially zero range" epsilon scale with the data must not make it
+    # so generous at large magnitudes that a real, meaningfully-sized
+    # difference gets misclassified as "flat ground truth, ignore
+    # everything" and reported as a perfect match.
+    ground_truth = Curve(x_values=(0.0, 1.0), y_values=(3000.0, 3030.0))  # 1% real range
+    predicted = Curve(x_values=(0.0, 1.0), y_values=(3000.0, 3000.0))  # misses the rise entirely
+
+    result = metric.compare(predicted, ground_truth)
+
+    assert result.mean_normalized_error > 0.1
+
+
 def test_distance_never_returns_nan_or_inf(metric):
     predicted = Curve(x_values=(0.0,), y_values=(0.0,))
     ground_truth = Curve(x_values=(0.0,), y_values=(0.0,))
