@@ -17,8 +17,15 @@
 - [docs/design/benchmark-architecture.md](docs/design/benchmark-architecture.md): the
   full design history — every architectural decision, every empirical finding from real
   data (license yield rates, panel-splitting failure modes, image-orientation bugs,
-  metric design rationale), in dated, numbered sections (§1-§7.30+). This is the
+  metric design rationale), in dated, numbered sections (§1-§7.49+). This is the
   authoritative source if README's summary isn't enough detail.
+- [docs/design/pairing-automation.md](docs/design/pairing-automation.md): the design for
+  automating image↔ground-truth pairing — the project's one genuine bottleneck. Candidate
+  generation as a per-paper assignment problem, the numeric cross-verification checks and
+  their empirically-measured tolerances, confidence thresholds and why the operating point
+  is asymmetric, and what is deliberately left un-automated.
+- [CITATION.cff](CITATION.cff): how to cite this benchmark, and the Starrydata dataset +
+  paper you should cite alongside it if you use the ground-truth data.
 
 ## Core interfaces (read these before writing code against this repo)
 
@@ -38,7 +45,12 @@
   figures, curves), CC BY 4.0.
 - [data/verified_pairs/registry.json](data/verified_pairs/registry.json): committed
   audit trail of manually verified (and rejected) image↔ground-truth pairings, with
-  numeric evidence and a `license_id` on every entry.
+  numeric evidence and a `license_id` on every entry. Rejected entries additionally carry
+  a `rejection_category` (`pairing` / `image` / `gt_suspect`) separating our own errors
+  from suspected upstream ground-truth errors; a `gt_suspect` entry carries a
+  `gt_suspect_status` lifecycle (`llm_flagged` → `human_confirmed` / `human_rejected`).
+  **`llm_flagged` alone is a suspicion, never a confirmed ground-truth error** — only
+  `human_confirmed` counts (design §7.48).
 - `data/raw/` is gitignored (regeneratable); run
   [scripts/eval/fetch_verified_images.py](scripts/eval/fetch_verified_images.py) to
   fetch just what the verified-pairs registry needs.
