@@ -2440,3 +2440,141 @@ README.mdの「Evaluate your own model」節に、`x_range`/`y_range`/
 **テスト**: pytest 261 passed(metrics.pyの新規テスト3件を含む)、domain層
 カバレッジ100%、ruff clean、import-linter clean。`run_baselines.py`再実行
 で`mean_summary_score`が移行前と完全一致(0.73135...)することを確認。
+
+### 7.48 GT不一致をクレンジング対象として記録するスキーマ(2026-09-02、戦略メモ「柱G」)
+
+**背景**: `registry.json`のREJECTEDエントリ(9件)は、これまで自由記述の
+`evidence`文字列のみで却下理由を記録していた。監査履歴としては機能するが、
+「なぜ却下したか」を機械的に分類できないため、(a) こちら側の作業ミス
+(figure/panelの誤マッチ、画像が取得できなかった)と (b) Starrydata側の
+GTデータそのものの疑わしさ、を区別してクレンジング対象をルーティングする
+ことができなかった。本セクションはこの区別をドメイン層の型として導入する。
+
+**スキーマ**: `src/real_chart_bench/domain/verified_pairing.py`に
+`RejectionCategory`・`GtSuspectStatus`・`RejectionEvidence`を追加し、
+`VerifiedPairing`に`rejection_category` / `gt_suspect_status` /
+`rejection_evidence`の3フィールドを追加した(いずれもオプショナル、
+既存の自由記述`evidence`フィールドは削除せず維持)。
+
+`RejectionCategory`は3値:
+
+- `pairing` — 誤ったfigureとのマッチ、panel境界/向きのクロップ誤り
+  (**こちら側**のバグ)
+- `image` — 解像度/スキャン品質により判読不能、または(同じ「こちら側」の
+  失敗がさらに上流で起きたケースとして)そもそも図がPDF抽出で
+  見つからなかった("image-not-found")。いずれも**こちら側**の都合で
+  除外している。
+- `gt_suspect` — Starrydataの正解データ自体が疑わしい(人手デジタイズ・
+  軸較正・単位変換のミス)。**データセット側**の問題であり、こちら側の
+  バグではない。
+
+**VERIFIEDエントリがgt_suspectフラグを持てる、というモデリング判断**:
+`rejection_category`という名前だが、VERIFIEDなエントリにも設定できる
+唯一の値として`GT_SUSPECT`を許可した(`PAIRING`/`IMAGE`はVERIFIEDでは
+禁止 — 設定すると`__post_init__`が`ValueError`を送出する)。理由:
+「figureとのペアリングは正しいが、そのペアリングに紐づくGT自体は疑わしい」
+という状態は実際に起こりうる(むしろ今回の柱Gタスクの主眼である
+「要注意45件」は全てVERIFIEDのまま)。`pairing`/`image`はペアリング自体の
+信頼性に関わる欠陥なので、それが真であればそもそもVERIFIEDではあり得ない
+(REJECTEDにすべき)。一方`gt_suspect`はペアリングの正しさとは直交する
+関心事(「この画像とこの図は正しく対応しているが、対応している数値の方が
+おかしいかもしれない」)なので、VERIFIED/REJECTEDのどちらの状態とも
+共存できる。フィールド名は`rejection_category`のままだが、この一点だけ
+命名と意味がずれることをここに明記しておく。
+
+**gt_suspectのレビューライフサイクル**: `GtSuspectStatus`は3値
+(`llm_flagged` / `human_confirmed` / `human_rejected`)。`rejection_category`
+が`gt_suspect`のときのみ必須、それ以外では禁止(`__post_init__`で強制)。
+
+**重大ルール(オーナー指示): llm_flaggedだけでは「GTエラー」と報告しては
+ならない**。VLM(視覚言語モデル)自身の読み取りも誤りうるため、
+`llm_flagged`は「自動チェックが疑いを上げた」以上の意味を持たない。
+「確定したGTエラー」と言えるのは`human_confirmed`のときだけ。これを
+コメントだけでなく型/コードで強制するため:
+
+- `GtSuspectStatus.is_confirmed_gt_error`(プロパティ) — `HUMAN_CONFIRMED`
+  のときのみ`True`。呼び出し側が`== GtSuspectStatus.LLM_FLAGGED`のような
+  手書き比較で「GTエラーかどうか」を誤って判定してしまうリスクを排除する
+  ためのプロパティ。
+- `VerifiedPairing.is_confirmed_gt_error` — 同じ判定をエントリ単位で提供。
+  `gt_suspect_status`が`None`(gt_suspectフラグなし)の場合も`False`。
+
+将来書く予定の`scripts/export/gt_issues.py`(柱Gの後続タスク、本タスクの
+スコープ外)は、このプロパティを経由してのみ「GTエラー」を報告すること。
+
+**`RejectionEvidence`(構造化エビデンス)**: 自由記述`evidence`文字列の
+補完として、`axis_range_mismatch` / `point_count_mismatch` /
+`y_value_offset_magnitude` / `missing_series`の4フィールドを持つ
+(全てオプショナル、フィールドの意味は`RejectionEvidence`のdocstring
+参照)。既存9件のうち、evidenceテキストから明確に読み取れた値のみを埋め、
+推測はしていない(後述)。
+
+**「REJECTEDならrejection_category必須」の運用上の例外**: ドメインの
+意図としては「REJECTEDエントリには最終的にrejection_categoryが付く
+べき」だが、`__post_init__`ではこれを無条件のraiseにはしていない
+(`VerifiedPairing.needs_rejection_classification`プロパティで問い合わせ
+可能なクエリとして表現)。理由: 実データ移行(下記)で9件中2件は
+evidenceテキストが単一のカテゴリを明確に支持しておらず、AGENTS.mdの
+「信頼性 > 件数」方針・オーナー指示の「わからなければ推測せず人間の
+判断を待つ」を優先し、未分類のまま残すことを選んだ。ここで
+`rejection_category`を構築時に必須とすると、この2件を含む`registry.json`
+全体がパース不能になり、リーダーボード生成等の既存フローを壊す。
+`needs_rejection_classification`により「未分類のREJECTEDエントリ」を
+コードから安全に問い合わせられるようにしている。
+
+**アダプタ**: `src/real_chart_bench/adapter/verified_pairing_registry.py`
+の`_parse_entry`を拡張し、新フィールドが存在しない既存エントリとの
+後方互換を保ったままパースする。加えて`serialize_entry(pairing, base=raw)`
+を新設: `base`(パース元の生dict)を渡すと、そのキー順序と
+ドメインモデルが関知しない未知キー(例: `figure_reference`。
+`VerifiedPairing`はこのフィールドを一切パースしていない)を保ったまま、
+モデル化されたフィールドだけを更新する。`registry.json`への実際の
+移行(下記)はこの関数を経由せず、既存の`scripts/eval/convert_ground_truth_to_display_units.py`
+と同じ「生dictを直接mutateしてキー順序をそのまま保つ」やり方を踏襲した
+(実データに対しては最も差分が追いやすく安全)。
+
+**TDD**: `tests/domain/test_verified_pairing_rejection.py`・
+`tests/adapter/test_verified_pairing_registry_rejection.py`を新設。
+境界ケース(REJECTEDでcategory欠如、gt_suspectでstatus欠如、
+非gt_suspectでstatus設定、不明なenum値、`figure_reference`のような
+未知キーを保ったままのラウンドトリップ)を含め38件のテストを追加
+(pytest 261 → 299 passed)。
+
+**既存9件のREJECTEDエントリの分類**(evidenceテキストの引用付き):
+
+| paper_id/figure_id | 分類 | 判断根拠(evidence引用) |
+|---|---|---|
+| 17049/13287 | `image` | "No chart matching Seebeck coefficient vs Temperature was found among any of this paper's 9 extracted images ... Rejected as image-not-found." |
+| 17049/13288 | `image` | "Same investigation and same negative result as figure_id=13287 ... see that entry's evidence."(13287と同じimage-not-foundパターン) |
+| 48080/50979 | `image` | "the paper's own text (page 4) explicitly describes 'Fig. 3a' as the resistivity-vs-temperature plot, but no such chart was found among any of the 11 extracted images ... Rejected as image-not-found, not as a numeric mismatch." |
+| 17024/18598 | `image` | "All 15 extracted images for this paper are ... no line/scatter chart of any kind was found. Rejected as image-not-found (likely a vector-drawn chart missed by extraction, same failure mode as paper 48080)." |
+| 47139/48697 | `gt_suspect`(llm_flagged) | "The chart's panel (b) y-axis is printed as 'log sigma [S x cm^-1]' ranging -2.5 to -7.0. The ground-truth magnitude is off by roughly two orders of magnitude from the printed axis range even after accounting for the cm<->m unit conversion -- rejected as a numeric mismatch, not merely a plausible-looking visual match."(印字軸との単位換算後2桁のズレ = GTSuspectの定義する「unit-conversion error」に合致) |
+| 48052/50906 | `gt_suspect`(llm_flagged) | "x-range 320-751K matches the chart's 300-800K axis, but y-range 30228-57868 ohm^-1*m^-1 ... does not match any of the 8 series visible in panel (a) ... Checked all 6 embedded images in this paper ... none found. Rejected as a numeric mismatch against the only plausibly-named candidate panel."(panel自体は消去法で正しいと判断できる一方、どの系列とも一致しない数値 = pairing/image起因ではなくGT側の疑い) |
+| 46123/45876 | `gt_suspect`(llm_flagged) | "all 5 curves have x-range exactly (0.0, 0.0), i.e. every x-value collapsed to zero. This is a ground-truth data quality defect (not a pairing/image problem): the underlying digitized data for this figure is unusable regardless of which of the 53 candidate images it might correspond to."(evidence自身が明示的に「pairing/imageの問題ではない」と結論) |
+
+**人間の判断待ちとして未分類のまま残した2件**:
+
+- **83/9048**: "the GT data for this figure may belong to a chart not
+  present among this paper's 6 extracted images, or may reflect a
+  Starrydata-side figure misassignment."(image-not-found的な仮説と
+  gt_suspect的な仮説の両方をevidence自身が併記し、どちらとも決めて
+  いない — 2つの異なるカテゴリの間で割り切れないため推測を避けた)
+- **46256/46343**: "this reconstruction could not be confirmed with
+  confidence against the image (no panel-by-panel value check produced a
+  clean match, and the image itself has no visible '(a)' panel label to
+  confirm it is figure 4a specifically). Rejected as ambiguous/unconfirmed
+  rather than force-accepted, per the 'reliability over quantity' gate
+  policy."(evidence自身が「未確認(unconfirmed)」と明言しており、
+  特定のカテゴリへの確定的な分類ではなく「確認不能」という別種の状態
+  だったため)
+
+いずれも`registry.json`上は`rejection_category`キーを追加していない
+(既存の`evidence`文字列はそのまま)。司令塔/オーナーの判断を仰ぐ。
+
+**結果**: `data/verified_pairs/registry.json`の9件中7件に
+`rejection_category`を追加(うち3件は`gt_suspect_status: llm_flagged`と
+`rejection_evidence`も付与)。VERIFIEDな111件のstatus・値は一切変更して
+いない。`ground_truth.json`も無変更。
+
+**テスト**: pytest 299 passed、domain層カバレッジ維持、ruff clean、
+import-linter clean。
