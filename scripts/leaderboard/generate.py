@@ -7,6 +7,7 @@ Usage:
 
 from __future__ import annotations
 
+import itertools
 import json
 import pathlib
 import sys
@@ -67,36 +68,67 @@ _TEMPLATE = """<!doctype html>
   td details table {{ margin-top: 0.4rem; width: auto; min-width: 14rem; }}
   td details th, td details td {{ padding: 0.25rem 0.5rem; }}
   td details summary {{ cursor: pointer; color: #1a5fb4; }}
+  h2.dataset-section {{
+    margin-top: 2rem; padding-top: 0.5rem; border-top: 2px solid #ddd;
+    font-size: 1.05rem;
+  }}
+  h2.dataset-section .figure-count {{ font-weight: normal; color: #555; }}
+  section.dataset-section table {{ margin-bottom: 0; }}
 </style>
 </head>
 <body>
 <h1>real-chart-bench leaderboard (v0)</h1>
 <p class="version-banner">📌 <strong>Latest evaluated set: {latest_dataset_version}</strong>
-(most recent run: {latest_run_at} UTC). Scores below may come from different runs against
-different verified-pair counts as the registry grows over time -- always check each row's
-own <strong>Dataset</strong>/<strong>Run at</strong> columns before comparing scores across
-models; do not compare a row's score against a different dataset_version as if they were
-the same benchmark.</p>
+(most recent run: {latest_run_at} UTC). <strong>Rank is only meaningful within a section
+below</strong> -- each section is its own figure set (dataset_version), scored runs are
+never ranked against a different section's runs, and a higher raw score in a smaller
+section does NOT mean that model beat a model ranked #1 in a different section. Always
+check which section a row is in (and its own <strong>Run at</strong> column) before
+comparing scores.</p>
 <p><strong>⚠️ pre-alpha:</strong> evaluation set is a small manually-verified pilot
-gated on data/verified_pairs/registry.json (real-figure count varies by run, see the
-Dataset column) + 3 synthetic fixtures, not the full v0 dataset. See docs/experiments/ and
-docs/design/benchmark-architecture.md &sect;7.19/&sect;7.21/&sect;7.27 for methodology and
-known limitations (automatic image&harr;figure pairing is unsolved outside the
-verified registry; naive baselines cannot see black/gray line series or
-achromatic markers).</p>
+gated on data/verified_pairs/registry.json (real-figure count varies by run, see each
+section's heading below) + 3 synthetic fixtures, not the full v0 dataset. See
+docs/experiments/ and docs/design/benchmark-architecture.md
+&sect;7.19/&sect;7.21/&sect;7.27 for methodology and known limitations (automatic
+image&harr;figure pairing is unsolved outside the verified registry; naive baselines
+cannot see black/gray line series or achromatic markers).</p>
+{sections}
+{pending_section}
+{head_to_head}
+</body>
+</html>
+"""
+
+# 2026-09-02 (HQ: "never rank across figure sets"): one <section> per
+# dataset_version, each with its own Rank column starting at 1 -- see
+# usecase/build_leaderboard.py's module docstring for why a rank number
+# must never be visually comparable across different figure sets. The
+# heading states the figure count and the dataset_version string so a
+# skimming reader sees "this rank is scoped to N figures" without having to
+# open a details/Breakdown panel or cross-reference a Dataset column.
+_SECTION_TEMPLATE = """<section class="dataset-section">
+<h2 class="dataset-section">{heading}</h2>
 <table>
 <thead><tr>
 <th>Rank</th><th>Model</th><th>Mean score</th><th>#figures</th>
-<th>Dataset</th><th>Run at (UTC)</th><th>Breakdown</th>
+<th>Run at (UTC)</th><th>Breakdown</th>
 </tr></thead>
 <tbody>
 {rows}
 </tbody>
 </table>
-{head_to_head}
-</body>
-</html>
-"""
+</section>"""
+
+_PENDING_SECTION_TEMPLATE = """<section class="dataset-section">
+<h2 class="dataset-section">Pending -- not yet run</h2>
+<p>Registered but not yet scored. Never ranked against any section above.</p>
+<table>
+<thead><tr><th>Model</th><th>Status</th></tr></thead>
+<tbody>
+{rows}
+</tbody>
+</table>
+</section>"""
 
 # design task 2026-09-02 ("Task 1"): naive-cv-v0 is scored against every
 # currently-VERIFIED figure (111 as of this writing) while
@@ -111,11 +143,11 @@ achromatic markers).</p>
 # that IS a fair head-to-head, right next to the table, instead of leaving
 # the reader to notice the matching dataset_version themselves.
 _HEAD_TO_HEAD_TEMPLATE = """<div class="head-to-head">
-<strong>Head-to-head, same figures only:</strong> the table above mixes runs
-scored against different figure counts (see each row's Dataset column) --
-comparing their raw scores directly is misleading. The one comparison below
-IS apples-to-apples: both rows are scored on the exact same
-{n_figures}-figure set (dataset_version <code>{dataset_version}</code>).
+<strong>Head-to-head, same figures only:</strong> the sections above are
+each scored against a different figure count (see each section's own
+heading) -- comparing a row's raw score across sections is misleading. The
+one comparison below IS apples-to-apples: both rows are scored on the exact
+same {n_figures}-figure set (dataset_version <code>{dataset_version}</code>).
 <table><thead><tr><th>Model</th><th>Mean score</th><th>#figures</th></tr></thead>
 <tbody>
 {head_to_head_rows}
@@ -155,12 +187,12 @@ def _render_head_to_head_html(results_by_model_id: dict) -> str:
 _ROW_TEMPLATE = (
     "<tr><td>{rank}</td><td>{model_name}</td>"
     '<td class="score">{score:.3f}</td><td>{n_figures}</td>'
-    "<td>{dataset_version}</td><td>{run_at}</td><td>{breakdown_html}</td></tr>"
+    "<td>{run_at}</td><td>{breakdown_html}</td></tr>"
 )
 
 _PENDING_ROW_TEMPLATE = (
-    '<tr class="pending"><td>{rank}</td><td>{model_name}</td>'
-    '<td class="score">—</td><td colspan="4">pending external run — {note}</td></tr>'
+    '<tr class="pending"><td>{model_name}</td>'
+    "<td>pending external run — {note}</td></tr>"
 )
 
 _BREAKDOWN_TEMPLATE = (
@@ -193,6 +225,65 @@ def _render_breakdown_html(breakdown: list) -> str:
     return _BREAKDOWN_TEMPLATE.format(category_rows=category_rows)
 
 
+def _section_heading(dataset_version: str | None, group_rows: list) -> str:
+    label = (
+        f"Dataset: <code>{dataset_version}</code>"
+        if dataset_version is not None
+        else "No dataset_version recorded (legacy/malformed result)"
+    )
+    n_figures_values = sorted({r.n_figures for r in group_rows if r.n_figures is not None})
+    if len(n_figures_values) == 1:
+        figures_text = f"{n_figures_values[0]} figures"
+    elif n_figures_values:
+        # Defensive: rows sharing a dataset_version are expected to share a
+        # figure count (same set of figures) -- if they don't, say so
+        # loudly instead of picking one number and hiding the mismatch.
+        figures_text = f"{', '.join(str(n) for n in n_figures_values)} figures (mismatched!)"
+    else:
+        figures_text = "unknown figure count"
+    return f'{label} <span class="figure-count">&mdash; {figures_text}</span>'
+
+
+def _render_sections_html(
+    scored_rows: list, results_by_model_id: dict, pairings_by_figure_id: dict
+) -> str:
+    if not scored_rows:
+        return "<p>No scored results yet.</p>"
+    sections = []
+    by_dataset_version = itertools.groupby(scored_rows, key=lambda r: r.dataset_version)
+    for dataset_version, group_iter in by_dataset_version:
+        group_rows = list(group_iter)
+        rows_html = "\n".join(
+            _ROW_TEMPLATE.format(
+                rank=r.rank,
+                model_name=r.model_name,
+                score=r.mean_summary_score,
+                n_figures=r.n_figures,
+                run_at=r.run_at,
+                breakdown_html=_render_breakdown_html(
+                    build_model_breakdown(results_by_model_id[r.model_id], pairings_by_figure_id)
+                ),
+            )
+            for r in group_rows
+        )
+        sections.append(
+            _SECTION_TEMPLATE.format(
+                heading=_section_heading(dataset_version, group_rows),
+                rows=rows_html,
+            )
+        )
+    return "\n".join(sections)
+
+
+def _render_pending_section_html(pending_rows: list) -> str:
+    if not pending_rows:
+        return ""
+    rows_html = "\n".join(
+        _PENDING_ROW_TEMPLATE.format(model_name=r.model_name, note=r.note) for r in pending_rows
+    )
+    return _PENDING_SECTION_TEMPLATE.format(rows=rows_html)
+
+
 def main() -> None:
     results = [json.loads(p.read_text()) for p in sorted(RESULTS_DIR.glob("*.json"))]
     rows = build_leaderboard_rows(results)
@@ -207,33 +298,23 @@ def main() -> None:
     pairings_by_figure_id = {f"{p.paper_id}-{p.figure_id}": p for p in registry}
     results_by_model_id = {r["model_id"]: r for r in results}
 
-    rows_html = "\n".join(
-        _PENDING_ROW_TEMPLATE.format(rank=r.rank, model_name=r.model_name, note=r.note)
-        if r.status == "pending_external_run"
-        else _ROW_TEMPLATE.format(
-            rank=r.rank,
-            model_name=r.model_name,
-            score=r.mean_summary_score,
-            n_figures=r.n_figures,
-            dataset_version=r.dataset_version,
-            run_at=r.run_at,
-            breakdown_html=_render_breakdown_html(
-                build_model_breakdown(results_by_model_id[r.model_id], pairings_by_figure_id)
-            ),
-        )
-        for r in rows
-    )
-    if not rows:
-        rows_html = '<tr><td colspan="7">No results yet.</td></tr>'
+    # 2026-09-02 (HQ: "never rank across figure sets"): render one <section>
+    # per dataset_version (build_leaderboard_rows already groups+orders
+    # scored rows so same-dataset_version rows are contiguous) so a rank
+    # number is never visually next to a rank from a different figure set.
+    # Pending rows are unranked and get their own trailing section.
+    scored_rows = [r for r in rows if r.status == "scored"]
+    pending_rows = [r for r in rows if r.status == "pending_external_run"]
+    sections_html = _render_sections_html(scored_rows, results_by_model_id, pairings_by_figure_id)
+    pending_section_html = _render_pending_section_html(pending_rows)
 
     # Design §7.27/HQ 2026-08-21: the version banner is derived from the most
     # recently-run scored result, not hardcoded -- a hardcoded string is
     # exactly what went stale across the 1->10->20-pair registry expansions
     # (results/*.json's own dataset_version had the same bug, fixed in
     # scripts/eval/run_baselines.py the same day).
-    scored = [r for r in rows if r.status == "scored"]
-    if scored:
-        latest = max(scored, key=lambda r: r.run_at)
+    if scored_rows:
+        latest = max(scored_rows, key=lambda r: r.run_at)
         latest_dataset_version = latest.dataset_version
         latest_run_at = latest.run_at
     else:
@@ -243,7 +324,8 @@ def main() -> None:
     SITE_DIR.mkdir(exist_ok=True)
     (SITE_DIR / "index.html").write_text(
         _TEMPLATE.format(
-            rows=rows_html,
+            sections=sections_html,
+            pending_section=pending_section_html,
             latest_dataset_version=latest_dataset_version,
             latest_run_at=latest_run_at,
             head_to_head=_render_head_to_head_html(results_by_model_id),
