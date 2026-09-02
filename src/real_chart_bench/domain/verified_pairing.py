@@ -29,7 +29,7 @@ class VerificationStatus(Enum):
 class RejectionCategory(Enum):
     """Why a candidate pairing was rejected -- or, for a VERIFIED entry, the
     one case where the pairing itself is fine but the ground truth backing
-    it is still under suspicion (design §7.4x, 戦略メモ「柱G」).
+    it is still under suspicion (design §7.48, 戦略メモ「柱G」).
 
     - PAIRING: wrong figure matched, or a panel boundary/orientation crop
       error -- our bug in the matching/cropping step.
@@ -56,7 +56,7 @@ class RejectionCategory(Enum):
 
 
 class GtSuspectStatus(Enum):
-    """Review lifecycle for a GT_SUSPECT flag (design §7.4x).
+    """Review lifecycle for a GT_SUSPECT flag (design §7.48).
 
     - LLM_FLAGGED: an LLM/automated check raised the suspicion. Nothing more.
     - HUMAN_CONFIRMED: a human looked at the source figure and confirmed the
@@ -142,7 +142,7 @@ class VerifiedPairing:
     # longer applies, but the field stays as the general escape hatch for
     # future harness gaps of the same shape.)
     excluded_reason: str | None = None
-    # design §7.4x (戦略メモ「柱G」): distinguishes *why* a REJECTED entry was
+    # design §7.48 (戦略メモ「柱G」): distinguishes *why* a REJECTED entry was
     # rejected (pairing/image/gt_suspect), and doubles as a flag a VERIFIED
     # entry can carry to say "the pairing is correct but the GT is
     # suspect" -- see RejectionCategory's docstring for why GT_SUSPECT is

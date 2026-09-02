@@ -1,4 +1,4 @@
-"""TDD for design §7.4x (戦略メモ「柱G」): the adapter's handling of
+"""TDD for design §7.48 (戦略メモ「柱G」): the adapter's handling of
 rejection_category / gt_suspect_status / rejection_evidence -- parsing,
 backward compatibility with entries that lack them, and round-trip
 serialisation preserving field order and unknown keys.

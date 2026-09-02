@@ -1,4 +1,4 @@
-"""TDD for design §7.4x (戦略メモ「柱G」): rejection_category / GtSuspectStatus
+"""TDD for design §7.48 (戦略メモ「柱G」): rejection_category / GtSuspectStatus
 on VerifiedPairing.
 
 See src/real_chart_bench/domain/verified_pairing.py for the invariants these
@@ -123,7 +123,7 @@ def test_rejected_entry_may_carry_an_image_category():
 def test_rejected_entry_missing_category_needs_classification_but_does_not_raise():
     """Boundary case: a REJECTED entry with no rejection_category. This is
     the real state of some already-rejected registry entries whose evidence
-    genuinely didn't support a single category (design §7.4x) -- guessing
+    genuinely didn't support a single category (design §7.48) -- guessing
     one would be worse than leaving it explicitly pending, so construction
     succeeds and the gap is exposed via needs_rejection_classification."""
     pairing = VerifiedPairing(**_base_kwargs(rejection_category=None))
@@ -137,7 +137,7 @@ def test_verified_entry_without_rejection_category_does_not_need_classification(
 
 def test_verified_entry_may_carry_gt_suspect_category():
     """A pairing can be correctly matched (VERIFIED) and still have a
-    suspect ground truth -- the two are orthogonal (design §7.4x)."""
+    suspect ground truth -- the two are orthogonal (design §7.48)."""
     pairing = VerifiedPairing(
         **_base_kwargs(
             status=VerificationStatus.VERIFIED,
