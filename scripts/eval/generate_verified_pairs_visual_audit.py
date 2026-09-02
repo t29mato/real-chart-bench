@@ -599,17 +599,36 @@ def main() -> None:
                 k_y = fy["factor"]
 
         plot_path = PLOTS_DIR / f"{slug}.png"
-        # Only label the axis with the printed unit text when a conversion
-        # matching that exact unit was actually applied (kind in
-        # multiplicative/additive) -- for "log10"/"indeterminate" factors
-        # k_x/k_y stay 1 (unconverted), so the printed unit wouldn't
-        # actually describe what's plotted.
+        # Label the axis with the printed unit text whenever it's safe to:
+        # either a conversion matching that exact unit was actually applied
+        # (kind in multiplicative/additive), or -- design 7.47's fix, since
+        # a thermal-conductivity-style axis where SI and the paper's own
+        # unit are dimensionally identical (factor 1) still lands as
+        # "indeterminate" purely from the label-vs-frame-margin pattern --
+        # the printed unit dimensionally matches raw SI at the k=1 the
+        # fallback already uses, so showing it is harmless (no rescale is
+        # silently implied that wasn't applied). "log10" stays excluded:
+        # there k=1 is *not* dimensionally equal to the printed unit, it's
+        # just the least-wrong fallback for a non-linear axis.
         printed_x_unit = printed_y_unit = None
         if axp is not None and factor_detail is not None:
             fx, fy = factor_detail["x"], factor_detail["y"]
-            if fx["kind"] in ("multiplicative", "additive"):
+            si_unit_x = curves[0].get("unit_x") if curves else None
+            si_unit_y = curves[0].get("unit_y") if curves else None
+
+            def _safe_to_label(f: dict, axis_unit: str | None, si_unit: str | None) -> bool:
+                if f["kind"] in ("multiplicative", "additive"):
+                    return True
+                if f["kind"] == "indeterminate" and axis_unit and si_unit:
+                    try:
+                        return abs(si_to_display_factor(si_unit, axis_unit) - 1.0) < 0.03
+                    except (UnitParseError, IncompatibleUnitsError):
+                        return False
+                return False
+
+            if _safe_to_label(fx, axp.get("x_axis_unit"), si_unit_x):
                 printed_x_unit = axp.get("x_axis_unit")
-            if fy["kind"] in ("multiplicative", "additive"):
+            if _safe_to_label(fy, axp.get("y_axis_unit"), si_unit_y):
                 printed_y_unit = axp.get("y_axis_unit")
             # "-" means dimensionless -- not a real unit string to print.
             if printed_x_unit == "-":
