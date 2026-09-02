@@ -57,6 +57,12 @@ _TEMPLATE = """<!doctype html>
     padding: 0.6rem 1rem; border-radius: 4px; margin-bottom: 1rem;
     font-variant-numeric: tabular-nums;
   }}
+  .head-to-head {{
+    background: #f3f3f3; border: 1px solid #ccc;
+    padding: 0.75rem 1rem; border-radius: 4px; margin-top: 1rem;
+    font-variant-numeric: tabular-nums;
+  }}
+  .head-to-head table {{ margin-top: 0.5rem; }}
   td details {{ font-size: 0.85em; }}
   td details table {{ margin-top: 0.4rem; width: auto; min-width: 14rem; }}
   td details th, td details td {{ padding: 0.25rem 0.5rem; }}
@@ -87,9 +93,64 @@ achromatic markers).</p>
 {rows}
 </tbody>
 </table>
+{head_to_head}
 </body>
 </html>
 """
+
+# design task 2026-09-02 ("Task 1"): naive-cv-v0 is scored against every
+# currently-VERIFIED figure (111 as of this writing) while
+# lineformer-pretrained.json is stuck at the 42 it was last run against
+# (LineFormer can't be re-run here -- needs mmcv/mmdetection via a Colab
+# notebook, design §7.16) -- those two mean_summary_scores are NOT
+# comparable on their own. run_baselines.py additionally emits
+# naive-cv-v0-lineformer-subset.json: naive-cv rescored on exactly
+# LineFormer's own figure set (same dataset_version string, reused
+# verbatim -- see scripts/eval/run_baselines.py's
+# _lineformer_comparable_subset). This callout surfaces the one number pair
+# that IS a fair head-to-head, right next to the table, instead of leaving
+# the reader to notice the matching dataset_version themselves.
+_HEAD_TO_HEAD_TEMPLATE = """<div class="head-to-head">
+<strong>Head-to-head, same figures only:</strong> the table above mixes runs
+scored against different figure counts (see each row's Dataset column) --
+comparing their raw scores directly is misleading. The one comparison below
+IS apples-to-apples: both rows are scored on the exact same
+{n_figures}-figure set (dataset_version <code>{dataset_version}</code>).
+<table><thead><tr><th>Model</th><th>Mean score</th><th>#figures</th></tr></thead>
+<tbody>
+{head_to_head_rows}
+</tbody></table>
+</div>"""
+
+_HEAD_TO_HEAD_ROW_TEMPLATE = (
+    '<tr><td>{model_name}</td><td class="score">{score:.3f}</td><td>{n_figures}</td></tr>'
+)
+
+
+def _render_head_to_head_html(results_by_model_id: dict) -> str:
+    lineformer = results_by_model_id.get("lineformer-pretrained")
+    subset = results_by_model_id.get("naive-cv-v0-lineformer-subset")
+    if lineformer is None or subset is None or lineformer.get("status") == "pending_external_run":
+        return ""
+    if lineformer["dataset_version"] != subset["dataset_version"]:
+        # The two rows were meant to be built on the same figure set (see
+        # _lineformer_comparable_subset) -- if they've drifted apart
+        # (e.g. someone regenerated one but not the other), showing them
+        # side by side would repeat exactly the mistake this callout exists
+        # to prevent. Say nothing rather than show a stale comparison.
+        return ""
+    contenders = sorted([lineformer, subset], key=lambda r: -r["mean_summary_score"])
+    head_to_head_rows = "\n".join(
+        _HEAD_TO_HEAD_ROW_TEMPLATE.format(
+            model_name=r["model_name"], score=r["mean_summary_score"], n_figures=r["n_figures"]
+        )
+        for r in contenders
+    )
+    return _HEAD_TO_HEAD_TEMPLATE.format(
+        n_figures=subset["n_figures"],
+        dataset_version=subset["dataset_version"],
+        head_to_head_rows=head_to_head_rows,
+    )
 
 _ROW_TEMPLATE = (
     "<tr><td>{rank}</td><td>{model_name}</td>"
@@ -185,6 +246,7 @@ def main() -> None:
             rows=rows_html,
             latest_dataset_version=latest_dataset_version,
             latest_run_at=latest_run_at,
+            head_to_head=_render_head_to_head_html(results_by_model_id),
         )
     )
     print(f"wrote {SITE_DIR / 'index.html'} ({len(rows)} model(s))")
