@@ -940,3 +940,70 @@ def classify_range_disagreement(
         checks,
         f"UNIT_SPACE_DIFFERENCE: {affine_check.detail}; {unit_check.detail}",
     )
+
+
+def display_conversion(
+    verdict: Verdict,
+    *,
+    label_min: float,
+    label_max: float,
+    reg_lo: float,
+    reg_hi: float,
+    gt_unit: str | None = None,
+    printed_unit: str | None = None,
+) -> tuple[float, float]:
+    """Given a `Verdict` (typically `classify_range_disagreement(...).verdict`
+    for the same axis/inputs), returns `(factor, offset)` such that
+    `display = factor * registry_value + offset` re-expresses a value in
+    "registry space" (e.g. a GT curve point, or the registry range itself) in
+    the printed axis's display units. This is the one piece of logic that
+    replaces `generate_verified_pairs_visual_audit.py`'s old `_derive_factor`
+    for the re-plot: which conversion is *trustworthy enough to apply* depends
+    entirely on which verdict fired, so this dispatches on it rather than
+    re-deriving a factor of its own from scratch.
+
+    - `BENIGN_MARGIN`: the registry is already in the paper's display units
+      (design 7.47) and the residual is just axis-framing headroom -- no
+      conversion needed, identity `(1.0, 0.0)`.
+    - `UNIT_SPACE_DIFFERENCE`: registry/GT are self-consistent but in a
+      *different* unit space than the printed axis (the "not yet migrated to
+      display units" backlog). The expected conversion is derived the same
+      way rule (e) verified it -- `si_to_display_factor` plus
+      `_expected_additive_offset` -- from the unit strings alone, still with
+      no reference to the endpoint values. Falls back to identity if the unit
+      strings are unusable (shouldn't happen if `verdict` genuinely came from
+      `classify_range_disagreement` with the same `gt_unit`/`printed_unit`,
+      since UNIT_SPACE_DIFFERENCE requires them to have resolved -- this is
+      just defensive, not a case this corpus exercises).
+    - `AXIS_SCALE_FACTOR`: the endpoints themselves are the trustworthy
+      conversion here (already confirmed, by the classifier, to be a clean
+      power-of-ten multiple of the dimensionally-expected factor -- not a
+      guess) -- reuses the same exact 2-point affine fit (`_affine_fit`)
+      `classify_range_disagreement` computed informationally, so the
+      re-plot's axis limits land exactly on the printed labels.
+    - `REAL_MISMATCH` / `INDETERMINATE`: no conversion is confirmed --
+      identity `(1.0, 0.0)`, i.e. an honest raw-SI/unconverted fallback (see
+      module docstring; callers should label the axis accordingly, not with
+      the printed unit text).
+    """
+    if verdict is Verdict.BENIGN_MARGIN:
+        return 1.0, 0.0
+
+    if verdict is Verdict.UNIT_SPACE_DIFFERENCE:
+        if _is_missing_or_ambiguous_unit(gt_unit) or _is_missing_or_ambiguous_unit(printed_unit):
+            return 1.0, 0.0
+        try:
+            factor = si_to_display_factor(gt_unit, printed_unit)
+        except (IncompatibleUnitsError, UnitParseError):
+            return 1.0, 0.0
+        offset = _expected_additive_offset(gt_unit, printed_unit)
+        return factor, offset
+
+    if verdict is Verdict.AXIS_SCALE_FACTOR:
+        fit = _affine_fit(label_min, label_max, reg_lo, reg_hi)
+        if fit is None:
+            return 1.0, 0.0
+        return fit
+
+    # REAL_MISMATCH / INDETERMINATE.
+    return 1.0, 0.0

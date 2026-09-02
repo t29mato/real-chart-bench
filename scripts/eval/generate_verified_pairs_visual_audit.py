@@ -14,13 +14,23 @@ this produces one Markdown section with:
    tried, in order of trustworthiness:
 
    a. **axis-pixel-derived** (primary): when `axis_pixel_candidates.json`
-      has a matching entry, the printed axis's own tick *values* (not just
-      their pixel positions) let us derive the exact SI -> paper-display
-      factor with no unit-string guessing: divide the printed tick value
-      by the SI-unit registry x_range/y_range at that same point. Trusted
-      only when it agrees independently at both the min and max end of the
-      axis (see `_derive_factor`); a disagreement is surfaced as a
-      top-of-file "needs attention" flag rather than silently applied.
+      has a matching entry, each axis's registry range vs. printed tick
+      labels is classified by `domain/pairing_checks.py::
+      classify_range_disagreement` (design 7.49/7.52) into one of five
+      verdicts -- BENIGN_MARGIN, UNIT_SPACE_DIFFERENCE, AXIS_SCALE_FACTOR,
+      REAL_MISMATCH, INDETERMINATE -- and `display_conversion` turns that
+      verdict into the `(factor, offset)` actually safe to apply for the
+      re-plot (see both functions' docstrings). This REPLACES the old
+      `_derive_factor`, which *fitted* a factor from the endpoints and
+      flagged any disagreement as "needs attention" -- 45 of 111 entries,
+      of which an independent triage
+      (docs/experiments/2026-09-02-flagged-entries-triage.md) found 43
+      were not errors at all, just the fitting method's inability to tell
+      a benign one-sided framing margin from a real unit bug. Since
+      commit 31bd7e9 (design 7.47), registry.json/ground_truth.json are
+      stored in each paper's *display* units, so the a-priori expected
+      registry-vs-label relationship is the identity map, not something to
+      fit.
    b. **evidence-text-derived** (fallback, only when (a) is unavailable):
       most entries' `evidence` field already states the exact factor a
       human/agent verified against the image while writing the entry
@@ -53,6 +63,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import matplotlib
 
@@ -64,6 +75,14 @@ from PIL import Image  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from real_chart_bench.domain.curve import ScaleType  # noqa: E402
+from real_chart_bench.domain.pairing_checks import (  # noqa: E402
+    AxisPixelCalibration,
+    RangeDisagreementVerdict,
+    Verdict,
+    classify_range_disagreement,
+    display_conversion,
+)
 from real_chart_bench.domain.unit_conversion import (  # noqa: E402
     IncompatibleUnitsError,
     UnitParseError,
@@ -81,7 +100,19 @@ MARKDOWN_PATH = AUDIT_DIR / "visual-audit.md"
 REVIEW_HTML_PATH = AUDIT_DIR / "review.html"
 
 _COLORS = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-_FACTOR_AGREEMENT_TOL = 0.03  # 3% relative disagreement between endpoint-derived factors
+
+# Verdicts safe to label the re-plot axis with the printed unit *text*: in
+# all three, `display_conversion` returns a conversion that's either the
+# identity (registry already in display units, BENIGN_MARGIN) or one
+# actually derived from/confirmed against the printed axis itself
+# (UNIT_SPACE_DIFFERENCE, AXIS_SCALE_FACTOR). REAL_MISMATCH/INDETERMINATE
+# are deliberately excluded -- labeling with the printed unit there would
+# silently imply a conversion that was never confirmed.
+_SAFE_TO_LABEL_VERDICTS = (
+    Verdict.BENIGN_MARGIN,
+    Verdict.UNIT_SPACE_DIFFERENCE,
+    Verdict.AXIS_SCALE_FACTOR,
+)
 
 # Matches the "(xN)" / "(divide by N)" / "(/N)" phrasing evidence texts use
 # when documenting the y-axis unit conversion they manually verified against
@@ -100,9 +131,10 @@ def _evidence_text_factor(evidence: str) -> dict | None:
     """Fallback factor source when no axis-pixel data exists for an entry:
     parse the explicit conversion factor most evidence texts already state
     (see AGENTS.md's evidence-style convention -- "state the actual numbers
-    you cross-checked"). Unlike `_derive_factor`, this is NOT independently
-    re-verified here, just trusting text a human/agent already validated
-    once against the image -- callers must label it as such.
+    you cross-checked"). Unlike the axis-pixel-derived path (now
+    `domain/pairing_checks.py`), this is NOT independently re-verified here,
+    just trusting text a human/agent already validated once against the
+    image -- callers must label it as such.
     """
     m = _EVIDENCE_FACTOR_RE.search(evidence)
     if not m:
@@ -126,134 +158,132 @@ def _slug(entry: dict) -> str:
     return f"{entry['paper_id']}_{entry['figure_id']}_{ref}"
 
 
-def _derive_factor(
-    reg_range: list[float], label_min: float, label_max: float, scale: str = "linear"
-) -> dict:
-    """Derive the SI -> paper-display relationship for one axis.
-
-    Most properties in this domain (resistivity, conductivity, Seebeck
-    coefficient, ...) rescale multiplicatively: display = k * SI. Temperature
-    is the one common exception -- degC vs K is *additive* (degC = K -
-    273.15), which a multiplicative-factor fit will always misreport as
-    "disagreement" even when both numbers are correct. A third pattern shows
-    up on a handful of log-y Arrhenius plots (e.g. paper 46278, design 7.42):
-    the axis prints the raw log10 value itself (-1, -2, ... -6) instead of
-    decade labels (10^-1, 10^-2, ...) -- display = log10(SI), not a linear
-    relationship at all, so neither the multiplicative nor additive fit
-    applies (and the negative label values on a physically-positive quantity
-    are the tell). This function checks all three and reports whichever one
-    actually fits.
-
-    Returns a dict with `kind` ("multiplicative" | "additive" | "log10" |
-    "indeterminate"), `factor` (the multiplicative k, always populated for
-    applying to a plot, 1.0 when the fit isn't multiplicative), `offset`
-    (populated only when `kind == "additive"`), `confident` (bool), and
-    `detail` (str explaining the cross-check).
+class AxisEvaluation(NamedTuple):
+    """One axis's (registry vs. printed-label) evaluation for one entry:
+    the `RangeDisagreementVerdict` from `classify_range_disagreement`
+    (`None` when this axis has no printed label captured in this crop --
+    nothing to classify, not the same as an INDETERMINATE verdict), plus the
+    raw inputs that produced it -- needed again by `display_conversion` and
+    for rendering.
     """
-    lo, hi = reg_range
-    span = hi - lo
-    if span == 0:
-        return {
-            "kind": "indeterminate",
-            "factor": 1.0,
-            "offset": None,
-            "confident": False,
-            "detail": "degenerate registry range (span=0)",
-        }
 
-    if scale == "log" and lo > 0 and (label_min < 0 or label_max < 0):
-        import math
+    verdict: RangeDisagreementVerdict | None
+    label_min: float | None
+    label_max: float | None
+    reg_lo: float
+    reg_hi: float
+    gt_unit: str | None
+    printed_unit: str | None
 
-        fit = abs(math.log10(lo) - label_min) < 0.5 and abs(math.log10(hi) - label_max) < 0.5
-        return {
-            "kind": "log10",
-            "factor": 1.0,
-            "offset": None,
-            "confident": True if fit else None,
-            "detail": (
-                f"axis prints raw log10 values ({label_min:g}..{label_max:g}) against a "
-                f"positive-SI log-scale range ({lo:g}..{hi:g}) -- not a linear factor, "
-                f"design 7.42's known pattern"
-                + (
-                    ""
-                    if fit
-                    else " (log10(range) doesn't match the printed values though -- "
-                    "check manually)"
-                )
-            ),
-        }
 
-    k_span = (label_max - label_min) / span
-    k_lo = (label_min / lo) if lo != 0 else None
-    k_hi = (label_max / hi) if hi != 0 else None
-    endpoint_ks = [k for k in (k_lo, k_hi) if k is not None]
+def _axis_scale(entry: dict, axis: str) -> ScaleType:
+    return ScaleType.LOG if entry.get(f"{axis}_scale", "linear") == "log" else ScaleType.LINEAR
 
-    mult_factor, mult_agree, mult_detail = None, False, None
-    if len(endpoint_ks) == 2:
-        a, b = endpoint_ks
-        denom = max(abs(a), abs(b), 1e-30)
-        mult_agree = abs(a - b) / denom <= _FACTOR_AGREEMENT_TOL
-        mult_factor = (a + b) / 2 if mult_agree else k_span
-        mult_detail = f"k_min={a:.6g}, k_max={b:.6g}, k_span={k_span:.6g}"
-    elif len(endpoint_ks) == 1:
-        (k,) = endpoint_ks
-        denom = max(abs(k), abs(k_span), 1e-30)
-        mult_agree = abs(k - k_span) / denom <= _FACTOR_AGREEMENT_TOL
-        mult_factor = k if mult_agree else k_span
-        mult_detail = f"k_endpoint={k:.6g}, k_span={k_span:.6g}"
-    else:
-        mult_factor, mult_detail = k_span, f"k_span={k_span:.6g} (both range endpoints are 0)"
 
-    if mult_agree:
-        return {
-            "kind": "multiplicative",
-            "factor": mult_factor,
-            "offset": None,
-            "confident": True,
-            "detail": mult_detail,
-        }
+def _axis_calibration(
+    axp: dict, axis: str, img_w: int, img_h: int
+) -> AxisPixelCalibration | None:
+    """Builds the pixel calibration `classify_range_disagreement`'s rule (d)
+    needs to project a registry endpoint into the image and check it lands
+    inside it (design 7.49's paper 10939/figure 1528 case -- the one rule
+    this can't be skipped for)."""
+    bbox = axp["pixel_bbox_mean"]
+    lo_px, hi_px = bbox.get(f"{axis}_min_px"), bbox.get(f"{axis}_max_px")
+    if lo_px is None or hi_px is None:
+        return None
+    extent = img_w if axis == "x" else img_h
+    return AxisPixelCalibration(label_lo_px=lo_px, label_hi_px=hi_px, image_extent_px=extent)
 
-    # multiplicative fit failed -- check whether it's actually additive
-    # (display = SI + offset), the degC-vs-K signature. Never valid for a
-    # log-scale axis: log-scale values are strictly positive and plotted
-    # logarithmically, so an additive shift is physically meaningless there
-    # (and, mechanically, can turn small positive values negative -- see
-    # design 7.47, where this false-matched on a log-y entry and corrupted
-    # the stored curve with negative y-values).
-    offset_lo = label_min - lo
-    offset_hi = label_max - hi
-    offset_denom = max(abs(offset_lo), abs(offset_hi), 1.0)
-    additive_agree = scale != "log" and abs(offset_lo - offset_hi) / offset_denom <= (
-        _FACTOR_AGREEMENT_TOL * 3
+
+def _evaluate_axis(
+    entry: dict, axp: dict | None, curves: list[dict], axis: str, img_w: int, img_h: int
+) -> AxisEvaluation:
+    """Runs `classify_range_disagreement` for one axis ("x" or "y") of one
+    verified_pairs entry, wiring up everything the domain function needs
+    from this script's own data files: registry.json's range + scale,
+    axis_pixel_candidates.json's printed labels + pixel positions + printed
+    unit text, and ground_truth.json's curve values + unit (`gt_unit`/
+    `printed_unit` are the genuinely independent third constraint -- see
+    design 7.52 -- so they're always passed when available).
+    """
+    reg_lo, reg_hi = entry[f"{axis}_range"]
+    gt_unit = curves[0].get(f"unit_{axis}") if curves else None
+    printed_unit = axp.get(f"{axis}_axis_unit") if axp else None
+    label_min = axp.get(f"{axis}_min_label") if axp else None
+    label_max = axp.get(f"{axis}_max_label") if axp else None
+
+    if axp is None or label_min is None or label_max is None:
+        return AxisEvaluation(None, label_min, label_max, reg_lo, reg_hi, gt_unit, printed_unit)
+
+    gt_extents: list[float] = []
+    for curve in curves:
+        values = curve.get(axis) or []
+        if values:
+            gt_extents.append(min(values))
+            gt_extents.append(max(values))
+
+    verdict = classify_range_disagreement(
+        label_min=label_min,
+        label_max=label_max,
+        reg_lo=reg_lo,
+        reg_hi=reg_hi,
+        scale=_axis_scale(entry, axis),
+        gt_extents=gt_extents,
+        calibration=_axis_calibration(axp, axis, img_w, img_h),
+        gt_unit=gt_unit,
+        printed_unit=printed_unit,
     )
-    if additive_agree:
-        return {
-            "kind": "additive",
-            "factor": 1.0,
-            "offset": (offset_lo + offset_hi) / 2,
-            "confident": True,
-            "detail": (
-                f"offset_min={offset_lo:.6g}, offset_max={offset_hi:.6g} "
-                f"(fits display = SI + offset, e.g. degC = K - 273.15, "
-                f"not a unit-scale mismatch)"
-            ),
-        }
+    return AxisEvaluation(verdict, label_min, label_max, reg_lo, reg_hi, gt_unit, printed_unit)
 
-    # Neither hypothesis fit. This is very often just the "registry range is
-    # a hair wider than the outermost printed label" pattern (e.g. axis
-    # framed to 900 to leave room for a data point at 865, only 300-800
-    # labeled) rather than an actual unit-space bug -- but a wrong best-
-    # effort factor would visibly *distort* the re-plot's axis, which reads
-    # as worse than not converting at all. Fall back to raw SI (factor=1)
-    # rather than force a number neither check could confirm; the mismatch
-    # is still surfaced via `confident=False` for the "needs attention" list.
-    return {
-        "kind": "indeterminate",
-        "factor": 1.0,
-        "offset": None,
-        "confident": False,
-        "detail": mult_detail + " (unreliable -- re-plot uses raw SI instead of this factor)",
+
+def _axis_conversion(axis_eval: AxisEvaluation) -> tuple[float, float]:
+    """`(factor, offset)` to apply to registry-space values for this axis's
+    re-plot -- `display_conversion` dispatched on the verdict, or the
+    identity when this axis had no printed label to classify at all (never
+    guess a conversion with nothing to check it against)."""
+    if axis_eval.verdict is None:
+        return 1.0, 0.0
+    return display_conversion(
+        axis_eval.verdict.verdict,
+        label_min=axis_eval.label_min,
+        label_max=axis_eval.label_max,
+        reg_lo=axis_eval.reg_lo,
+        reg_hi=axis_eval.reg_hi,
+        gt_unit=axis_eval.gt_unit,
+        printed_unit=axis_eval.printed_unit,
+    )
+
+
+def _printed_unit_for_label(axis_eval: AxisEvaluation) -> str | None:
+    """The printed unit text to use for the re-plot's axis label, or `None`
+    to fall back to Starrydata's raw SI unit name instead -- only for a
+    verdict where the applied conversion is actually confirmed to land in
+    that printed unit's space (see `_SAFE_TO_LABEL_VERDICTS`). "-" (this
+    corpus's placeholder for "dimensionless / no unit captured") is not a
+    real unit string to print."""
+    if axis_eval.verdict is None or axis_eval.verdict.verdict not in _SAFE_TO_LABEL_VERDICTS:
+        return None
+    unit = axis_eval.printed_unit
+    return None if unit in (None, "-") else unit
+
+
+def _describe_axis_eval(axis_eval: AxisEvaluation) -> str:
+    """One-line human-readable verdict description for the per-entry
+    Markdown section."""
+    if axis_eval.verdict is None:
+        return "n/a (no printed label for this axis in the source crop)"
+    descriptions = {
+        Verdict.BENIGN_MARGIN: "benign_margin (same unit space, ordinary framing margin)",
+        Verdict.UNIT_SPACE_DIFFERENCE: (
+            "unit_space_difference (display-unit conversion backlog -- normal, see design 7.47)"
+        ),
+        Verdict.AXIS_SCALE_FACTOR: (
+            "axis_scale_factor (axis-label multiplier, e.g. '1000/T' -- normal)"
+        ),
+        Verdict.REAL_MISMATCH: "⚠️ REAL_MISMATCH",
+        Verdict.INDETERMINATE: "❓ INDETERMINATE",
     }
+    return descriptions[axis_eval.verdict.verdict]
 
 
 def _render_ground_truth_plot(
@@ -400,15 +430,18 @@ def _render_pixel_overlay(entry: dict, axp: dict, out_path: Path) -> None:
 def _dimensional_unit_check(
     si_unit: str | None, printed_unit: str | None, numeric_factor: float, factor_source: str
 ) -> str | None:
-    """Cross-checks the axis-pixel/evidence-text-derived numeric SI->display
-    factor against one predicted purely from the two unit *names*
-    (dimensional analysis, `unit_conversion.si_to_display_factor`) -- a
-    second, independent verification route for exactly the kind of
-    "Starrydata's raw value doesn't actually match physical reality" or
-    "registry's calibration doesn't match the stated unit" bug that a
-    numeric-tick-only check can't see (see design 7.46). Returns a short
-    human-readable verdict string, or None if the check isn't applicable
-    (no printed unit captured, or no SI unit on record).
+    """Cross-checks the evidence-text-derived numeric SI->display factor
+    against one predicted purely from the two unit *names* (dimensional
+    analysis, `unit_conversion.si_to_display_factor`) -- a second,
+    independent verification route for exactly the kind of "Starrydata's raw
+    value doesn't actually match physical reality" or "registry's
+    calibration doesn't match the stated unit" bug that a numeric-tick-only
+    check can't see (see design 7.46). Only used for the evidence-text
+    fallback path now -- axis-pixel-derived entries get this same
+    cross-check, and more, from `classify_range_disagreement`'s rule (e)
+    directly (design 7.52). Returns a short human-readable verdict string,
+    or None if the check isn't applicable (no printed unit captured, or no
+    SI unit on record).
     """
     if not printed_unit or not si_unit:
         return None
@@ -427,8 +460,8 @@ def _dimensional_unit_check(
     if abs(predicted / numeric_factor - 1) <= 0.05:
         return f"✅ confirmed by dimensional analysis (×{predicted:.4g})"
     return (
-        f"⚠️ dimensional analysis predicts ×{predicted:.4g} but the axis-pixel/"
-        f"evidence-derived factor is ×{numeric_factor:.4g} -- worth a second look"
+        f"⚠️ dimensional analysis predicts ×{predicted:.4g} but the evidence-text-derived "
+        f"factor is ×{numeric_factor:.4g} -- worth a second look"
     )
 
 
@@ -454,7 +487,18 @@ def _write_review_html(
     across every browser.
     """
     entries = []
-    for entry, curves, plot_path, overlay_path, axp, factor_detail, factor_source, warning in rows:
+    for (
+        entry,
+        curves,
+        plot_path,
+        overlay_path,
+        axp,
+        x_eval,
+        y_eval,
+        factor_detail,
+        factor_source,
+        warning,
+    ) in rows:
         slug = _slug(entry)
         anchor = slug.lower()
         paper = papers_by_id.get(entry["paper_id"], {})
@@ -464,19 +508,29 @@ def _write_review_html(
 
         k_x = k_y = 1.0
         off_x = off_y = 0.0
+        x_verdict = y_verdict = None
+        x_verdict_reason = y_verdict_reason = None
         if factor_source == "axis-pixel":
-            fx, fy = factor_detail["x"], factor_detail["y"]
+            k_x, off_x = _axis_conversion(x_eval)
+            k_y, off_y = _axis_conversion(y_eval)
+            x_verdict = x_eval.verdict.verdict.value if x_eval.verdict else None
+            y_verdict = y_eval.verdict.verdict.value if y_eval.verdict else None
+            x_verdict_reason = (
+                x_eval.verdict.reason if x_eval.verdict else "no printed label for x-axis"
+            )
+            y_verdict_reason = (
+                y_eval.verdict.reason if y_eval.verdict else "no printed label for y-axis"
+            )
 
-            def _short(f: dict) -> str:
-                if f["kind"] == "additive":
-                    return f"+{f['offset']:.4g}"
-                if f["kind"] in ("log10", "indeterminate"):
-                    return "raw SI"
-                return f"×{f['factor']:.4g}"
+            def _fmt_k(k: float, off: float) -> str:
+                suffix = "" if off == 0 else f"{off:+.4g}"
+                return f"×{k:.4g}{suffix}"
 
-            factor_summary = f"x: {_short(fx)}, y: {_short(fy)} (axis-pixel derived)"
-            k_x, off_x = fx["factor"], (fx["offset"] or 0.0)
-            k_y, off_y = fy["factor"], (fy["offset"] or 0.0)
+            factor_summary = (
+                f"x: {x_verdict or 'n/a'} ({_fmt_k(k_x, off_x)}), "
+                f"y: {y_verdict or 'n/a'} ({_fmt_k(k_y, off_y)}) "
+                "(domain/pairing_checks.py)"
+            )
         elif factor_source == "evidence-text":
             fy = factor_detail["y"]
             factor_summary = f"y: ×{fy['factor']:.4g} (evidence-text, unverified)"
@@ -490,7 +544,11 @@ def _write_review_html(
 
         printed_y_unit = axp.get("y_axis_unit") if axp else None
         si_unit_y = curves[0].get("unit_y") if curves else None
-        unit_check = _dimensional_unit_check(si_unit_y, printed_y_unit, k_y, factor_source)
+        unit_check = (
+            None
+            if factor_source == "axis-pixel"
+            else _dimensional_unit_check(si_unit_y, printed_y_unit, k_y, factor_source)
+        )
 
         entries.append(
             {
@@ -516,6 +574,10 @@ def _write_review_html(
                 "factor_summary": factor_summary,
                 "printed_y_unit": printed_y_unit,
                 "unit_check": unit_check,
+                "x_verdict": x_verdict,
+                "y_verdict": y_verdict,
+                "x_verdict_reason": x_verdict_reason,
+                "y_verdict_reason": y_verdict_reason,
                 "needs_attention": (entry["paper_id"], entry["figure_id"]) in attention_keys,
             }
         )
@@ -544,7 +606,18 @@ def main() -> None:
     rows = []
     n_with_axis_data = 0
     n_with_evidence_text_factor = 0
-    attention = []  # entries whose derived factor disagreed at the two endpoints
+
+    # Axes actually classified by classify_range_disagreement, bucketed by
+    # verdict: (entry, axis_name, RangeDisagreementVerdict). BENIGN_MARGIN is
+    # tracked only as a count -- it is explicitly NOT "needs attention" (the
+    # entire point of design 7.49/7.52 replacing the old fitted-factor
+    # "needs attention" flag, which fired on 45/111 entries, 43 of which an
+    # independent triage found were not errors).
+    n_benign_margin = 0
+    real_mismatch: list[tuple[dict, str, RangeDisagreementVerdict]] = []
+    indeterminate: list[tuple[dict, str, RangeDisagreementVerdict]] = []
+    unit_space_difference: list[tuple[dict, str, RangeDisagreementVerdict]] = []
+    axis_scale_factor: list[tuple[dict, str, RangeDisagreementVerdict]] = []
 
     for entry in verified:
         curves = ground_truth.get(entry["figure_id"], [])
@@ -557,34 +630,34 @@ def main() -> None:
         factor_detail = None
         factor_source = "none"
         overlay_path = None
+        x_eval = y_eval = None
 
         if axp is not None:
             n_with_axis_data += 1
             factor_source = "axis-pixel"
-            no_label = {
-                "kind": "indeterminate",
-                "factor": 1.0,
-                "offset": None,
-                "confident": None,
-                "detail": "no printed label for this axis in the source crop (see notes)",
-            }
-            x_scale = entry.get("x_scale", "linear")
-            y_scale = entry.get("y_scale", "linear")
-            fx = (
-                _derive_factor(entry["x_range"], axp["x_min_label"], axp["x_max_label"], x_scale)
-                if axp["x_min_label"] is not None and axp["x_max_label"] is not None
-                else no_label
-            )
-            fy = (
-                _derive_factor(entry["y_range"], axp["y_min_label"], axp["y_max_label"], y_scale)
-                if axp["y_min_label"] is not None and axp["y_max_label"] is not None
-                else no_label
-            )
-            factor_detail = {"x": fx, "y": fy}
-            k_x, off_x = fx["factor"], (fx["offset"] or 0.0)
-            k_y, off_y = fy["factor"], (fy["offset"] or 0.0)
-            if fx["confident"] is False or fy["confident"] is False:
-                attention.append((entry, fx, fy))
+
+            img_path = REPO_ROOT / entry["image_path"]
+            img_w, img_h = Image.open(img_path).size
+
+            x_eval = _evaluate_axis(entry, axp, curves, "x", img_w, img_h)
+            y_eval = _evaluate_axis(entry, axp, curves, "y", img_w, img_h)
+            k_x, off_x = _axis_conversion(x_eval)
+            k_y, off_y = _axis_conversion(y_eval)
+
+            for axis_name, axis_eval in (("x", x_eval), ("y", y_eval)):
+                if axis_eval.verdict is None:
+                    continue
+                v = axis_eval.verdict.verdict
+                if v is Verdict.BENIGN_MARGIN:
+                    n_benign_margin += 1
+                elif v is Verdict.UNIT_SPACE_DIFFERENCE:
+                    unit_space_difference.append((entry, axis_name, axis_eval.verdict))
+                elif v is Verdict.AXIS_SCALE_FACTOR:
+                    axis_scale_factor.append((entry, axis_name, axis_eval.verdict))
+                elif v is Verdict.REAL_MISMATCH:
+                    real_mismatch.append((entry, axis_name, axis_eval.verdict))
+                else:
+                    indeterminate.append((entry, axis_name, axis_eval.verdict))
 
             overlay_path = OVERLAYS_DIR / f"{slug}.png"
             _render_pixel_overlay(entry, axp, overlay_path)
@@ -599,42 +672,8 @@ def main() -> None:
                 k_y = fy["factor"]
 
         plot_path = PLOTS_DIR / f"{slug}.png"
-        # Label the axis with the printed unit text whenever it's safe to:
-        # either a conversion matching that exact unit was actually applied
-        # (kind in multiplicative/additive), or -- design 7.47's fix, since
-        # a thermal-conductivity-style axis where SI and the paper's own
-        # unit are dimensionally identical (factor 1) still lands as
-        # "indeterminate" purely from the label-vs-frame-margin pattern --
-        # the printed unit dimensionally matches raw SI at the k=1 the
-        # fallback already uses, so showing it is harmless (no rescale is
-        # silently implied that wasn't applied). "log10" stays excluded:
-        # there k=1 is *not* dimensionally equal to the printed unit, it's
-        # just the least-wrong fallback for a non-linear axis.
-        printed_x_unit = printed_y_unit = None
-        if axp is not None and factor_detail is not None:
-            fx, fy = factor_detail["x"], factor_detail["y"]
-            si_unit_x = curves[0].get("unit_x") if curves else None
-            si_unit_y = curves[0].get("unit_y") if curves else None
-
-            def _safe_to_label(f: dict, axis_unit: str | None, si_unit: str | None) -> bool:
-                if f["kind"] in ("multiplicative", "additive"):
-                    return True
-                if f["kind"] == "indeterminate" and axis_unit and si_unit:
-                    try:
-                        return abs(si_to_display_factor(si_unit, axis_unit) - 1.0) < 0.03
-                    except (UnitParseError, IncompatibleUnitsError):
-                        return False
-                return False
-
-            if _safe_to_label(fx, axp.get("x_axis_unit"), si_unit_x):
-                printed_x_unit = axp.get("x_axis_unit")
-            if _safe_to_label(fy, axp.get("y_axis_unit"), si_unit_y):
-                printed_y_unit = axp.get("y_axis_unit")
-            # "-" means dimensionless -- not a real unit string to print.
-            if printed_x_unit == "-":
-                printed_x_unit = None
-            if printed_y_unit == "-":
-                printed_y_unit = None
+        printed_x_unit = _printed_unit_for_label(x_eval) if x_eval is not None else None
+        printed_y_unit = _printed_unit_for_label(y_eval) if y_eval is not None else None
         warning = _render_ground_truth_plot(
             entry,
             curves,
@@ -648,8 +687,27 @@ def main() -> None:
             printed_y_unit,
         )
         rows.append(
-            (entry, curves, plot_path, overlay_path, axp, factor_detail, factor_source, warning)
+            (
+                entry,
+                curves,
+                plot_path,
+                overlay_path,
+                axp,
+                x_eval,
+                y_eval,
+                factor_detail,
+                factor_source,
+                warning,
+            )
         )
+
+    n_axes_evaluated = (
+        n_benign_margin
+        + len(unit_space_difference)
+        + len(axis_scale_factor)
+        + len(real_mismatch)
+        + len(indeterminate)
+    )
 
     lines: list[str] = []
     lines.append("# Verified Pairs Visual Audit")
@@ -668,9 +726,10 @@ def main() -> None:
         "magenta = y-axis tick pixel positions, from `axis_pixel_candidates.json` -- "
         "only present for entries that have axis-pixel ground truth), and "
         "**(3) the digitized ground-truth curve(s) re-plotted in the paper's own "
-        "display units** (derived from the axis-pixel tick label values, not guessed -- "
-        "see the module docstring). Where no axis-pixel data exists yet, (2) is omitted "
-        "and (3) falls back to raw SI units, clearly labeled."
+        "display units** where the axis's classification (`domain/pairing_checks.py::"
+        "classify_range_disagreement`, design 7.49/7.52) confirms it's safe to. Where "
+        "no axis-pixel data exists yet, (2) is omitted and (3) falls back to raw SI "
+        "units, clearly labeled."
     )
     lines.append("")
     n_log_y = sum(1 for e in verified if e.get("y_scale") == "log")
@@ -688,36 +747,73 @@ def main() -> None:
     lines.append(f"- log-y entries: {n_log_y}")
     n_render_warnings = sum(1 for *_, w in rows if w)
     lines.append(f"- Entries with a re-plot rendering warning: {n_render_warnings}")
-    lines.append(f"- Entries with a factor-agreement mismatch (see below): {len(attention)}")
+    lines.append(
+        f"- Axis-pixel-derived range classifications "
+        f"(`domain/pairing_checks.py::classify_range_disagreement`, {n_axes_evaluated} axes "
+        f"evaluated): benign_margin=**{n_benign_margin}**, "
+        f"unit_space_difference=**{len(unit_space_difference)}**, "
+        f"axis_scale_factor=**{len(axis_scale_factor)}**, "
+        f"real_mismatch=**{len(real_mismatch)}**, indeterminate=**{len(indeterminate)}**"
+    )
     lines.append("")
 
-    if attention:
-        lines.append("## ⚠️ Needs attention: axis range / tick label disagreement")
+    def _attention_list(
+        title: str, intro: str, items: list[tuple[dict, str, RangeDisagreementVerdict]]
+    ) -> None:
+        if not items:
+            return
+        lines.append(title)
         lines.append("")
-        lines.append(
-            "For these entries, the registry's `x_range`/`y_range` and the axis-pixel "
-            "candidate's tick label values don't scale by a single consistent factor at "
-            "both the min and max end. This usually means one of the two doesn't actually "
-            "describe the same axis extent (mismatched panel, a misread tick, or the "
-            "registry range extending past the outermost printed tick) -- **not "
-            "necessarily an error**, but worth a manual look. The re-plot below still uses "
-            "a best-effort factor (the whole-range ratio) so it's in the right ballpark."
-        )
+        lines.append(intro)
         lines.append("")
-        for entry, fx, fy in attention:
+        for entry, axis_name, verdict in items:
             anchor = _slug(entry).lower()
             lines.append(
-                f"- [ ] [{entry['paper_id']} / fig {entry['figure_reference']}](#{anchor})"
+                f"- [ ] [{entry['paper_id']} / fig {entry['figure_reference']}](#{anchor}) "
+                f"-- {axis_name}-axis: {verdict.reason}"
             )
-            if fx["confident"] is False:
-                lines.append(f"  - x-axis: {fx['detail']}")
-            if fy["confident"] is False:
-                lines.append(f"  - y-axis: {fy['detail']}")
         lines.append("")
+
+    _attention_list(
+        "## ⚠️ Needs attention: REAL_MISMATCH",
+        "For these axes, the registry range does not encode the relationship the axis's own "
+        "unit strings and/or GT curve extents declare -- this is the group that actually "
+        "warrants a human look (replaces the old fitted-factor 'needs attention' flag, which "
+        "fired on 45/111 entries -- an independent triage found 43 of those were not errors, "
+        "just the old method's inability to tell a benign framing margin from a real bug; "
+        "see docs/experiments/2026-09-02-flagged-entries-triage.md).",
+        real_mismatch,
+    )
+    _attention_list(
+        "## ❓ Indeterminate (unable to classify)",
+        "For these axes, the available data (printed unit strings, GT extents, pixel "
+        "calibration) wasn't enough to confidently classify the registry-vs-label "
+        "relationship -- not a known-benign pattern, but not confirmed as an error either. "
+        "Worth a quieter look than REAL_MISMATCH above.",
+        indeterminate,
+    )
+    _attention_list(
+        "## ℹ️ Display-unit conversion backlog (UNIT_SPACE_DIFFERENCE)",
+        "For these axes, the registry range and GT curve are internally self-consistent but "
+        "in a different (still-SI, or Kelvin-vs-Celsius) unit space than the printed axis -- "
+        "the design-7.47 migration to display units hasn't reached these entries yet. "
+        "**Not an error** -- informational backlog tracking only.",
+        unit_space_difference,
+    )
+    _attention_list(
+        "## ℹ️ Axis-label scale factors (AXIS_SCALE_FACTOR)",
+        "For these axes, the printed axis carries its own scale-factor annotation (e.g. "
+        "'1000/T', 'sigma x10^4') on top of a dimensionally-identical unit -- the endpoints "
+        "cleanly imply a power-of-ten multiplier that is the axis label's own declared "
+        "choice, not a unit or endpoint error. **Normal, no action needed.**",
+        axis_scale_factor,
+    )
 
     lines.append("## Index")
     lines.append("")
-    for entry, _curves, _plot_path, _overlay_path, axp, _fd, factor_source, warning in rows:
+    for entry, _curves, _plot_path, _overlay_path, axp, _xe, _ye, _fd, factor_source, warning in (
+        rows
+    ):
         anchor = _slug(entry).lower()
         flags = ""
         if warning:
@@ -736,7 +832,18 @@ def main() -> None:
     lines.append("---")
     lines.append("")
 
-    for entry, curves, plot_path, overlay_path, axp, factor_detail, factor_source, warning in rows:
+    for (
+        entry,
+        curves,
+        plot_path,
+        overlay_path,
+        axp,
+        x_eval,
+        y_eval,
+        factor_detail,
+        factor_source,
+        warning,
+    ) in rows:
         slug = _slug(entry)
         anchor = slug.lower()
         paper = papers_by_id.get(entry["paper_id"], {})
@@ -752,38 +859,37 @@ def main() -> None:
         if warning:
             lines.append(f"> ⚠️ **{warning}**")
             lines.append("")
-        def _describe(f: dict) -> str:
-            if f["kind"] == "additive":
-                return f"+{f['offset']:.6g} (degC/K-style offset)"
-            if f["kind"] == "log10":
-                return "n/a (raw-log10-printed axis, see note)"
-            if f["kind"] == "indeterminate":
-                if f["confident"] is False:
-                    return "raw SI (unreliable factor, see 'needs attention' above)"
-                return "n/a (no label)"
-            return f"x{f['factor']:.6g}"
 
         if factor_source == "axis-pixel":
-            fx, fy = factor_detail["x"], factor_detail["y"]
-            if fx["confident"] is False or fy["confident"] is False:
-                conf_note = "⚠️ see 'needs attention' section above"
-            elif fx["confident"] and fy["confident"]:
-                conf_note = "✅ confirmed at both axis endpoints"
-            else:
-                conf_note = "ℹ️ not a simple linear factor on one axis (see above)"
+            flagged = any(
+                ev is not None
+                and ev.verdict is not None
+                and ev.verdict.verdict in (Verdict.REAL_MISMATCH, Verdict.INDETERMINATE)
+                for ev in (x_eval, y_eval)
+            )
+            conf_note = (
+                "⚠️ see 'needs attention' section above"
+                if flagged
+                else "classified via domain/pairing_checks.py"
+            )
             disagreement_px = axp.get("model_disagreement_px")
             disagreement_str = f"{disagreement_px:.2g}px" if disagreement_px is not None else "n/a"
             lines.append(
                 f"> Axis-pixel status: **{axp['status']}** "
                 f"(model disagreement {disagreement_str}). "
-                f"x: {_describe(fx)}, y: {_describe(fy)} -- {conf_note}."
+                f"x: {_describe_axis_eval(x_eval)}, y: {_describe_axis_eval(y_eval)} -- "
+                f"{conf_note}."
             )
+            lines.append("")
+            for axis_name, axis_eval in (("x", x_eval), ("y", y_eval)):
+                if axis_eval.verdict is not None:
+                    lines.append(f"> - {axis_name}-axis: {axis_eval.verdict.reason}")
             lines.append("")
         elif factor_source == "evidence-text":
             fy = factor_detail["y"]
             lines.append(
                 f"> 📝 No axis-pixel ground truth for this entry -- y converted from a factor "
-                f"**parsed out of the evidence text** instead (y: {_describe(fy)}, "
+                f"**parsed out of the evidence text** instead (y: x{fy['factor']:.6g}, "
                 f"{fy['detail']}). This was validated once by whoever wrote the entry but is "
                 f"**not independently re-checked here** -- treat with a bit less confidence "
                 f"than the axis-pixel-derived entries above. x-axis is unconverted (raw SI == "
@@ -841,14 +947,19 @@ def main() -> None:
 
     MARKDOWN_PATH.write_text("\n".join(lines))
 
-    attention_keys = {(e["paper_id"], e["figure_id"]) for e, _fx, _fy in attention}
+    attention_keys = {
+        (e["paper_id"], e["figure_id"]) for e, _axis, _v in (real_mismatch + indeterminate)
+    }
     _write_review_html(rows, papers_by_id, attention_keys)
 
     print(
         f"wrote {MARKDOWN_PATH} and {REVIEW_HTML_PATH} ({len(verified)} entries, "
         f"{n_with_axis_data} with axis-pixel data, "
         f"{n_with_evidence_text_factor} with evidence-text-derived factor, "
-        f"{len(attention)} flagged for attention)"
+        f"{n_axes_evaluated} axes classified: benign_margin={n_benign_margin}, "
+        f"unit_space_difference={len(unit_space_difference)}, "
+        f"axis_scale_factor={len(axis_scale_factor)}, real_mismatch={len(real_mismatch)}, "
+        f"indeterminate={len(indeterminate)})"
     )
 
 
