@@ -1,0 +1,482 @@
+"""pairing_checks: the benign/real classifier for registry-vs-printed-label
+axis range disagreements (design finding following commit 31bd7e9 -- since
+registry.json/ground_truth.json are stored in each paper's *display* units,
+the a-priori SI->display factor is known to be 1, so any residual
+disagreement needs a principled classification instead of `_derive_factor`'s
+fitted-factor "needs attention" flag in
+`generate_verified_pairs_visual_audit.py`).
+
+A 2026-09-02 review of all 208 axes across the 111 verified entries found
+the registry-vs-label relationship is AFFINE (`label = a*registry + b`),
+not multiplicative -- a pure ratio test is blind to additive unit
+differences (Kelvin vs Celsius) and undefined/misleading at a zero
+endpoint. `classify_range_disagreement` therefore has four outcomes, not
+three: BENIGN_MARGIN (same unit space, residual is just axis-framing
+headroom), UNIT_SPACE_DIFFERENCE (a different but self-consistent unit
+space -- benign for scoring, but a distinct "still needs display-unit
+conversion" backlog, NOT the same claim as BENIGN_MARGIN), REAL_MISMATCH,
+and INDETERMINATE.
+
+Where possible, tests use REAL numbers from `data/verified_pairs/` (cited
+by paper_id/figure_id) rather than invented ones, since this module's own
+docstring documents a genuine mathematical limitation (see
+`test_large_margin_violation_with_contained_gt_is_still_unit_space_difference`)
+and real data is the only way to be honest about what it does and doesn't
+catch.
+
+Priority is auditability over accuracy (CLAUDE.md) -- every test also
+checks that the returned verdict carries *which* sub-check fired, not just
+a bare bool, and that missing data produces an explicit INDETERMINATE
+rather than a silent non-error outcome.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from real_chart_bench.domain.curve import ScaleType
+from real_chart_bench.domain.pairing_checks import (
+    AxisPixelCalibration,
+    Verdict,
+    classify_range_disagreement,
+    containment,
+    coverage,
+    scale_consistency,
+)
+
+
+def _check(verdict, name):
+    matches = [c for c in verdict.checks if c.name == name]
+    assert matches, f"no check named {name!r} in {[c.name for c in verdict.checks]}"
+    return matches[0]
+
+
+class TestClassifyRangeDisagreementBenignMargin:
+    def test_one_sided_benign_gap_is_benign_margin(self):
+        # labels 300..800 (L=500), registry extends past the top label to
+        # 850 only -- the "axis framed wider than the outermost tick"
+        # pattern the audit doc calls out as not necessarily an error.
+        calibration = AxisPixelCalibration(
+            label_lo_px=50.0, label_hi_px=950.0, image_extent_px=1100.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=850.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(310.0, 780.0),
+            calibration=calibration,
+        )
+
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        assert all(c.passed is not False for c in verdict.checks)
+
+    def test_missing_calibration_is_indeterminate_not_silently_benign(self):
+        # Same as the one-sided benign gap above, but rule (d) is not
+        # optional: no calibration data means we cannot confirm the
+        # registry endpoint actually lands inside the image, so this must
+        # come back INDETERMINATE, never a silent BENIGN_MARGIN.
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=850.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(310.0, 780.0),
+            calibration=None,
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        check = _check(verdict, "endpoint_pixel_bounds")
+        assert check.passed is None
+
+    def test_paper_10939_figure_1528_is_real_mismatch_via_pixel_bounds_only(self):
+        # Real case from the design review: y-axis labeled -110..-30 uV/K
+        # (L=80), registry claimed the top endpoint as -20 (pre-correction
+        # value, see registry.json evidence for paper 10939/figure 1528).
+        # gap_hi = |-20 - (-30)| = 10 = 0.125L, comfortably under the
+        # 0.25L margin -- rule (b) passes, so this is the SAME-unit-space
+        # branch. But projecting -20 through the actual tick-label pixel
+        # calibration (axis_pixel_candidates.json: y_min_px=548.5 for
+        # label -110, y_max_px=13.5 for label -30, image height 650px)
+        # lands at pixel -53.4 -- above the top of the 650px-tall image --
+        # so only rule (d) catches it.
+        calibration = AxisPixelCalibration(
+            label_lo_px=548.5, label_hi_px=13.5, image_extent_px=650.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=-110.0,
+            label_max=-30.0,
+            reg_lo=-110.0,
+            reg_hi=-20.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(-100.1, -42.2),
+            calibration=calibration,
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        margin_check = _check(verdict, "endpoint_margin")
+        assert margin_check.passed is True  # (b) passes
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is True  # (c) passes
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is False  # (d) is the only failure
+        assert "reg_hi" in pixel_check.detail
+
+    def test_log_axis_one_sided_benign_gap_uses_log10_space(self):
+        # labels 10..10000 (3 decades, L=3 in log10 space). Registry hi
+        # extends to 13000 -- a gap of log10(13000)-log10(10000)=0.114
+        # decades, well under 0.25*3=0.75 decades.
+        calibration = AxisPixelCalibration(
+            label_lo_px=900.0, label_hi_px=50.0, image_extent_px=1000.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=10.0,
+            label_max=10000.0,
+            reg_lo=10.0,
+            reg_hi=13000.0,
+            scale=ScaleType.LOG,
+            gt_extents=(50.0, 9000.0),
+            calibration=calibration,
+        )
+
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        margin_check = _check(verdict, "endpoint_margin")
+        assert "0.11" in margin_check.detail or "0.1" in margin_check.detail
+
+    def test_gt_extent_exactly_on_registry_boundary_is_contained(self):
+        # (c) uses exact registry containment, not a margin -- a GT value
+        # exactly equal to the registry endpoint must still count as
+        # contained (boundary inclusive).
+        calibration = AxisPixelCalibration(
+            label_lo_px=100.0, label_hi_px=900.0, image_extent_px=1000.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=0.0,
+            label_max=100.0,
+            reg_lo=0.0,
+            reg_hi=100.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(0.0, 100.0),
+            calibration=calibration,
+        )
+
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is True
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+
+    def test_missing_gt_extents_makes_registry_containment_indeterminate(self):
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=850.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(),
+            calibration=AxisPixelCalibration(
+                label_lo_px=50.0, label_hi_px=950.0, image_extent_px=1100.0
+            ),
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        check = _check(verdict, "registry_contains_gt")
+        assert check.passed is None
+
+    def test_degenerate_label_span_is_indeterminate(self):
+        verdict = classify_range_disagreement(
+            label_min=5.0,
+            label_max=5.0,
+            reg_lo=4.0,
+            reg_hi=6.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(4.5, 5.5),
+            calibration=AxisPixelCalibration(
+                label_lo_px=100.0, label_hi_px=100.0, image_extent_px=500.0
+            ),
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        assert len(verdict.checks) == 1
+        margin_check = verdict.checks[0]
+        assert margin_check.name == "endpoint_margin"
+        assert margin_check.passed is None
+
+
+class TestClassifyRangeDisagreementUnitSpaceDifference:
+    """Real registry-vs-label-vs-GT numbers from data/verified_pairs/,
+    covering: the zero-endpoint case, negative-valued axes, an additive
+    (Kelvin/Celsius) offset, and a clean x1000 not-yet-converted axis --
+    the exact scenarios the 2026-09-02 review found the old ratio-only
+    rule (a) mishandled.
+    """
+
+    def test_clean_x1000_still_si_axis_is_unit_space_difference(self):
+        # paper 46278, figure 51437, x-axis: registry [0.0008, 0.0018]
+        # (1/K) vs printed labels (0.8, 1.8) ("1000/T (1/K)") -- exactly
+        # x1000 at both endpoints. The known "still in SI, not yet
+        # converted to display units" backlog (design 7.47), not an
+        # error.
+        verdict = classify_range_disagreement(
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            scale=ScaleType.LINEAR,
+            gt_extents=(0.0008906, 0.001745),
+        )
+
+        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+        affine_check = _check(verdict, "affine_fit")
+        assert affine_check.passed is True
+        assert "1000" in affine_check.detail
+
+    def test_kelvin_celsius_offset_is_unit_space_difference(self):
+        # paper 4965, figure 13164, x-axis: registry [298.15, 353.15] K
+        # vs printed labels (30, 80) degC -- a pure additive offset a
+        # ratio test can never see (b ~= -241, not a clean -273.15
+        # because the registry's low end also carries a ~5K framing
+        # margin -- see the module docstring on this being an inherent
+        # 2-endpoint-fit limitation, not a bug).
+        verdict = classify_range_disagreement(
+            label_min=30.0,
+            label_max=80.0,
+            reg_lo=298.15,
+            reg_hi=353.15,
+            scale=ScaleType.LINEAR,
+            gt_extents=(298.458, 348.303),
+        )
+
+        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+        affine_check = _check(verdict, "affine_fit")
+        assert affine_check.passed is True
+
+    def test_zero_registry_endpoint_does_not_crash_the_ratio_test_would_have(self):
+        # paper 44283, figure 38965, y-axis: registry [0.0, 2.5e-05] vs
+        # printed labels (0.5, 2.5) -- x1e5, but the low endpoint is
+        # exactly 0, which is exactly what broke the old ratio-based rule
+        # (division by zero / silently skipped). The affine fit handles
+        # it natively via subtraction.
+        verdict = classify_range_disagreement(
+            label_min=0.5,
+            label_max=2.5,
+            reg_lo=0.0,
+            reg_hi=2.5e-05,
+            scale=ScaleType.LINEAR,
+            gt_extents=(2.53165e-06, 2.11392e-05),
+        )
+
+        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+        affine_check = _check(verdict, "affine_fit")
+        assert affine_check.passed is True
+
+    def test_negative_valued_axis_is_unit_space_difference(self):
+        # paper 4173, figure 20121, y-axis: registry [-5.6e-05, -4.4e-05]
+        # V/K vs printed labels (-60, -40) uV/K -- x1e6 on negative
+        # values.
+        verdict = classify_range_disagreement(
+            label_min=-60.0,
+            label_max=-40.0,
+            reg_lo=-5.6e-05,
+            reg_hi=-4.4e-05,
+            scale=ScaleType.LINEAR,
+            gt_extents=(-5.519232e-05, -4.628295e-05),
+        )
+
+        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+
+    def test_large_margin_violation_with_contained_gt_is_still_unit_space_difference(self):
+        # DOCUMENTED KNOWN LIMITATION (see module docstring): once rule
+        # (b) fails, the only further gate is rule (c) (registry contains
+        # GT) -- and for ANY monotonic affine map, GT contained in
+        # [reg_lo, reg_hi] is mathematically guaranteed to map inside
+        # [label_min, label_max] too. So a registry endpoint that is
+        # simply wrong by a wide margin, but still happens to bound the
+        # GT curve, is indistinguishable from a genuine unit-space
+        # difference using only these inputs -- it comes back
+        # UNIT_SPACE_DIFFERENCE, not REAL_MISMATCH. This test pins that
+        # behavior explicitly rather than leaving it as a surprise.
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=1000.0,  # 0.4L past the label max -- clearly exceeds rule (b)'s margin
+            scale=ScaleType.LINEAR,
+            gt_extents=(310.0, 780.0),
+        )
+
+        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+        margin_check = _check(verdict, "endpoint_margin")
+        assert margin_check.passed is False
+
+    def test_gt_outside_registry_range_is_real_mismatch(self):
+        # paper 18759, figure 12217, y-axis: registry [25000, 135000] vs
+        # printed labels (250, 1250). One of the four GT curves has
+        # y-extents around 662-1029 -- entirely outside the registry's
+        # stated range. Rule (c) catches this directly, independent of
+        # the unit-space question the affine fit alone cannot resolve.
+        verdict = classify_range_disagreement(
+            label_min=250.0,
+            label_max=1250.0,
+            reg_lo=25000.0,
+            reg_hi=135000.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(662.2915, 103454.0),
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is False
+
+    def test_missing_gt_extents_in_different_unit_branch_is_indeterminate(self):
+        verdict = classify_range_disagreement(
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            scale=ScaleType.LINEAR,
+            gt_extents=(),
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        check = _check(verdict, "registry_contains_gt")
+        assert check.passed is None
+
+    def test_degenerate_registry_span_cannot_fit_affine_map(self):
+        verdict = classify_range_disagreement(
+            label_min=0.0,
+            label_max=100.0,
+            reg_lo=50.0,
+            reg_hi=50.0,  # zero-width registry range, far from both labels
+            scale=ScaleType.LINEAR,
+            gt_extents=(),
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        affine_check = _check(verdict, "affine_fit")
+        assert affine_check.passed is None
+
+
+class TestContainment:
+    def test_within_bounds_passes(self):
+        result = containment((310.0, 780.0), label_min=300.0, label_max=800.0)
+        assert result.passed is True
+
+    def test_outside_margin_fails(self):
+        # 900 is 100 past the label max (800), margin is 0.25*500=125, so
+        # this specific value alone still passes -- push further out.
+        result = containment((950.0,), label_min=300.0, label_max=800.0)
+        assert result.passed is False
+
+    def test_exactly_on_margin_boundary_passes(self):
+        # margin = 0.25 * 500 = 125 -> boundary at 800+125=925
+        result = containment((925.0,), label_min=300.0, label_max=800.0)
+        assert result.passed is True
+
+    def test_empty_gt_extents_is_indeterminate(self):
+        result = containment((), label_min=300.0, label_max=800.0)
+        assert result.passed is None
+
+    def test_log_scale_uses_log10_space(self):
+        # label 10..10000 (log10 span 3, margin 0.75 decades -> upper bound
+        # 10**(4+0.75) = 10**4.75 ~= 56234)
+        result = containment((56000.0,), label_min=10.0, label_max=10000.0, scale=ScaleType.LOG)
+        assert result.passed is True
+        result = containment((60000.0,), label_min=10.0, label_max=10000.0, scale=ScaleType.LOG)
+        assert result.passed is False
+
+    def test_non_positive_extent_on_log_axis_is_indeterminate(self):
+        result = containment((-5.0,), label_min=10.0, label_max=10000.0, scale=ScaleType.LOG)
+        assert result.passed is None
+
+
+class TestCoverage:
+    def test_within_expected_ratio_passes(self):
+        # GT span 400 over L=500 -> ratio 0.8, within [0.35, 1.15]
+        result = coverage((350.0, 750.0), label_min=300.0, label_max=800.0)
+        assert result.passed is True
+
+    def test_below_minimum_ratio_fails(self):
+        # GT span 100 over L=500 -> ratio 0.2 < 0.35
+        result = coverage((400.0, 500.0), label_min=300.0, label_max=800.0)
+        assert result.passed is False
+
+    def test_above_maximum_ratio_fails(self):
+        # GT span 700 over L=500 -> ratio 1.4 > 1.15
+        result = coverage((250.0, 950.0), label_min=300.0, label_max=800.0)
+        assert result.passed is False
+
+    def test_empty_gt_extents_is_indeterminate(self):
+        result = coverage((), label_min=300.0, label_max=800.0)
+        assert result.passed is None
+
+    def test_degenerate_label_span_is_indeterminate(self):
+        result = coverage((300.0, 300.0), label_min=300.0, label_max=300.0)
+        assert result.passed is None
+
+
+class TestScaleConsistency:
+    def test_log_axis_with_at_least_one_decade_passes(self):
+        result = scale_consistency((5.0, 5000.0), scale=ScaleType.LOG)
+        assert result.passed is True
+
+    def test_log_axis_with_less_than_one_decade_fails(self):
+        result = scale_consistency((100.0, 500.0), scale=ScaleType.LOG)
+        assert result.passed is False
+
+    def test_linear_axis_under_2_5_decades_passes(self):
+        # ratio 100 -> 2 decades
+        result = scale_consistency((1.0, 100.0), scale=ScaleType.LINEAR)
+        assert result.passed is True
+
+    def test_linear_axis_at_or_over_2_5_decades_fails(self):
+        # ratio 1000 -> 3 decades
+        result = scale_consistency((1.0, 1000.0), scale=ScaleType.LINEAR)
+        assert result.passed is False
+
+    def test_non_positive_extent_is_indeterminate(self):
+        result = scale_consistency((-1.0, 100.0), scale=ScaleType.LINEAR)
+        assert result.passed is None
+
+    def test_empty_gt_extents_is_indeterminate(self):
+        result = scale_consistency((), scale=ScaleType.LINEAR)
+        assert result.passed is None
+
+
+class TestVerdictAuditTrail:
+    def test_real_mismatch_reason_names_the_failing_check(self):
+        verdict = classify_range_disagreement(
+            label_min=250.0,
+            label_max=1250.0,
+            reg_lo=25000.0,
+            reg_hi=135000.0,
+            gt_extents=(662.2915, 103454.0),
+        )
+        assert "registry_contains_gt" in verdict.reason
+
+    def test_same_unit_branch_checks_tuple_has_the_three_named_sub_rules(self):
+        verdict = classify_range_disagreement(
+            label_min=300.0, label_max=800.0, reg_lo=300.0, reg_hi=850.0
+        )
+        names = {c.name for c in verdict.checks}
+        assert names == {"endpoint_margin", "registry_contains_gt", "endpoint_pixel_bounds"}
+
+    def test_different_unit_branch_checks_tuple_includes_affine_fit(self):
+        verdict = classify_range_disagreement(
+            label_min=0.8, label_max=1.8, reg_lo=0.0008, reg_hi=0.0018, gt_extents=(0.001,)
+        )
+        names = {c.name for c in verdict.checks}
+        assert names == {
+            "endpoint_margin",
+            "registry_contains_gt",
+            "affine_fit",
+            "endpoint_pixel_bounds",
+        }
+
+
+if __name__ == "__main__":
+    raise SystemExit(pytest.main([__file__, "-q"]))
