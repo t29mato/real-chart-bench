@@ -228,6 +228,121 @@ class TestClassifyRangeDisagreementBenignMargin:
         assert margin_check.passed is None
 
 
+class TestRegistryContainmentMargin:
+    """Rule (c) (`registry_contains_gt`) originally required EXACT
+    containment (no margin). A 2026-09-02 measurement across all 222 axes
+    of the 111 verified entries found this zero-tolerance design was itself
+    producing the same kind of "flags ordinary framing margin as an error"
+    false positives the pre-design-7.49 fitted factor did -- 33/40 of the
+    then-current REAL_MISMATCH axes were pure rule (c) firings on ordinary
+    (median 0.9%, max 6.8% of registry span) GT-vs-registry overshoot, well
+    within this project's own established 15% registry-vs-GT tolerance
+    (design 7.44). `_CONTAINMENT_MARGIN_FRACTION` (default 0.02) fixes
+    this -- see its own docstring for the full measured distribution and
+    the reasoning for 0.02 specifically (not the 0.10 that would isolate
+    only the two known defects, per the design's cost asymmetry: a false
+    ACCEPT silently corrupts ground truth, a false REJECT only costs a
+    human a few seconds of review).
+    """
+
+    def test_overshoot_just_under_the_margin_is_benign_margin(self):
+        # registry span = 500 (labels == registry, so rule (b) passes
+        # exactly with zero gap), margin = 0.02*500 = 10. GT dips 9 below
+        # reg_lo -- 1.8% of the span, just under the containment margin.
+        calibration = AxisPixelCalibration(
+            label_lo_px=50.0, label_hi_px=950.0, image_extent_px=1100.0
+        )
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=800.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(291.0, 780.0),
+            calibration=calibration,
+        )
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is True
+
+    def test_overshoot_just_over_the_margin_is_real_mismatch(self):
+        # Same setup, but GT dips 11 below reg_lo -- 2.2% of the span, just
+        # over the containment margin.
+        calibration = AxisPixelCalibration(
+            label_lo_px=50.0, label_hi_px=950.0, image_extent_px=1100.0
+        )
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=800.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(289.0, 780.0),
+            calibration=calibration,
+        )
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is False
+
+    def test_paper_17044_figure_20740_negative_resistivity_still_real_mismatch(self):
+        # Real numbers, design 7.53's largest measured overshoot (68.4% of
+        # the registry span): registry y_range [0.001, 0.02] ohm*m, LOG
+        # scale, but one GT curve dips to -0.000451613 -- a physically
+        # impossible negative resistivity. Far beyond even a loosened
+        # margin, and (per _registry_containment_check's docstring) a
+        # non-positive value on a log-scale axis deliberately does NOT
+        # short-circuit to "can't evaluate" -- it falls through to a raw
+        # linear-space comparison instead, so this must still fail.
+        verdict = classify_range_disagreement(
+            label_min=0.001,
+            label_max=0.02,
+            reg_lo=0.001,
+            reg_hi=0.02,
+            scale=ScaleType.LOG,
+            gt_extents=(-0.0004516129, 0.01275806, -0.0001612903, 0.01508065),
+        )
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is False
+
+    def test_paper_18759_figure_12217_100x_gt_error_still_real_mismatch(self):
+        # Real numbers, design 7.53's second-largest measured overshoot
+        # (22.1% of the registry span) -- one of four GT curves is off by
+        # 100x (a Starrydata unit-tagging error, S/m vs S/cm). Far beyond
+        # the 0.02 containment margin.
+        verdict = classify_range_disagreement(
+            label_min=250.0,
+            label_max=1250.0,
+            reg_lo=25000.0,
+            reg_hi=135000.0,
+            gt_extents=(662.2915, 103454.0),
+        )
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is False
+
+    def test_containment_margin_fraction_is_a_parameter_not_only_a_constant(self):
+        # A caller can tighten (or loosen) the containment margin without
+        # editing the module -- e.g. shrink it to 0.0 to recover the
+        # pre-2026-09-02 exact-containment behavior for a single call.
+        calibration = AxisPixelCalibration(
+            label_lo_px=50.0, label_hi_px=950.0, image_extent_px=1100.0
+        )
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=800.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(291.0, 780.0),  # 1.8% overshoot -- passes the 0.02 default
+            calibration=calibration,
+            containment_margin_fraction=0.0,
+        )
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is False
+
+
 class TestClassifyRangeDisagreementUnitSpaceDifference:
     """Real registry-vs-label-vs-GT-vs-unit numbers from
     data/verified_pairs/, covering: the zero-endpoint case, negative-valued

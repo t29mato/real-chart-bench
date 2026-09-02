@@ -156,6 +156,68 @@ from real_chart_bench.domain.unit_conversion import (
 # of into this population; retighten then.
 _MARGIN_FRACTION = 0.25
 
+# Rule (c) (`registry_contains_gt`) containment margin, as a fraction of the
+# REGISTRY span (not the label span L rule (b)/(e) use) -- log10-space on a
+# log axis, same convention as the rest of this module. Originally 0 ("the
+# registry range is defined to be the axis frame that contains all plotted
+# data" -- see `_registry_containment_check`'s docstring for why that framing
+# is still correct in principle). A 2026-09-02 measurement of
+# `max(reg_lo - gt_min, gt_max - reg_hi, 0) / registry_span` across ALL 222
+# axes of the 111 verified entries (not just ones already flagged) found:
+#
+#   p50 = 0.0000   p75 = 0.0000   p90 = 0.0084   p95 = 0.0136
+#   p99 = 0.0682   max = 0.6835
+#
+#   margin  axes firing
+#   0.000   36/222  (16.2%)  <- zero margin, the original behavior
+#   0.005   27/222  (12.2%)
+#   0.010   16/222  ( 7.2%)
+#   0.020    8/222  ( 3.6%)  <- chosen
+#   0.050    4/222  ( 1.8%)
+#   0.100    2/222  ( 0.9%)  <- isolates exactly the 2 known defects
+#
+# The two largest overshoots by a wide margin are the two independently-
+# confirmed real defects: paper 17044/figure 20740's y-axis at 68.4% (a
+# non-positive resistivity value on a log-scale axis -- physically
+# impossible) and paper 18759/figure 12217's y-axis at 22.1% (one of four GT
+# curves off by 100x, a Starrydata unit-tagging error). Everything below
+# ~7% is the ordinary "digitizer traced a little past the frame, or a
+# registry endpoint got rounded" pattern this project has documented
+# repeatedly (e.g. paper 10939/figure 1527, design 7.44's own canonical
+# BENIGN worked example) -- exact-containment rule (c) was flagging that
+# pattern as REAL_MISMATCH just as surely as the pre-design-7.49 fitted
+# factor did, only via a different mechanism (see design 7.53).
+#
+# 0.02 was chosen, not 0.10, even though 0.10 isolates exactly the two known
+# defects and 0.02 does not (8/222 still fire at 0.02, none of them known
+# problems yet). The reasons:
+#   - 0.02 sits just above the measured p95 (0.0136), so ordinary overshoot
+#     clears as normal while the check keeps most of its sensitivity.
+#   - It is far below both confirmed defects (22.1%, 68.4%) -- real margin
+#     to spare, not a threshold drawn tightly around the two known-bad cases.
+#   - It is stricter than this project's own established registry-vs-GT
+#     tolerance (15%, design 7.44's machine cross-check) -- this does not
+#     loosen existing practice, it only stops being infinitely (0%) stricter
+#     than that practice.
+#   - The cost asymmetry that motivates this whole module (design 7.49/
+#     pairing-automation.md §6) is not symmetric: a false ACCEPT here
+#     silently corrupts ground truth and is caught, if at all, only by a
+#     later manual audit; a false REJECT only costs a human a few seconds of
+#     review. 0.10 would leave rule (c) no headroom to catch a genuinely new
+#     ~8% defect appearing as the verified set grows -- 0.02 keeps it
+#     sensitive while still clearing the overwhelming majority of ordinary
+#     framing margin. The resulting review list (8 axes at 0.02, out of 222)
+#     is short enough that a human will actually work through it end to end,
+#     which is the entire point of surfacing a "needs attention" list rather
+#     than a raw count.
+#
+# This is a DETECTION threshold, not a physical constant, and the basis
+# above is 222 axes from one materials-science corpus -- it should be
+# re-derived (not merely re-tuned to keep some list short) as the verified
+# set grows into other domains. See design 7.53 for the full before/after
+# analysis this measurement is drawn from.
+_CONTAINMENT_MARGIN_FRACTION = 0.02
+
 # ~2x the observed inter-model pixel disagreement (see
 # axis_pixel_candidates.json's `model_disagreement_px`, typically well under
 # 1px, occasionally a few px on a hard read) plus line width, at 150dpi.
@@ -302,9 +364,12 @@ def containment(
 
     General-purpose reusable check for a future automated pairing
     pipeline: unlike rule (c) of `classify_range_disagreement` (which
-    checks exact containment against the *registry* range, no margin),
-    this checks against the *printed labels* with the same 0.25L margin
-    used elsewhere in this module.
+    checks containment against the *registry* range, with its own much
+    smaller `_CONTAINMENT_MARGIN_FRACTION` of the registry span -- 0.02 by
+    default), this checks against the *printed labels* with the much
+    larger 0.25L margin used elsewhere in this module -- the two margins
+    are deliberately different sizes for different reasons, see each
+    constant's own docstring.
     """
     name = "containment"
     if not gt_extents:
@@ -492,25 +557,73 @@ def _margin_check(
 
 
 def _registry_containment_check(
-    reg_lo: float, reg_hi: float, gt_extents: Sequence[float]
+    reg_lo: float,
+    reg_hi: float,
+    gt_extents: Sequence[float],
+    *,
+    scale: ScaleType = ScaleType.LINEAR,
+    margin_fraction: float = _CONTAINMENT_MARGIN_FRACTION,
 ) -> CheckResult:
-    """Rule (c): the registry range contains the ground-truth curve
-    extents exactly (no margin -- the registry range is defined to be the
-    axis frame that contains all plotted data). This is the ONLY check in
+    """Rule (c): the registry range contains the ground-truth curve extents,
+    within `margin_fraction * registry_span` (log10-space on a log axis,
+    same convention rule (b)/(e) use) -- the registry range is defined to be
+    the axis frame that contains all plotted data, but "contains" gets a
+    small margin (see `_CONTAINMENT_MARGIN_FRACTION`'s docstring for the
+    2026-09-02 measurement behind the default) rather than being exact,
+    because real hand-digitized curves routinely land a hair outside the
+    stated frame (a digitizer tracing a fraction of a pixel past the axis
+    line, a registry endpoint rounded to a clean number) -- the SAME benign
+    pattern this project has always tolerated on the *label* side (a
+    registry range framed a little wider than the printed ticks), just
+    showing up here as GT vs. registry instead. This is the ONLY check in
     this module that can independently produce REAL_MISMATCH in the
     unit-space-difference branch (see module docstring) -- e.g. paper
     18759/figure 12217, where one of four GT curves has y-extents
     (~662-1029) that fall entirely outside the registry's stated
-    `[25000, 135000]`."""
+    `[25000, 135000]` (by 22.1% of the registry span -- far beyond any
+    margin considered here).
+
+    A GT extent that is non-positive where `scale` is `LOG` is deliberately
+    NOT treated as "can't evaluate" the way `containment()`/`coverage()`
+    elsewhere in this module treat an untransformable value -- it falls
+    through to a raw-value-space comparison instead, because a
+    physically-impossible value (e.g. negative resistivity, paper
+    17044/figure 20740) is itself evidence of a real problem, not a reason
+    to abstain.
+    """
     name = "registry_contains_gt"
     if not gt_extents:
         return CheckResult(name, None, "no GT extents supplied -- cannot evaluate containment")
 
     lo, hi = min(gt_extents), max(gt_extents)
-    detail = f"registry=[{reg_lo:.6g}, {reg_hi:.6g}], GT=[{lo:.6g}, {hi:.6g}]"
-    if reg_lo - _EPS <= lo and hi <= reg_hi + _EPS:
+    reg_lo_t, reg_hi_t = _transform(reg_lo, scale), _transform(reg_hi, scale)
+    lo_t, hi_t = _transform(lo, scale), _transform(hi, scale)
+
+    if None not in (reg_lo_t, reg_hi_t, lo_t, hi_t):
+        # Normal case: compare in the same space rule (b)/(e) use.
+        span = abs(reg_hi_t - reg_lo_t)
+        bound_lo_t = min(reg_lo_t, reg_hi_t) - margin_fraction * span
+        bound_hi_t = max(reg_lo_t, reg_hi_t) + margin_fraction * span
+        contained = bound_lo_t - _EPS <= lo_t and hi_t <= bound_hi_t + _EPS
+    else:
+        # A GT extent (or, in principle, a registry bound) is non-positive
+        # on a declared log-scale axis -- can't take log10 of it. Compare in
+        # raw linear space instead; see docstring above on why this is a
+        # deliberate fallback, not an INDETERMINATE bail-out.
+        span = abs(reg_hi - reg_lo)
+        bound_lo_t = min(reg_lo, reg_hi) - margin_fraction * span
+        bound_hi_t = max(reg_lo, reg_hi) + margin_fraction * span
+        contained = bound_lo_t - _EPS <= lo and hi <= bound_hi_t + _EPS
+
+    detail = (
+        f"registry=[{reg_lo:.6g}, {reg_hi:.6g}] (+/-{margin_fraction:g} of span), "
+        f"GT=[{lo:.6g}, {hi:.6g}]"
+    )
+    if contained:
         return CheckResult(name, True, detail)
-    return CheckResult(name, False, detail + " -- GT extent(s) fall outside the registry range")
+    return CheckResult(
+        name, False, detail + " -- GT extent(s) fall outside the registry range (beyond margin)"
+    )
 
 
 def _is_missing_or_ambiguous_unit(unit: str | None) -> bool:
@@ -586,6 +699,30 @@ def _unit_dimensional_check(
     incompatible dimensions or a confirmed disagreement, AXIS_SCALE_FACTOR
     for a clean power-of-ten disagreement between dimensionally-identical
     units.
+
+    **Known false positive, deliberately left as-is (2026-09-02)**: paper
+    4965/figure 13164's y-axis (registry `[0, 2.25e-4]` V/K, labels
+    `(50, 200)` uV/degC) is REAL_MISMATCH here even though the independent
+    triage (`docs/experiments/2026-09-02-flagged-entries-triage.json`)
+    judged it benign -- the registry's `0` lower bound is a natural physical
+    floor (Seebeck near zero) well below the first *printed* tick (50), and
+    its upper bound legitimately extends past the last tick (200) to ~225 to
+    fit the curve -- ordinary asymmetric framing margin, structurally the
+    same root cause as rule (c)'s pre-2026-09-02 zero-margin problem (see
+    `_CONTAINMENT_MARGIN_FRACTION`, design 7.53). It was considered for the
+    same fix and deliberately NOT changed: unlike rule (c), this check's
+    tolerance (`margin_fraction * L`, the SAME `_MARGIN_FRACTION` = 0.25
+    that gates rule (b) for every axis in the corpus, not a check-local
+    constant) is not zero -- it is already a generous 0.25L, and still
+    fails here (gap_lo=50 vs tol=37.5, ~33% over an already-generous
+    tolerance) because it must satisfy a SINGLE shared tolerance at BOTH
+    ends simultaneously despite genuinely asymmetric real-world margin. That
+    is a different failure shape from rule (c)'s "zero tolerance at all",
+    and `_MARGIN_FRACTION` has no measured-distribution basis analogous to
+    `_CONTAINMENT_MARGIN_FRACTION`'s 222-axis study to justify moving it --
+    doing so here would also loosen rule (b) for all 111 entries, a much
+    larger blast radius than this one axis. Left for a future task with its
+    own measurement, not tuned on the strength of a single known case.
     """
     name = "unit_dimensional_analysis"
     if _is_missing_or_ambiguous_unit(gt_unit) or _is_missing_or_ambiguous_unit(printed_unit):
@@ -762,6 +899,7 @@ def classify_range_disagreement(
     margin_fraction: float = _MARGIN_FRACTION,
     pixel_tolerance_px: float = _PIXEL_TOLERANCE_PX,
     scale_factor_tol: float = _CLEAN_POWER_OF_TEN_TOL,
+    containment_margin_fraction: float = _CONTAINMENT_MARGIN_FRACTION,
 ) -> RangeDisagreementVerdict:
     """Classifies one axis's registry-vs-printed-label range disagreement.
 
@@ -779,22 +917,26 @@ def classify_range_disagreement(
 
     2. If margin passes ("same unit space, at most a framing margin"):
        BENIGN_MARGIN iff rule (c) (`registry_contains_gt`: the registry
-       range contains the GT curve extents, no margin) AND rule (d)
-       (`endpoint_pixel_bounds`: both registry endpoints, projected
-       through the label->pixel calibration, land inside the image, +/-
-       `pixel_tolerance_px`) both pass. Either failing -> REAL_MISMATCH
-       (rule (d) is NOT optional -- see paper 10939/figure 1528, design
-       review 2026-09: gap passes rule (b) at only 0.125L but the
-       registry endpoint still projects above the top of the image).
-       Either being unevaluable (no GT extents / no calibration) with
-       neither failing -> INDETERMINATE.
+       range contains the GT curve extents, within
+       `containment_margin_fraction * registry_span` -- see
+       `_CONTAINMENT_MARGIN_FRACTION`'s docstring for the measured basis of
+       its 0.02 default) AND rule (d) (`endpoint_pixel_bounds`: both
+       registry endpoints, projected through the label->pixel calibration,
+       land inside the image, +/- `pixel_tolerance_px`) both pass. Either
+       failing -> REAL_MISMATCH (rule (d) is NOT optional -- see paper
+       10939/figure 1528, design review 2026-09: gap passes rule (b) at
+       only 0.125L but the registry endpoint still projects above the top
+       of the image). Either being unevaluable (no GT extents / no
+       calibration) with neither failing -> INDETERMINATE.
 
     3. If margin fails ("possibly a different, but perhaps still
        self-consistent, unit space" -- e.g. still-SI-not-yet-converted
        entries, or Kelvin vs Celsius): rule (c) still applies first and is
        still universal -- GT extents genuinely outside the registry range
-       -> REAL_MISMATCH regardless of anything else (paper 18759/figure
-       12217). Otherwise, fit the exact 2-point affine map `label =
+       (beyond its own margin) -> REAL_MISMATCH regardless of anything else
+       (paper 18759/figure 12217, whose overshoot -- 22.1% of the registry
+       span -- is nowhere near `containment_margin_fraction`). Otherwise,
+       fit the exact 2-point affine map `label =
        a*registry + b` (`_affine_fit`, reported informationally) and run
        rule (e) (`unit_dimensional_analysis`, see its own docstring):
 
@@ -839,7 +981,9 @@ def classify_range_disagreement(
     margin_check = _margin_check(
         label_min, label_max, reg_lo, reg_hi, scale, margin_fraction=margin_fraction
     )
-    containment_check = _registry_containment_check(reg_lo, reg_hi, gt_extents)
+    containment_check = _registry_containment_check(
+        reg_lo, reg_hi, gt_extents, scale=scale, margin_fraction=containment_margin_fraction
+    )
     pixel_check = _pixel_bounds_check(
         label_min, label_max, reg_lo, reg_hi, scale, calibration, tolerance_px=pixel_tolerance_px
     )
