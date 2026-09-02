@@ -229,6 +229,66 @@ def run(model_id: str, model_name: str, model) -> dict:
     return payload
 
 
+LINEFORMER_RESULTS_PATH = RESULTS_DIR / "lineformer-pretrained.json"
+
+
+def _lineformer_comparable_subset(full_payload: dict) -> dict | None:
+    """LineFormer cannot be re-run here (needs mmcv/mmdetection via a Colab
+    notebook, design §7.16) -- results/lineformer-pretrained.json is stuck
+    at whatever verified-pair count it was last run against (currently 42
+    real figures + 3 synthetic fixtures), while `full_payload` above is
+    scored against every currently-VERIFIED entry (111, and growing). Those
+    two mean_summary_scores are therefore NOT comparable -- more figures in
+    one run than the other changes the average for reasons that have
+    nothing to do with which model is better.
+
+    This filters `full_payload`'s per-figure scores down to exactly the
+    figure_ids LineFormer was scored on (same dataset_version string,
+    reused verbatim from the LineFormer results file so the two rows are
+    self-evidently comparable via the leaderboard's existing "same
+    dataset_version" convention -- no new comparability-signalling code
+    needed). Returns None if results/lineformer-pretrained.json isn't
+    present (e.g. a fresh clone before that external run is registered) --
+    the subset has nothing to be comparable *to* in that case."""
+    if not LINEFORMER_RESULTS_PATH.exists():
+        return None
+    lineformer = json.loads(LINEFORMER_RESULTS_PATH.read_text())
+    lineformer_figure_ids = [p["figure_id"] for p in lineformer["per_figure"]]
+
+    by_figure_id = {p["figure_id"]: p for p in full_payload["per_figure"]}
+    missing = [fid for fid in lineformer_figure_ids if fid not in by_figure_id]
+    if missing:
+        # A figure LineFormer was scored on has since left the naive-cv run
+        # (e.g. re-classified out of the registry) -- the subset would no
+        # longer be the same set LineFormer saw, so refuse to fabricate a
+        # partial "comparable" number rather than silently comparing on a
+        # smaller, undocumented set.
+        raise ValueError(
+            "naive-cv run is missing figures LineFormer was scored on, "
+            f"can't build a comparable subset: {missing}"
+        )
+
+    per_figure = [by_figure_id[fid] for fid in lineformer_figure_ids]
+    mean_score = sum(p["summary_score"] for p in per_figure) / len(per_figure)
+
+    return {
+        "model_id": "naive-cv-v0-lineformer-subset",
+        "model_name": "Naive CV (hue-bucket baseline) -- LineFormer-comparable subset",
+        "dataset_version": lineformer["dataset_version"],
+        "run_at": full_payload["run_at"],
+        "n_figures": len(per_figure),
+        "mean_summary_score": mean_score,
+        "per_figure": per_figure,
+        "comparison_note": (
+            "Scored on exactly the figure_ids in results/lineformer-pretrained.json's "
+            "per_figure (same dataset_version, deliberately reused verbatim) so this row "
+            "IS directly comparable to LineFormer's mean_summary_score. The naive-cv-v0 "
+            "row above is scored on every currently-VERIFIED figure and is NOT comparable "
+            "to LineFormer's score -- see docs/experiments/2026-09-02-failure-analysis.md."
+        ),
+    }
+
+
 def main() -> None:
     RESULTS_DIR.mkdir(exist_ok=True)
     payload = run("naive-cv-v0", "Naive CV (hue-bucket baseline)", NaiveCvModelRunner())
@@ -236,6 +296,12 @@ def main() -> None:
     out_path.write_text(json.dumps(payload, indent=2))
     print(json.dumps(payload, indent=2))
     print(f"wrote {out_path}", file=sys.stderr)
+
+    subset_payload = _lineformer_comparable_subset(payload)
+    if subset_payload is not None:
+        subset_path = RESULTS_DIR / f"{subset_payload['model_id']}.json"
+        subset_path.write_text(json.dumps(subset_payload, indent=2))
+        print(f"wrote {subset_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

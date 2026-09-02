@@ -22,6 +22,12 @@
     padding: 0.6rem 1rem; border-radius: 4px; margin-bottom: 1rem;
     font-variant-numeric: tabular-nums;
   }
+  .head-to-head {
+    background: #f3f3f3; border: 1px solid #ccc;
+    padding: 0.75rem 1rem; border-radius: 4px; margin-top: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .head-to-head table { margin-top: 0.5rem; }
   td details { font-size: 0.85em; }
   td details table { margin-top: 0.4rem; width: auto; min-width: 14rem; }
   td details th, td details td { padding: 0.25rem 0.5rem; }
@@ -31,7 +37,7 @@
 <body>
 <h1>real-chart-bench leaderboard (v0)</h1>
 <p class="version-banner">📌 <strong>Latest evaluated set: v0-eval-pilot-n111</strong>
-(most recent run: 2026-09-02T09:57:08.707955+00:00 UTC). Scores below may come from different runs against
+(most recent run: 2026-09-02T15:06:29.836491+00:00 UTC). Scores below may come from different runs against
 different verified-pair counts as the registry grows over time -- always check each row's
 own <strong>Dataset</strong>/<strong>Run at</strong> columns before comparing scores across
 models; do not compare a row's score against a different dataset_version as if they were
@@ -49,13 +55,28 @@ achromatic markers).</p>
 <th>Dataset</th><th>Run at (UTC)</th><th>Breakdown</th>
 </tr></thead>
 <tbody>
-<tr><td>1</td><td>Naive CV (hue-bucket baseline)</td><td class="score">0.731</td><td>114</td><td>v0-eval-pilot-n111</td><td>2026-09-02T09:57:08.707955+00:00</td><td><details><summary>by figure type</summary><table><thead><tr><th>Type</th><th>Mean</th><th>#</th></tr></thead><tbody><tr><td>Real figures (linear x-axis)</td><td class="score">0.733</td><td>110</td></tr>
+<tr><td>1</td><td>Naive CV (hue-bucket baseline)</td><td class="score">0.731</td><td>114</td><td>v0-eval-pilot-n111</td><td>2026-09-02T15:06:29.836491+00:00</td><td><details><summary>by figure type</summary><table><thead><tr><th>Type</th><th>Mean</th><th>#</th></tr></thead><tbody><tr><td>Real figures (linear x-axis)</td><td class="score">0.733</td><td>110</td></tr>
 <tr><td>Real figures (log x-axis)</td><td class="score">0.775</td><td>1</td></tr>
 <tr><td>Synthetic fixtures</td><td class="score">0.665</td><td>3</td></tr></tbody></table></details></td></tr>
 <tr><td>2</td><td>LineFormer (pretrained, ICDAR2023)</td><td class="score">0.647</td><td>45</td><td>v0-eval-pilot-n42</td><td>2026-08-29T02:16:22.185776+00:00</td><td><details><summary>by figure type</summary><table><thead><tr><th>Type</th><th>Mean</th><th>#</th></tr></thead><tbody><tr><td>Real figures (linear x-axis)</td><td class="score">0.627</td><td>41</td></tr>
 <tr><td>Real figures (log x-axis)</td><td class="score">0.642</td><td>1</td></tr>
 <tr><td>Synthetic fixtures</td><td class="score">0.917</td><td>3</td></tr></tbody></table></details></td></tr>
+<tr><td>3</td><td>Naive CV (hue-bucket baseline) -- LineFormer-comparable subset</td><td class="score">0.607</td><td>45</td><td>v0-eval-pilot-n42</td><td>2026-09-02T15:06:29.836491+00:00</td><td><details><summary>by figure type</summary><table><thead><tr><th>Type</th><th>Mean</th><th>#</th></tr></thead><tbody><tr><td>Real figures (linear x-axis)</td><td class="score">0.598</td><td>41</td></tr>
+<tr><td>Real figures (log x-axis)</td><td class="score">0.775</td><td>1</td></tr>
+<tr><td>Synthetic fixtures</td><td class="score">0.665</td><td>3</td></tr></tbody></table></details></td></tr>
 </tbody>
 </table>
+<div class="head-to-head">
+<strong>Head-to-head, same figures only:</strong> the table above mixes runs
+scored against different figure counts (see each row's Dataset column) --
+comparing their raw scores directly is misleading. The one comparison below
+IS apples-to-apples: both rows are scored on the exact same
+45-figure set (dataset_version <code>v0-eval-pilot-n42</code>).
+<table><thead><tr><th>Model</th><th>Mean score</th><th>#figures</th></tr></thead>
+<tbody>
+<tr><td>LineFormer (pretrained, ICDAR2023)</td><td class="score">0.647</td><td>45</td></tr>
+<tr><td>Naive CV (hue-bucket baseline) -- LineFormer-comparable subset</td><td class="score">0.607</td><td>45</td></tr>
+</tbody></table>
+</div>
 </body>
 </html>
