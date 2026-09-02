@@ -211,7 +211,8 @@
     "status": "rejected",
     "verified_at": "2026-08-21",
     "evidence": "1 ground-truth curve (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1)), n=154 points (dense continuous trace). This paper's own text states 'Figure 6 shows the electronic density of states' (confirmed matching p07_embedded_6.jpg, a DOS chart -- NOT this figure), so Figure 7 (Seebeck coefficient, resistivity vs T) must fall between Figure 6 (page 7) and Figure 8 (thermal conductivity, page 8, confirmed via caption text). No chart matching Seebeck coefficient vs Temperature was found among any of this paper's 9 extracted images (SEM images, a crystal-structure diagram, the DOS chart, and text-only page renders). Likely the same vector-drawn-chart extraction-miss pattern found in papers 48080/17024 (design 7.21): the DOS chart (Fig. 6) being an embedded raster on the same page apparently satisfied the page's embedded-image threshold, suppressing the page-render fallback that would have captured a co-located vector-drawn Figure 7. Rejected as image-not-found.",
-    "license_id": "cc-by"
+    "license_id": "cc-by",
+    "rejection_category": "image"
   },
   {
     "paper_id": "17049",
@@ -224,7 +225,8 @@
     "status": "rejected",
     "verified_at": "2026-08-21",
     "evidence": "1 ground-truth curve (prop_x=Temperature/K, prop_y=Electrical resistivity/ohm*m), n=54 points. Same investigation and same negative result as figure_id=13287 (panel b of the same missing Figure 7); see that entry's evidence.",
-    "license_id": "cc-by"
+    "license_id": "cc-by",
+    "rejection_category": "image"
   },
   {
     "paper_id": "22102",
@@ -611,7 +613,15 @@
     "status": "rejected",
     "verified_at": "2026-08-16",
     "evidence": "1 ground-truth curve (prop_x=Inverse temperature/K^-1, prop_y=log(Electrical conductivity)/S*m^-1), y-values ~-441 to -538+. The chart's panel (b) y-axis is printed as 'log sigma [S x cm^-1]' ranging -2.5 to -7.0. The ground-truth magnitude is off by roughly two orders of magnitude from the printed axis range even after accounting for the cm<->m unit conversion -- rejected as a numeric mismatch, not merely a plausible-looking visual match.",
-    "license_id": "cc-by"
+    "license_id": "cc-by",
+    "rejection_category": "gt_suspect",
+    "gt_suspect_status": "llm_flagged",
+    "rejection_evidence": {
+      "axis_range_mismatch": null,
+      "point_count_mismatch": null,
+      "y_value_offset_magnitude": 100.0,
+      "missing_series": null
+    }
   },
   {
     "paper_id": "5904",
@@ -644,7 +654,15 @@
     "status": "rejected",
     "verified_at": "2026-08-19",
     "evidence": "1 ground-truth curve (prop_x=Temperature/K, prop_y=Electrical conductivity/ohm^(-1)*m^(-1)), x-range 320-751K matches the chart's 300-800K axis, but y-range 30228-57868 ohm^-1*m^-1 (=302-579 S/cm) does not match any of the 8 series visible in panel (a) (which span ~700-6000 S/cm across the 2 sintering temps x 4 Bi-content compositions). Checked all 6 embedded images in this paper (p01-p06) for an alternative match; none found. Rejected as a numeric mismatch against the only plausibly-named candidate panel.",
-    "license_id": "cc-by"
+    "license_id": "cc-by",
+    "rejection_category": "gt_suspect",
+    "gt_suspect_status": "llm_flagged",
+    "rejection_evidence": {
+      "axis_range_mismatch": false,
+      "point_count_mismatch": null,
+      "y_value_offset_magnitude": null,
+      "missing_series": true
+    }
   },
   {
     "paper_id": "48080",
@@ -657,7 +675,8 @@
     "status": "rejected",
     "verified_at": "2026-08-19",
     "evidence": "1 ground-truth curve (prop_x=Temperature/K, prop_y=Electrical resistivity/ohm*m). The paper's own text (page 4) explicitly describes 'Fig. 3a' as the resistivity-vs-temperature plot, but no such chart was found among any of the 11 extracted images (embedded rasters are TEM/diffraction/crystal-structure diagrams; page renders p01/p02/p04/p08/p10/p11 are text-only). Likely a vector-drawn chart on page 3 that PDF extraction missed because another embedded raster on that page (a diffraction pattern) already satisfied the page's embedded-image threshold, suppressing the page-render fallback (see design 1.2/7.10). Rejected as image-not-found, not as a numeric mismatch.",
-    "license_id": "cc-by"
+    "license_id": "cc-by",
+    "rejection_category": "image"
   },
   {
     "paper_id": "17024",
@@ -670,7 +689,8 @@
     "status": "rejected",
     "verified_at": "2026-08-19",
     "evidence": "1 ground-truth curve (prop_x=Temperature/K, prop_y=Lattice thermal conductivity/W*m^(-1)*K^(-1)). All 15 extracted images for this paper are either a repeated decorative page-header banner or small crystal-structure ball-and-stick diagrams; no line/scatter chart of any kind was found. Rejected as image-not-found (likely a vector-drawn chart missed by extraction, same failure mode as paper 48080).",
-    "license_id": "cc-by"
+    "license_id": "cc-by",
+    "rejection_category": "image"
   },
   {
     "paper_id": "46256",
@@ -716,7 +736,15 @@
     "status": "rejected",
     "verified_at": "2026-08-19",
     "evidence": "5 ground-truth curves (prop_x=Inverse temperature/K^-1, prop_y=log(Electrical conductivity)/S*m^-1) -- but all 5 curves have x-range exactly (0.0, 0.0), i.e. every x-value collapsed to zero. This is a ground-truth data quality defect (not a pairing/image problem): the underlying digitized data for this figure is unusable regardless of which of the 53 candidate images it might correspond to. Rejected on GT-quality grounds before any image was checked, per the design's 'GT quality check' step of the verification procedure.",
-    "license_id": "cc-by"
+    "license_id": "cc-by",
+    "rejection_category": "gt_suspect",
+    "gt_suspect_status": "llm_flagged",
+    "rejection_evidence": {
+      "axis_range_mismatch": true,
+      "point_count_mismatch": null,
+      "y_value_offset_magnitude": null,
+      "missing_series": null
+    }
   },
   {
     "paper_id": "27759",
