@@ -2631,3 +2631,65 @@ p50=0.000 / p75=0.000 / p90=0.125 / p95=0.446。0.25を超えるのは24/404(5.9
 
 参考: GT張り幅比`GT_span / L`は同一単位空間202軸で p5=0.376 / p50=0.900 / p95=1.093。
 被覆帯[0.35, 1.15]は実測に耐える。
+
+### 7.50 human ceiling(GT信頼性の定量化)のハーネスとメトリクス(2026-09-02、戦略メモ「柱B」)
+
+**背景**: 本ベンチはStarrydataの人手デジタイズ済み曲線をGTとして手法を採点する。
+外部レビュアーが最初に突くのは「そのGT自体はどれだけ正確なのか」である。これは
+主張ではなく測定で答えるべきであり、しかも**自分から先に出す**ことが身内データへの
+疑念に対する最善の防御になる。検証済み図の一部を独立に再デジタイズし、2つの
+デジタイズ間の一致度を「human ceiling」としてリーダーボードに載せる。
+
+**メトリクス**: 既存の評価機構をそのまま使う(`domain/human_ceiling.py` の
+`compare_annotations` が `evaluate_figure` / `HungarianCurveMatcher` /
+`NormalizedYDistanceMetric` の上に構築されている)。モデルの `summary_score` と
+**同じ軸に乗ること**が公開する意味そのものだからである。
+
+ただし `NormalizedYDistanceMetric` は非対称である(「予測」を「GT」のx格子上に補間し、
+GTのy-rangeで正規化する)。独立した2つのデジタイズには予測/GTの自然な順序が存在しない
+ため、`compare_annotations` は両方向を評価して平均し、順序に依存しない値にしている。
+
+**出所の完全性(ハード要件)**: `data/human_ceiling/annotations/` の各レコードは
+`annotation_source: human | llm | automated` を**必須・デフォルト値なし**で持つ。
+`require_human_ceiling()` が、寄与する全アノテーションが `human` でない限り
+`"human_ceiling"` というラベル/リーダーボード上の識別子を与えることを**構造的に拒否**する。
+混在または機械のみの集合も採点はされるが、`human-ceiling-mixed-sources` /
+`human-ceiling-machine-agreement` という正直に異なる識別子の下に出る。
+
+これは §7.48 の「llm_flagged を GT誤りと呼ばない」と同じ原則である。LLMによる
+再デジタイズから計算した数字は**機械間一致度**であって人間の天井ではなく、それを
+「human ceiling」と称するのは公開ベンチマークにおける虚偽になる。規約ではなく型で防ぐ。
+
+**部分集合の選択**: `scripts/eval/select_human_ceiling_subset.py` が検証済み111件から
+20〜30件を、軸スケール(linear / log-x / log-y)・系列数(単一/複数)・点数・点密度
+(マーカー密度の代理)・y物理量にわたる決定論的なcoverage-then-balance選択で選ぶ。
+偏った部分集合が特定の図タイプに強い手法を過大評価するのと同じ理屈が、天井の測定にも
+当てはまるため。実行結果は25/111件で、全軸タイプ・両系列数バケット・16のy物理量すべてを被覆した。
+
+**未収集時の振る舞い**: `scripts/eval/compute_human_ceiling.py` は、再デジタイズが
+まだ存在しない間は `pending_external_run` 行を書く。**捏造した数字もプレースホルダも
+出さない。**
+
+### 7.51 `scripts/export/gt_issues.py` — 確定したGT疑義の一方向エクスポート(2026-09-02、§7.48の後続)
+
+§7.48で追加した `is_confirmed_gt_error` を**唯一の判定経路**として使うエクスポータを
+実装した。`usecase/gt_issues.py` の `select_confirmed_gt_issues` が
+`VerifiedPairing.is_confirmed_gt_error` のみでフィルタし(呼び出し側でのenum手書き比較を
+一切させない)、`summarize_gt_suspect_review` が `human_confirmed` / `human_rejected` /
+`awaiting_human_review` の内訳を返す。`adapter/gt_issues_export.py` がCSV/JSONへの純粋な
+変換を担い、`scripts/export/gt_issues.py` は薄いI/Oシェルに留める。
+
+現在 `gt_suspect` は3件で全て `llm_flagged`、`human_confirmed` は0件である。したがって
+`data/gt_issues/gt_issues.json` は `"issues": []` かつ `summary.awaiting_human_review: 3`
+を持つ、**空だが正しい形**の出力になる。プレースホルダ行は書かない。
+
+**`sample_id` について**: 戦略メモはStarrydataの sample ID を識別子に含めることを
+求めているが、`sample_id` 列はStarrydataの生CSVスキーマには存在するものの
+(`adapter/starrydata_csv.py` のdocstring参照)、**本リポジトリのコミット済みデータの
+どこにも保持されていない**(`ParsedCurveRow` / `GroundTruthCurve` /
+`ground_truth.json` はいずれも x, y, prop_x, prop_y, unit_x, unit_y のみ)。
+捏造せず、欠落として `data/gt_issues/README.md` に明記した。上流に戻す際に
+sample単位の粒度が必要なら、収集パイプライン側で `sample_id` を保持する変更が要る。
+
+**責務の境界**: 本リポジトリのコードから starrydata2.org への書き込みは行わない。
+エクスポートは一方向であり、Starrydata2への反映は職務側の作業として分離する。
