@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/t29mato/real-chart-bench/data/human_ceiling/annotation.schema.json",
+  "title": "Human-ceiling annotation record",
+  "description": "One independent digitization of one figure already in data/verified_pairs/registry.json (status=verified), used to score inter-annotator agreement (\"human ceiling\") -- see data/human_ceiling/FORMAT.md for the full explanation, and src/real_chart_bench/adapter/human_ceiling_annotations.py for the authoritative parser/validator this document mirrors.",
+  "type": "object",
+  "required": ["paper_id", "figure_id", "annotation_source", "annotator_id", "annotated_at", "curves"],
+  "additionalProperties": true,
+  "properties": {
+    "paper_id": {
+      "type": "string",
+      "description": "Must match a paper_id in data/verified_pairs/registry.json."
+    },
+    "figure_id": {
+      "type": "string",
+      "description": "Must match a figure_id in data/verified_pairs/registry.json for the given paper_id. Combined with paper_id as '{paper_id}-{figure_id}' to key results, matching every other results/*.json's per_figure figure_id convention."
+    },
+    "annotation_source": {
+      "type": "string",
+      "enum": ["human", "llm", "automated"],
+      "description": "MANDATORY, never defaulted. 'human' = a person manually re-digitized the figure (e.g. WebPlotDigitizer). 'llm' = a large language model produced the digitization. 'automated' = a non-LLM automated pipeline (e.g. a CV extraction tool) produced it. Only a set of annotations that are ALL 'human' may ever be labeled/published as a 'human ceiling' -- see domain.human_ceiling.require_human_ceiling(). A missing or unrecognized value is a hard parse error, not a default."
+    },
+    "annotator_id": {
+      "type": "string",
+      "description": "Identity of the annotator/system, e.g. a person's handle for a human annotation, or a model/tool identifier for llm/automated (e.g. 'gpt-4o-digitizer-v1'). Never left blank."
+    },
+    "annotated_at": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO 8601 date (YYYY-MM-DD) the digitization was produced."
+    },
+    "tool": {
+      "type": "string",
+      "description": "Optional. The digitization tool used, e.g. 'WebPlotDigitizer 4.7'."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional free-text notes (ambiguous series, uncertain calibration, etc.)."
+    },
+    "curves": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One entry per data series digitized in this annotation.",
+      "items": {
+        "type": "object",
+        "required": ["x", "y"],
+        "properties": {
+          "series_label": {
+            "type": "string",
+            "description": "Optional. Should match/approximate the corresponding ground_truth.json series' prop_y or legend label where identifiable, to help pair series across annotations."
+          },
+          "x": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "number" }
+          },
+          "y": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "number" }
+          }
+        }
+      }
+    }
+  }
+}
