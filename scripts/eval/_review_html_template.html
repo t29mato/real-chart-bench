@@ -255,9 +255,14 @@ function render() {
   if (e.needs_attention) {
     const b = document.createElement("div");
     b.className = "attn-banner";
-    b.textContent =
-      "⚠️ 軸ピクセルGTとregistryの範囲が単純な係数で一致しません" +
-      "(良性の場合が多いですが要確認)。";
+    const reasons = [];
+    if (e.x_verdict === "real_mismatch" || e.x_verdict === "indeterminate") {
+      reasons.push(`x軸 [${e.x_verdict}]: ${e.x_verdict_reason}`);
+    }
+    if (e.y_verdict === "real_mismatch" || e.y_verdict === "indeterminate") {
+      reasons.push(`y軸 [${e.y_verdict}]: ${e.y_verdict_reason}`);
+    }
+    b.textContent = "⚠️ " + (reasons.length ? reasons.join(" / ") : "要確認");
     banners.appendChild(b);
   }
 
@@ -290,6 +295,12 @@ function render() {
       <tr><td class="k">曲線数</td><td>${e.n_curves}</td></tr>
       <tr><td class="k">単位変換</td><td>${e.factor_summary}</td></tr>
       <tr><td class="k">軸に印字された単位(y)</td><td>${e.printed_y_unit || "(未取得)"}</td></tr>
+      <tr><td class="k">pairing_checks判定(x)</td><td>${
+        e.x_verdict ? `${e.x_verdict} -- ${e.x_verdict_reason}` : "(対象外)"
+      }</td></tr>
+      <tr><td class="k">pairing_checks判定(y)</td><td>${
+        e.y_verdict ? `${e.y_verdict} -- ${e.y_verdict_reason}` : "(対象外)"
+      }</td></tr>
       <tr><td class="k">次元解析クロスチェック</td><td>${e.unit_check || "(対象外)"}</td></tr>
       <tr><td class="k">axis-pixel status</td><td>${e.axp_status || "(none)"}</td></tr>
     </table>`;

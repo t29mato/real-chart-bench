@@ -61,6 +61,7 @@ from real_chart_bench.domain.pairing_checks import (
     classify_range_disagreement,
     containment,
     coverage,
+    display_conversion,
     scale_consistency,
 )
 
@@ -696,6 +697,131 @@ class TestVerdictAuditTrail:
             printed_unit="1/K",
         )
         assert "unit_dimensional_analysis" in verdict.reason
+
+
+class TestDisplayConversion:
+    """`display_conversion` is the direct replacement for
+    `generate_verified_pairs_visual_audit.py`'s old `_derive_factor`: given a
+    verdict (from `classify_range_disagreement` on the same axis), which
+    conversion is safe to apply to re-express a registry-space value (a GT
+    curve point, or the registry range itself) in the printed axis's display
+    units for the re-plot.
+    """
+
+    def test_benign_margin_is_identity(self):
+        # Registry is already display-unit (design 7.47) -- no conversion.
+        assert display_conversion(
+            Verdict.BENIGN_MARGIN,
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=850.0,
+        ) == (1.0, 0.0)
+
+    def test_unit_space_difference_returns_expected_multiplicative_factor(self):
+        # paper 44283/38965, y-axis: ohm*m -> mOhm*cm is x1e5.
+        factor, offset = display_conversion(
+            Verdict.UNIT_SPACE_DIFFERENCE,
+            label_min=0.5,
+            label_max=2.5,
+            reg_lo=0.0,
+            reg_hi=2.5e-05,
+            gt_unit="ohm*m",
+            printed_unit="mΩ·cm",
+        )
+        assert offset == 0.0
+        assert factor == pytest.approx(1e5, rel=1e-6)
+
+    def test_unit_space_difference_returns_expected_additive_offset(self):
+        # paper 4965/13164, x-axis: K -> degC.
+        factor, offset = display_conversion(
+            Verdict.UNIT_SPACE_DIFFERENCE,
+            label_min=30.0,
+            label_max=80.0,
+            reg_lo=298.15,
+            reg_hi=353.15,
+            gt_unit="K",
+            printed_unit="°C",
+        )
+        assert factor == pytest.approx(1.0)
+        assert offset == pytest.approx(-273.15)
+
+    def test_unit_space_difference_without_units_falls_back_to_identity(self):
+        # Defensive: shouldn't happen from a real classify_range_disagreement
+        # call (UNIT_SPACE_DIFFERENCE requires resolved unit strings), but
+        # display_conversion doesn't trust its caller blindly either.
+        assert display_conversion(
+            Verdict.UNIT_SPACE_DIFFERENCE,
+            label_min=30.0,
+            label_max=80.0,
+            reg_lo=298.15,
+            reg_hi=353.15,
+        ) == (1.0, 0.0)
+
+    def test_axis_scale_factor_reproduces_the_exact_endpoint_fit(self):
+        # paper 46278/51437, x-axis: registry K^-1 [0.0008, 0.0018] vs
+        # printed 1000/T labels (0.8, 1.8) -- a=1000, b=0.
+        factor, offset = display_conversion(
+            Verdict.AXIS_SCALE_FACTOR,
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+        )
+        assert factor == pytest.approx(1000.0)
+        assert offset == pytest.approx(0.0, abs=1e-9)
+
+    def test_axis_scale_factor_with_degenerate_registry_span_falls_back_to_identity(self):
+        assert display_conversion(
+            Verdict.AXIS_SCALE_FACTOR,
+            label_min=0.0,
+            label_max=100.0,
+            reg_lo=50.0,
+            reg_hi=50.0,
+        ) == (1.0, 0.0)
+
+    def test_real_mismatch_is_identity_raw_si_fallback(self):
+        assert display_conversion(
+            Verdict.REAL_MISMATCH,
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=1000.0,
+        ) == (1.0, 0.0)
+
+    def test_indeterminate_is_identity_raw_si_fallback(self):
+        assert display_conversion(
+            Verdict.INDETERMINATE,
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=1000.0,
+        ) == (1.0, 0.0)
+
+    def test_dispatches_correctly_from_a_real_classify_range_disagreement_call(self):
+        # End-to-end: feed classify_range_disagreement's own verdict straight
+        # into display_conversion, the way the audit script will.
+        verdict = classify_range_disagreement(
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            gt_extents=(0.0008906, 0.001745),
+            gt_unit="K^(-1)",
+            printed_unit="1/K",
+        )
+        assert verdict.verdict is Verdict.AXIS_SCALE_FACTOR
+        factor, offset = display_conversion(
+            verdict.verdict,
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            gt_unit="K^(-1)",
+            printed_unit="1/K",
+        )
+        assert factor == pytest.approx(1000.0)
+        assert offset == pytest.approx(0.0, abs=1e-9)
 
 
 if __name__ == "__main__":
