@@ -45,35 +45,71 @@ division), is an **affine** map `label = a * registry + b`. Two endpoint
 pairs `(reg_lo, label_min)` and `(reg_hi, label_max)` determine `(a, b)`
 *exactly* -- see `_affine_fit`.
 
-**A structural limitation, stated plainly**: because two points always
-determine an affine map exactly, `_affine_fit`'s own two input points can
-never disagree with themselves -- there is no residual to test. The only
-independent, already-available third constraint this module has is
-whether the ground-truth curve's own extents still fall inside the
-registry range (`registry_contains_gt`, rule (c) below) -- and for *any*
-monotonic affine map, if `GT ⊆ [reg_lo, reg_hi]` then the map necessarily
-sends `GT` inside `[label_min, label_max]` too. That containment is
-mathematically guaranteed once rule (c) already passed, not new
-information -- so this module reports the fitted `(a, b)` for a human's
-own judgement of whether it looks like a "clean" ratio/offset, but it
-cannot, from the registry endpoints and GT extents alone, distinguish a
-genuine different-but-self-consistent unit space from a badly wrong (but
-still GT-bounding) registry endpoint that isn't a unit issue at all --
-unless that same wrong endpoint also happens to fail rule (c) (as it did,
-by chance, for the worked real case below). Catching the general case
-would need a third *independent* tick reading or a "does this factor look
-like a physically plausible unit conversion" check -- out of scope for a
-pure function operating on two endpoints and a curve's extents. See
-`classify_range_disagreement`'s docstring and
-`test_pairing_checks.py::test_large_margin_violation_with_contained_gt_is_still_unit_space_difference`
-for this documented as a known gap, not papered over.
+**A structural limitation, found and then closed**: because two points
+always determine an affine map exactly, `_affine_fit`'s own two input
+points can never disagree with themselves -- there is no residual to
+test. GT-extent containment (`registry_contains_gt`, rule (c)) is *not*
+an independent third constraint either: for *any* monotonic affine map,
+if `GT ⊆ [reg_lo, reg_hi]` then the map necessarily sends `GT` inside
+`[label_min, label_max]` too, so once rule (c) has passed, checking it
+again in "label space" adds no information. An initial version of this
+module used rule (c) alone as the different-unit-space branch's gate,
+which meant it could not, from the registry endpoints and GT extents
+alone, distinguish a genuine different-but-self-consistent unit space
+from a badly wrong (but still GT-bounding) registry endpoint that isn't a
+unit issue at all -- unless that same wrong endpoint also happened to
+fail rule (c) (as it did, by chance, for paper 18759/figure 12217 below).
 
-Concretely, from the same 208-axis review: paper 18759/figure 12217's
-y-axis (registry `[25000, 135000]`, labels `(250, 1250)`) *is* correctly
-caught -- not via the affine fit, but because one of its four GT curves
-has y-extents around 662-1029, which falls *outside* `[25000, 135000]`
-entirely -- rule (c) fails outright, independent of any unit-space
-question.
+**The actual third constraint**: the ground-truth curve's own physical
+unit (`ground_truth.json`'s `unit_x`/`unit_y`) and the printed axis's own
+unit (`axis_pixel_candidates.json`'s `x_axis_unit`/`y_axis_unit`) imply an
+*expected* registry->label conversion derived with **no reference
+whatsoever to the endpoint values** -- via
+`domain/unit_conversion.py::si_to_display_factor` (built for exactly this
+purpose, design 7.46). That is genuinely independent information, and
+`rule (e)` (`unit_dimensional_analysis`, see `classify_range_disagreement`)
+uses it: when unit strings are supplied, they -- not GT containment --
+decide UNIT_SPACE_DIFFERENCE vs. REAL_MISMATCH in the different-unit-space
+branch. Without them, that branch now returns INDETERMINATE rather than
+confidently guessing from an uninformative constraint (see
+`test_pairing_checks.py`'s
+`TestClassifyRangeDisagreementUnitSpaceDifference` for the paired
+without-units-INDETERMINATE / with-units-resolves tests).
+
+One more real pattern the unit-dimensional check surfaces on its own: a
+chart axis is sometimes labeled with its *own* scale-factor annotation on
+top of the physical unit -- e.g. an Arrhenius plot's x-axis printed as
+"1000/T (1/K)" (paper 46278/figure 51437) rather than plain "1/T (1/K)",
+or a y-axis titled "sigma (x10^4 S/cm)". There, `unit_x`/`x_axis_unit`
+are `K^(-1)`/`1/K` -- *dimensionally identical*, dimensional analysis
+predicts a factor of 1 -- yet the endpoints cleanly imply `a=1000`. That
+is not a unit mismatch (nothing was misconverted) and not the SI-vs-
+display backlog (nothing needs migrating) -- it is the axis-label's own
+declared multiplier, real and common in this corpus. `Verdict.AXIS_SCALE_FACTOR`
+is a dedicated fifth outcome for exactly this signature: dimensionally
+compatible units, but the fitted slope disagrees with the dimensionally-
+expected one by a *clean* power of ten (`_clean_power_of_ten`, tight
+tolerance -- a deliberate labeling choice is numerically exact, not
+framed with margin the way an axis range is).
+
+A second gap found while wiring this in: `si_to_display_factor` does not
+model additive unit offsets at all (see its own `_normalize`, which
+folds `°C` to `K` for *scale* purposes only and explicitly documents that
+the absolute-value offset is a separate concern it doesn't handle) --
+so Kelvin<->Celsius's `-273.15` is never something dimensional analysis
+alone can report. Rather than bolt general offset-aware unit modeling
+into `unit_conversion.py` (a real design task of its own, out of scope
+here), this module hardcodes the one offset pair this corpus actually
+uses (`_expected_additive_offset`) and states plainly that it does not
+generalize -- a different additive unit pair (there are none observed in
+this corpus yet) would need real design work, not a second hardcoded
+case bolted on ad hoc.
+
+Concretely, from the same review: paper 18759/figure 12217's y-axis
+(registry `[25000, 135000]`, labels `(250, 1250)`) *is* correctly caught
+by GT containment alone (rule (c), independent of the unit question) --
+one of its four GT curves has y-extents around 662-1029, which falls
+*outside* `[25000, 135000]` entirely.
 
 ## Scope
 
@@ -98,6 +134,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 from real_chart_bench.domain.curve import ScaleType
+from real_chart_bench.domain.unit_conversion import (
+    IncompatibleUnitsError,
+    UnitParseError,
+    si_to_display_factor,
+)
 
 # 0.25 * L is a deliberately round, retightenable margin tolerance for "how
 # far past the outermost printed label can a registry endpoint legitimately
@@ -130,12 +171,30 @@ _MAX_COVERAGE_RATIO = 1.15
 _LOG_MIN_DECADES = 1.0
 _LINEAR_MAX_DECADES = 2.5
 
+# Tolerance for recognizing a fitted/expected ratio as a "clean" power of
+# ten (see Verdict.AXIS_SCALE_FACTOR). Tight, unlike _MARGIN_FRACTION: a
+# deliberate axis-label scale-factor annotation ("1000/T", "x10^4") is a
+# specific numeric choice, not something framed with headroom the way an
+# axis range is -- so it should reproduce almost exactly, and a "clean
+# power of ten that's actually off by 8%" would be a suspicious coincidence
+# worth flagging as a mismatch instead, not waving through with a loose
+# tolerance the way rule (b)'s margin does.
+_CLEAN_POWER_OF_TEN_TOL = 0.03
+
+# Kelvin -> Celsius offset (K to degC: degC = K - 273.15). Hardcoded
+# because `si_to_display_factor` does not model additive unit offsets at
+# all (see module docstring) -- this is the one additive unit pair
+# observed in this corpus, not a general mechanism; a different additive
+# pair would need real design work in unit_conversion.py, not a second
+# case bolted on here.
+_KELVIN_TO_CELSIUS_OFFSET = -273.15
+
 # Float-safety epsilon for boundary (<=) comparisons only -- not a margin.
 _EPS = 1e-9
 
 
 class Verdict(Enum):
-    """Four-way outcome of `classify_range_disagreement`. Never a bare
+    """Five-way outcome of `classify_range_disagreement`. Never a bare
     bool: INDETERMINATE means the available data genuinely can't decide,
     and must never be conflated with BENIGN_MARGIN. UNIT_SPACE_DIFFERENCE
     is distinct from both -- it is benign *for scoring* (the registry and
@@ -143,10 +202,15 @@ class Verdict(Enum):
     BENIGN_MARGIN (the registry matches the printed axis); it flags the
     "still needs display-unit conversion" backlog (design 7.47) and must
     be reported separately, not folded into either other outcome.
+    AXIS_SCALE_FACTOR is separate again: dimensionally identical units,
+    but the axis itself is printed with its own scale-factor annotation
+    (e.g. "1000/T", "sigma x10^4") -- nothing was mis-converted and
+    nothing needs migrating, the axis title just declares a multiplier.
     """
 
     BENIGN_MARGIN = "benign_margin"
     UNIT_SPACE_DIFFERENCE = "unit_space_difference"
+    AXIS_SCALE_FACTOR = "axis_scale_factor"
     REAL_MISMATCH = "real_mismatch"
     INDETERMINATE = "indeterminate"
 
@@ -449,6 +513,170 @@ def _registry_containment_check(
     return CheckResult(name, False, detail + " -- GT extent(s) fall outside the registry range")
 
 
+def _is_missing_or_ambiguous_unit(unit: str | None) -> bool:
+    """True for None or "-" (this corpus's placeholder for "dimensionless /
+    no printed unit captured", e.g. ZT). Per the 2026-09 correction: "do
+    not guess" -- both cases must fall out to INDETERMINATE, not be
+    treated as an implicit match."""
+    return unit is None or unit.strip() == "-"
+
+
+def _is_kelvin(unit: str) -> bool:
+    return unit.strip() == "K"
+
+
+def _is_celsius(unit: str) -> bool:
+    return unit.strip() in ("°C", "degC")
+
+
+def _expected_additive_offset(gt_unit: str, printed_unit: str) -> float:
+    """The known-gap workaround described in the module docstring:
+    `si_to_display_factor` never reports an additive offset, so the one
+    additive unit pair this corpus uses (Kelvin GT vs. Celsius-printed
+    axis, or vice versa) is recognized here by name. Returns 0.0 for every
+    other unit pair -- including any *other* additive relationship, which
+    this function does not attempt to generalize to (see module
+    docstring)."""
+    if _is_kelvin(gt_unit) and _is_celsius(printed_unit):
+        return _KELVIN_TO_CELSIUS_OFFSET
+    if _is_celsius(gt_unit) and _is_kelvin(printed_unit):
+        return -_KELVIN_TO_CELSIUS_OFFSET
+    return 0.0
+
+
+def _clean_power_of_ten(ratio: float, tol: float) -> int | None:
+    """None if `ratio` isn't within `tol` (relative) of `10**n` for some
+    nonzero integer `n`; otherwise `n`. `n == 0` (ratio ~= 1, i.e. "no
+    disagreement at all") is deliberately excluded -- that's the "matches"
+    case, handled separately, not a scale-factor signature."""
+    if ratio <= 0:
+        return None
+    n = round(math.log10(ratio))
+    if n == 0:
+        return None
+    if abs(ratio / (10.0**n) - 1.0) <= tol:
+        return n
+    return None
+
+
+def _unit_dimensional_check(
+    gt_unit: str | None,
+    printed_unit: str | None,
+    a: float,
+    reg_lo: float,
+    reg_hi: float,
+    label_min: float,
+    label_max: float,
+    L: float,
+    *,
+    margin_fraction: float,
+    scale_factor_tol: float,
+) -> tuple[CheckResult, Verdict | None]:
+    """Rule (e): the genuinely independent third constraint (2026-09
+    correction to this module -- see module docstring on why GT-extent
+    containment alone is NOT independent). `gt_unit`/`printed_unit` imply
+    an expected registry->label conversion with no reference to the
+    endpoint values at all.
+
+    Returns `(CheckResult, verdict_override)`. `verdict_override` is
+    `None` when the generic rule-(c)-based UNIT_SPACE_DIFFERENCE logic in
+    `classify_range_disagreement` should decide (unit strings absent/
+    unparseable, or they confirm a plain match); otherwise it is the
+    specific verdict this check determines directly: REAL_MISMATCH for
+    incompatible dimensions or a confirmed disagreement, AXIS_SCALE_FACTOR
+    for a clean power-of-ten disagreement between dimensionally-identical
+    units.
+    """
+    name = "unit_dimensional_analysis"
+    if _is_missing_or_ambiguous_unit(gt_unit) or _is_missing_or_ambiguous_unit(printed_unit):
+        return (
+            CheckResult(
+                name,
+                None,
+                f"no usable unit strings supplied (gt_unit={gt_unit!r}, "
+                f"printed_unit={printed_unit!r}) -- cannot independently verify the unit "
+                "relationship",
+            ),
+            None,
+        )
+
+    try:
+        expected_k = si_to_display_factor(gt_unit, printed_unit)
+    except IncompatibleUnitsError as exc:
+        return (
+            CheckResult(
+                name,
+                False,
+                f"GT unit {gt_unit!r} and printed unit {printed_unit!r} are dimensionally "
+                f"incompatible ({exc}) -- likely a wrong figure pairing, not just a bad "
+                "endpoint",
+            ),
+            Verdict.REAL_MISMATCH,
+        )
+    except UnitParseError as exc:
+        return (
+            CheckResult(
+                name,
+                None,
+                f"could not parse unit string(s) ({exc}) -- cannot independently verify the "
+                "unit relationship",
+            ),
+            None,
+        )
+
+    expected_offset = _expected_additive_offset(gt_unit, printed_unit)
+    predicted_lo = expected_k * reg_lo + expected_offset
+    predicted_hi = expected_k * reg_hi + expected_offset
+    gap_lo = abs(predicted_lo - label_min)
+    gap_hi = abs(predicted_hi - label_max)
+    tol = margin_fraction * L
+    detail_base = (
+        f"expected factor={expected_k:.6g}"
+        + (f", expected offset={expected_offset:.6g}" if expected_offset else "")
+        + f" (from unit strings {gt_unit!r} -> {printed_unit!r}); fitted a={a:.6g}; "
+        f"expected conversion predicts label=[{predicted_lo:.6g}, {predicted_hi:.6g}] vs "
+        f"actual [{label_min:.6g}, {label_max:.6g}] (gap_lo={gap_lo:.6g}, gap_hi={gap_hi:.6g}, "
+        f"tol={tol:.6g})"
+    )
+    if gap_lo <= tol + _EPS and gap_hi <= tol + _EPS:
+        # Confirms a plain multiplicative/additive unit conversion -- let
+        # the generic rule-(c)-based logic finalize UNIT_SPACE_DIFFERENCE
+        # (still subject to GT containment, already checked above).
+        return CheckResult(name, True, detail_base + " -- matches"), None
+
+    # Not a margin-consistent match to the expected conversion. Check the
+    # "printed axis carries its own scale-factor annotation" signature
+    # (design 7.42-adjacent, e.g. "1000/T", "sigma x10^4"): identical/
+    # compatible dimensions (expected_offset == 0 rules out the Kelvin/
+    # Celsius case, where a bare power-of-ten ratio wouldn't mean this)
+    # but the FITTED slope is a clean power of ten away from the
+    # dimensionally-expected one. No margin tolerance here -- see
+    # _CLEAN_POWER_OF_TEN_TOL's docstring.
+    if expected_offset == 0.0 and expected_k != 0:
+        n = _clean_power_of_ten(a / expected_k, scale_factor_tol)
+        if n is not None:
+            return (
+                CheckResult(
+                    name,
+                    True,
+                    detail_base + f" -- fitted/expected ratio is a clean 10^{n:+d}, "
+                    "consistent with a printed axis-label scale factor (e.g. '1000/T', "
+                    "'sigma x10^4'), not a unit or endpoint error",
+                ),
+                Verdict.AXIS_SCALE_FACTOR,
+            )
+
+    return (
+        CheckResult(
+            name,
+            False,
+            detail_base + " -- the fitted endpoints do not encode the unit relationship the "
+            "unit strings themselves declare",
+        ),
+        Verdict.REAL_MISMATCH,
+    )
+
+
 def _project_to_pixel(
     value: float,
     label_min: float,
@@ -529,10 +757,19 @@ def classify_range_disagreement(
     scale: ScaleType = ScaleType.LINEAR,
     gt_extents: Sequence[float] = (),
     calibration: AxisPixelCalibration | None = None,
+    gt_unit: str | None = None,
+    printed_unit: str | None = None,
     margin_fraction: float = _MARGIN_FRACTION,
     pixel_tolerance_px: float = _PIXEL_TOLERANCE_PX,
+    scale_factor_tol: float = _CLEAN_POWER_OF_TEN_TOL,
 ) -> RangeDisagreementVerdict:
     """Classifies one axis's registry-vs-printed-label range disagreement.
+
+    `gt_unit`/`printed_unit` (e.g. `ground_truth.json`'s `unit_x`/`unit_y`
+    and `axis_pixel_candidates.json`'s `x_axis_unit`/`y_axis_unit`) are
+    optional but strongly recommended -- see rule (e) below and the module
+    docstring on why they, not GT-extent containment, are the actual
+    independent third constraint for the different-unit-space branch.
 
     Decision tree:
 
@@ -554,24 +791,34 @@ def classify_range_disagreement(
 
     3. If margin fails ("possibly a different, but perhaps still
        self-consistent, unit space" -- e.g. still-SI-not-yet-converted
-       entries, or Kelvin vs Celsius): fit the exact 2-point affine map
-       `label = a*registry + b` (`_affine_fit`, reported informationally
-       -- see its docstring on why it can never itself disagree with its
-       inputs) and re-check rule (c). GT extents genuinely outside the
-       registry range -> REAL_MISMATCH (independent of the unit-space
-       question). Otherwise, if GT extents were supplied ->
-       UNIT_SPACE_DIFFERENCE (self-consistent, benign for scoring, but
-       flagged as its own outcome -- this is the "still needs
-       display-unit conversion" backlog, design 7.47, NOT the same claim
-       as BENIGN_MARGIN). No GT extents supplied -> INDETERMINATE.
+       entries, or Kelvin vs Celsius): rule (c) still applies first and is
+       still universal -- GT extents genuinely outside the registry range
+       -> REAL_MISMATCH regardless of anything else (paper 18759/figure
+       12217). Otherwise, fit the exact 2-point affine map `label =
+       a*registry + b` (`_affine_fit`, reported informationally) and run
+       rule (e) (`unit_dimensional_analysis`, see its own docstring):
 
-       **Known limitation** (see module docstring): step 3's rule (c)
-       check cannot detect a registry endpoint that's simply wrong in a
-       way that still happens to bound the GT curve -- there is no third
-       independent constraint available to this pure function for that
-       case. It reliably catches only registry ranges that fail to
-       contain their own GT data (as the worked paper 18759/figure 12217
-       example does).
+       - `gt_unit`/`printed_unit` missing, `"-"`, or unparseable ->
+         rule (e) is INDETERMINATE (honest "don't know" -- do not guess).
+       - dimensionally incompatible -> REAL_MISMATCH (possibly a wrong
+         figure pairing entirely).
+       - compatible, and the expected conversion applied to the raw
+         registry endpoints reproduces the actual labels within
+         `margin_fraction * L` -> confirms UNIT_SPACE_DIFFERENCE (subject
+         to rule (c), already known to have passed by this point).
+       - compatible, expected match fails, but the fitted slope `a` is a
+         *clean power of ten* away from the dimensionally-expected factor
+         -> AXIS_SCALE_FACTOR (the axis prints its own scale-factor
+         annotation, e.g. "1000/T" -- paper 46278/figure 51437).
+       - compatible but neither of the above -> REAL_MISMATCH (the
+         endpoints don't encode the relationship the units declare).
+
+       If rule (e) came back INDETERMINATE (no usable unit strings) and
+       rule (c) also could not run (no GT extents) or ran with GT
+       contained, the branch's overall verdict is INDETERMINATE -- it no
+       longer defaults to UNIT_SPACE_DIFFERENCE on GT containment alone
+       (see module docstring: that was shown not to be independent
+       information).
 
     Any branch with a degenerate/non-computable `L` (equal labels, or
     non-positive labels on a log axis) short-circuits to INDETERMINATE
@@ -629,10 +876,12 @@ def classify_range_disagreement(
             Verdict.BENIGN_MARGIN, checks, f"BENIGN_MARGIN: {margin_check.detail}"
         )
 
-    # Margin failed -- possible unit-space difference. Fit the affine map
-    # (informational only, see _affine_fit's docstring) and fall back on
-    # rule (c), already computed above (and already known not to be False
-    # here).
+    # Margin failed -- possible unit-space difference, axis-label scale
+    # factor, or real mismatch. Fit the affine map (informational, see
+    # _affine_fit's docstring) and hand off to rule (e), the genuinely
+    # independent third constraint (see module docstring) -- rule (c),
+    # already computed above, is known not to be False here but is no
+    # longer sufficient on its own to confirm UNIT_SPACE_DIFFERENCE.
     affine = _affine_fit(label_min, label_max, reg_lo, reg_hi)
     if affine is None:
         affine_check = CheckResult(
@@ -650,15 +899,44 @@ def classify_range_disagreement(
         f"label = {a:.6g} * registry + {b:.6g} (exact fit through both endpoints -- "
         "informational; see module docstring on this check's limits)",
     )
-    checks = (margin_check, containment_check, affine_check, pixel_check)
 
-    if containment_check.passed is None:
+    unit_check, verdict_override = _unit_dimensional_check(
+        gt_unit,
+        printed_unit,
+        a,
+        reg_lo,
+        reg_hi,
+        label_min,
+        label_max,
+        L,
+        margin_fraction=margin_fraction,
+        scale_factor_tol=scale_factor_tol,
+    )
+    checks = (margin_check, containment_check, affine_check, unit_check, pixel_check)
+
+    if verdict_override is Verdict.REAL_MISMATCH:
         return RangeDisagreementVerdict(
-            Verdict.INDETERMINATE, checks, f"INDETERMINATE: {containment_check.detail}"
+            Verdict.REAL_MISMATCH, checks, f"REAL_MISMATCH: {unit_check.name} ({unit_check.detail})"
         )
-    # containment_check.passed is True here (False already returned above).
+    if verdict_override is Verdict.AXIS_SCALE_FACTOR:
+        return RangeDisagreementVerdict(
+            Verdict.AXIS_SCALE_FACTOR,
+            checks,
+            f"AXIS_SCALE_FACTOR: {unit_check.name} ({unit_check.detail})",
+        )
+
+    # No unit-based verdict was determined (unit_check.passed is None --
+    # missing/unparseable unit strings -- or True, a confirmed match).
+    # Either way, rule (c) must ALSO have actually run (not just "not
+    # False") for a confident UNIT_SPACE_DIFFERENCE -- both are required,
+    # same pattern as the same-unit branch above.
+    if containment_check.passed is None or unit_check.passed is None:
+        unresolved = [c for c in (containment_check, unit_check) if c.passed is None]
+        reason = "INDETERMINATE: " + "; ".join(f"{c.name} ({c.detail})" for c in unresolved)
+        return RangeDisagreementVerdict(Verdict.INDETERMINATE, checks, reason)
+
     return RangeDisagreementVerdict(
         Verdict.UNIT_SPACE_DIFFERENCE,
         checks,
-        f"UNIT_SPACE_DIFFERENCE: {affine_check.detail}; {containment_check.detail}",
+        f"UNIT_SPACE_DIFFERENCE: {affine_check.detail}; {unit_check.detail}",
     )

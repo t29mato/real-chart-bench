@@ -232,6 +232,14 @@ def _split_terms(text: str) -> list[tuple[str, int]]:
             continue
         if not piece:
             continue
+        if re.fullmatch(r"1(\.0+)?", piece):
+            # A bare "1" numerator (e.g. "1/K", the reciprocal-unit
+            # notation common on Arrhenius-plot axes, design 7.42) is
+            # dimensionless and contributes no term -- distinct from "-"
+            # (handled above, meaning "no unit at all"), this is "no unit
+            # *in this position*", e.g. the "1" in "1/K" vs the "K" that
+            # follows it.
+            continue
         # Whitespace between unit factors is implicit multiplication (e.g.
         # "W m^-1 K^-1"), same as an explicit "*" would be.
         for sub_piece in piece.split():

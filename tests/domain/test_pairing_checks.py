@@ -10,19 +10,39 @@ A 2026-09-02 review of all 208 axes across the 111 verified entries found
 the registry-vs-label relationship is AFFINE (`label = a*registry + b`),
 not multiplicative -- a pure ratio test is blind to additive unit
 differences (Kelvin vs Celsius) and undefined/misleading at a zero
-endpoint. `classify_range_disagreement` therefore has four outcomes, not
-three: BENIGN_MARGIN (same unit space, residual is just axis-framing
-headroom), UNIT_SPACE_DIFFERENCE (a different but self-consistent unit
-space -- benign for scoring, but a distinct "still needs display-unit
-conversion" backlog, NOT the same claim as BENIGN_MARGIN), REAL_MISMATCH,
-and INDETERMINATE.
+endpoint.
+
+A same-day follow-up correction found that GT-extent containment (used as
+the different-unit-space branch's gate in the first version of this
+module) is NOT an independent third constraint -- any monotonic affine
+map preserves interval containment, so it can never disagree with the
+endpoints it was fit from. The genuinely independent third constraint is
+the GT curve's own physical unit vs. the printed axis's own unit
+(`domain/unit_conversion.py::si_to_display_factor`), which implies an
+expected conversion with no reference to the endpoint values at all.
+`classify_range_disagreement` therefore has FIVE outcomes: BENIGN_MARGIN
+(same unit space, residual is just axis-framing headroom),
+UNIT_SPACE_DIFFERENCE (a different but self-consistent unit space --
+benign for scoring, a distinct "still needs display-unit conversion"
+backlog, NOT the same claim as BENIGN_MARGIN, now actually *evidenced* by
+the unit strings rather than assumed from containment alone),
+AXIS_SCALE_FACTOR (dimensionally identical units, but the endpoints
+cleanly imply a power-of-ten multiplier -- the printed axis carries its
+own scale-factor annotation, e.g. "1000/T"), REAL_MISMATCH, and
+INDETERMINATE.
 
 Where possible, tests use REAL numbers from `data/verified_pairs/` (cited
 by paper_id/figure_id) rather than invented ones, since this module's own
-docstring documents a genuine mathematical limitation (see
-`test_large_margin_violation_with_contained_gt_is_still_unit_space_difference`)
-and real data is the only way to be honest about what it does and doesn't
-catch.
+docstring documents a genuine mathematical limitation and real data is
+the only way to be honest about what it does and doesn't catch. One
+citation from the correction's own instructions (paper 17038/figure
+20816's x-axis GT unit) did not match the committed data when checked
+(its `unit_x` is `'nm'`, not `'-'`) -- the dimensionless/missing-unit
+tests below use synthetic unit strings instead, on top of otherwise-real
+registry/label/GT numbers, and a real `'-'`-unit entry (paper 10939,
+figure 1530's y-axis, ZT) is cited separately for context even though its
+margin passes (same-unit branch, so it never reaches the unit-dimensional
+check at all).
 
 Priority is auditability over accuracy (CLAUDE.md) -- every test also
 checks that the returned verdict carries *which* sub-check fired, not just
@@ -208,19 +228,25 @@ class TestClassifyRangeDisagreementBenignMargin:
 
 
 class TestClassifyRangeDisagreementUnitSpaceDifference:
-    """Real registry-vs-label-vs-GT numbers from data/verified_pairs/,
-    covering: the zero-endpoint case, negative-valued axes, an additive
-    (Kelvin/Celsius) offset, and a clean x1000 not-yet-converted axis --
-    the exact scenarios the 2026-09-02 review found the old ratio-only
-    rule (a) mishandled.
+    """Real registry-vs-label-vs-GT-vs-unit numbers from
+    data/verified_pairs/, covering: the zero-endpoint case, negative-valued
+    axes, an additive (Kelvin/Celsius) offset, and a clean axis-label
+    scale factor -- the exact scenarios the 2026-09-02 review found the
+    old ratio-only rule (a) mishandled, now resolved via the genuinely
+    independent unit-string constraint (rule (e)) instead of the
+    non-independent GT-containment-only gate the first version of this
+    module used.
+
+    Each real case is shown twice: WITHOUT unit strings (INDETERMINATE --
+    honest "can't confirm" now that GT containment alone is known not to
+    be independent evidence) and WITH them (resolves to a definite
+    verdict) -- so the value of the extra constraint is visible in the
+    test names themselves, per the correction's instruction.
     """
 
-    def test_clean_x1000_still_si_axis_is_unit_space_difference(self):
+    def test_axis_scale_factor_without_units_is_indeterminate(self):
         # paper 46278, figure 51437, x-axis: registry [0.0008, 0.0018]
-        # (1/K) vs printed labels (0.8, 1.8) ("1000/T (1/K)") -- exactly
-        # x1000 at both endpoints. The known "still in SI, not yet
-        # converted to display units" backlog (design 7.47), not an
-        # error.
+        # (K^-1) vs printed labels (0.8, 1.8) ("1000/T (1/K)").
         verdict = classify_range_disagreement(
             label_min=0.8,
             label_max=1.8,
@@ -230,18 +256,36 @@ class TestClassifyRangeDisagreementUnitSpaceDifference:
             gt_extents=(0.0008906, 0.001745),
         )
 
-        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
-        affine_check = _check(verdict, "affine_fit")
-        assert affine_check.passed is True
-        assert "1000" in affine_check.detail
+        assert verdict.verdict is Verdict.INDETERMINATE
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is None
 
-    def test_kelvin_celsius_offset_is_unit_space_difference(self):
-        # paper 4965, figure 13164, x-axis: registry [298.15, 353.15] K
-        # vs printed labels (30, 80) degC -- a pure additive offset a
-        # ratio test can never see (b ~= -241, not a clean -273.15
-        # because the registry's low end also carries a ~5K framing
-        # margin -- see the module docstring on this being an inherent
-        # 2-endpoint-fit limitation, not a bug).
+    def test_axis_scale_factor_with_units_resolves_to_axis_scale_factor(self):
+        # Same as above, but with the real unit strings supplied: GT unit
+        # 'K^(-1)', printed axis unit '1/K' -- DIMENSIONALLY IDENTICAL
+        # (dimensional analysis predicts factor 1), yet the endpoints
+        # cleanly imply a=1000. This is the "axis prints its own
+        # 1000/T-style scale-factor annotation" signature, not a unit
+        # mismatch and not the SI-not-yet-converted backlog (nothing here
+        # actually needs unit conversion) -- hence its own
+        # AXIS_SCALE_FACTOR outcome rather than UNIT_SPACE_DIFFERENCE.
+        verdict = classify_range_disagreement(
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            scale=ScaleType.LINEAR,
+            gt_extents=(0.0008906, 0.001745),
+            gt_unit="K^(-1)",
+            printed_unit="1/K",
+        )
+
+        assert verdict.verdict is Verdict.AXIS_SCALE_FACTOR
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is True
+        assert "10^+3" in unit_check.detail
+
+    def test_kelvin_celsius_offset_without_units_is_indeterminate(self):
         verdict = classify_range_disagreement(
             label_min=30.0,
             label_max=80.0,
@@ -251,16 +295,39 @@ class TestClassifyRangeDisagreementUnitSpaceDifference:
             gt_extents=(298.458, 348.303),
         )
 
-        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
-        affine_check = _check(verdict, "affine_fit")
-        assert affine_check.passed is True
+        assert verdict.verdict is Verdict.INDETERMINATE
 
-    def test_zero_registry_endpoint_does_not_crash_the_ratio_test_would_have(self):
-        # paper 44283, figure 38965, y-axis: registry [0.0, 2.5e-05] vs
-        # printed labels (0.5, 2.5) -- x1e5, but the low endpoint is
+    def test_kelvin_celsius_offset_with_units_resolves_to_unit_space_difference(self):
+        # paper 4965, figure 13164, x-axis: registry [298.15, 353.15] K
+        # vs printed labels (30, 80) degC -- a pure additive offset a
+        # ratio test can never see (fitted a~=0.909, b~=-241, not exactly
+        # 1/-273.15 because the registry's low end also carries a ~5K
+        # framing margin -- see _expected_additive_offset's use of
+        # margin_fraction*L, which absorbs exactly this kind of
+        # contamination the same way rule (b) does).
+        verdict = classify_range_disagreement(
+            label_min=30.0,
+            label_max=80.0,
+            reg_lo=298.15,
+            reg_hi=353.15,
+            scale=ScaleType.LINEAR,
+            gt_extents=(298.458, 348.303),
+            gt_unit="K",
+            printed_unit="°C",
+        )
+
+        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is True
+        assert "-273.15" in unit_check.detail
+
+    def test_zero_registry_endpoint_with_units_resolves_to_unit_space_difference(self):
+        # paper 44283, figure 38965, y-axis: registry [0.0, 2.5e-05] ohm*m
+        # vs printed labels (0.5, 2.5) mOhm*cm -- the low endpoint is
         # exactly 0, which is exactly what broke the old ratio-based rule
-        # (division by zero / silently skipped). The affine fit handles
-        # it natively via subtraction.
+        # (division by zero / silently skipped). The affine fit AND the
+        # expected-conversion check both handle it natively via
+        # subtraction, not division.
         verdict = classify_range_disagreement(
             label_min=0.5,
             label_max=2.5,
@@ -268,13 +335,13 @@ class TestClassifyRangeDisagreementUnitSpaceDifference:
             reg_hi=2.5e-05,
             scale=ScaleType.LINEAR,
             gt_extents=(2.53165e-06, 2.11392e-05),
+            gt_unit="ohm*m",
+            printed_unit="mΩ·cm",
         )
 
         assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
-        affine_check = _check(verdict, "affine_fit")
-        assert affine_check.passed is True
 
-    def test_negative_valued_axis_is_unit_space_difference(self):
+    def test_negative_valued_axis_with_units_resolves_to_unit_space_difference(self):
         # paper 4173, figure 20121, y-axis: registry [-5.6e-05, -4.4e-05]
         # V/K vs printed labels (-60, -40) uV/K -- x1e6 on negative
         # values.
@@ -285,21 +352,21 @@ class TestClassifyRangeDisagreementUnitSpaceDifference:
             reg_hi=-4.4e-05,
             scale=ScaleType.LINEAR,
             gt_extents=(-5.519232e-05, -4.628295e-05),
+            gt_unit="V*K^(-1)",
+            printed_unit="μV/K",
         )
 
         assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
 
-    def test_large_margin_violation_with_contained_gt_is_still_unit_space_difference(self):
-        # DOCUMENTED KNOWN LIMITATION (see module docstring): once rule
-        # (b) fails, the only further gate is rule (c) (registry contains
-        # GT) -- and for ANY monotonic affine map, GT contained in
-        # [reg_lo, reg_hi] is mathematically guaranteed to map inside
-        # [label_min, label_max] too. So a registry endpoint that is
-        # simply wrong by a wide margin, but still happens to bound the
-        # GT curve, is indistinguishable from a genuine unit-space
-        # difference using only these inputs -- it comes back
-        # UNIT_SPACE_DIFFERENCE, not REAL_MISMATCH. This test pins that
-        # behavior explicitly rather than leaving it as a surprise.
+    def test_large_margin_violation_without_units_is_indeterminate(self):
+        # This is the exact scenario that pinned the module's original
+        # "known limitation" (GT-extent containment alone cannot tell a
+        # genuine unit-space difference apart from a registry endpoint
+        # that's simply wrong by a wide margin but still happens to
+        # contain the GT curve). Now that containment alone is no longer
+        # sufficient for a confident verdict, this correctly comes back
+        # INDETERMINATE rather than the previous version's (wrong, per
+        # the correction) confident UNIT_SPACE_DIFFERENCE.
         verdict = classify_range_disagreement(
             label_min=300.0,
             label_max=800.0,
@@ -309,16 +376,137 @@ class TestClassifyRangeDisagreementUnitSpaceDifference:
             gt_extents=(310.0, 780.0),
         )
 
-        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+        assert verdict.verdict is Verdict.INDETERMINATE
         margin_check = _check(verdict, "endpoint_margin")
         assert margin_check.passed is False
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is None
 
-    def test_gt_outside_registry_range_is_real_mismatch(self):
+    def test_large_margin_violation_with_matching_units_resolves_to_real_mismatch(self):
+        # Same numbers as above, but now declaring "no unit conversion is
+        # expected at all" (gt_unit == printed_unit == 'K', an arbitrary
+        # same-unit choice for this synthetic case): the expected
+        # conversion (factor 1, no offset) applied to the raw registry
+        # endpoints does NOT reproduce the printed labels within margin,
+        # and 0.714286 is not a clean power of ten either -- so unlike the
+        # without-units case, this now correctly resolves to a definite
+        # REAL_MISMATCH instead of staying stuck at INDETERMINATE. This is
+        # the demonstration that the unit-string constraint actually
+        # closes the gap the without-units test above documents.
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=1000.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(310.0, 780.0),
+            gt_unit="K",
+            printed_unit="K",
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is False
+
+    def test_incompatible_unit_dimensions_is_real_mismatch(self):
+        # Synthetic numbers (no real committed example of this specific
+        # failure mode), but real, already-tested unit strings: a Seebeck
+        # coefficient (V*K^-1) GT curve cannot legitimately be printed on
+        # a conductivity (S/cm) axis -- strong evidence of a wrong figure
+        # pairing, not just a bad endpoint.
+        verdict = classify_range_disagreement(
+            label_min=100.0,
+            label_max=200.0,
+            reg_lo=0.001,
+            reg_hi=0.002,
+            scale=ScaleType.LINEAR,
+            gt_extents=(0.0012, 0.0018),
+            gt_unit="V*K^(-1)",
+            printed_unit="S/cm",
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is False
+        assert "incompatible" in unit_check.detail
+
+    def test_incompatible_dimensions_is_real_mismatch_even_with_no_gt_extents(self):
+        # Unlike a plain unit-space-difference match, incompatible
+        # dimensions is decided entirely from the unit strings -- it does
+        # not need GT extents (rule (c)) to resolve.
+        verdict = classify_range_disagreement(
+            label_min=100.0,
+            label_max=200.0,
+            reg_lo=0.001,
+            reg_hi=0.002,
+            scale=ScaleType.LINEAR,
+            gt_extents=(),
+            gt_unit="V*K^(-1)",
+            printed_unit="S/cm",
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+
+    def test_axis_scale_factor_resolves_even_with_no_gt_extents(self):
+        # Like the incompatible-dimensions case above, AXIS_SCALE_FACTOR
+        # is decided from the unit strings + fitted slope alone -- no GT
+        # extents needed.
+        verdict = classify_range_disagreement(
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            scale=ScaleType.LINEAR,
+            gt_extents=(),
+            gt_unit="K^(-1)",
+            printed_unit="1/K",
+        )
+
+        assert verdict.verdict is Verdict.AXIS_SCALE_FACTOR
+
+    def test_dimensionless_ambiguous_unit_is_indeterminate(self):
+        # '-' is this corpus's placeholder for "no printed unit captured /
+        # genuinely dimensionless" (e.g. ZT -- see paper 10939/figure
+        # 1530's real y-axis, though that entry's margin actually passes
+        # so it never reaches this branch). Per the correction: "do not
+        # guess" -- '-' must not be treated as an implicit match.
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=1000.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(310.0, 780.0),
+            gt_unit="-",
+            printed_unit="-",
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is None
+
+    def test_unparseable_unit_string_is_indeterminate(self):
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=1000.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(310.0, 780.0),
+            gt_unit="K",
+            printed_unit="???garbled???",
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        unit_check = _check(verdict, "unit_dimensional_analysis")
+        assert unit_check.passed is None
+
+    def test_gt_outside_registry_range_is_real_mismatch_regardless_of_units(self):
         # paper 18759, figure 12217, y-axis: registry [25000, 135000] vs
         # printed labels (250, 1250). One of the four GT curves has
         # y-extents around 662-1029 -- entirely outside the registry's
-        # stated range. Rule (c) catches this directly, independent of
-        # the unit-space question the affine fit alone cannot resolve.
+        # stated range. Rule (c) is universal and catches this before
+        # rule (e) even runs -- no unit strings needed.
         verdict = classify_range_disagreement(
             label_min=250.0,
             label_max=1250.0,
@@ -333,13 +521,26 @@ class TestClassifyRangeDisagreementUnitSpaceDifference:
         assert containment_check.passed is False
 
     def test_missing_gt_extents_in_different_unit_branch_is_indeterminate(self):
+        # The unit strings here confirm a plain (margin-consistent) match
+        # (Kelvin/Celsius, not a scale-factor or incompatible-dimensions
+        # signal) -- that alone still requires rule (c) to have actually
+        # run before a confident UNIT_SPACE_DIFFERENCE, same as the
+        # same-unit branch's pattern. AXIS_SCALE_FACTOR and the
+        # incompatible-dimensions REAL_MISMATCH are different: both are
+        # decided purely from the unit strings + fitted slope, independent
+        # of GT, so they do NOT need GT extents to resolve (see
+        # test_axis_scale_factor_with_units_resolves_to_axis_scale_factor,
+        # which passes real GT extents anyway but doesn't strictly need
+        # to).
         verdict = classify_range_disagreement(
-            label_min=0.8,
-            label_max=1.8,
-            reg_lo=0.0008,
-            reg_hi=0.0018,
+            label_min=30.0,
+            label_max=80.0,
+            reg_lo=298.15,
+            reg_hi=353.15,
             scale=ScaleType.LINEAR,
             gt_extents=(),
+            gt_unit="K",
+            printed_unit="°C",
         )
 
         assert verdict.verdict is Verdict.INDETERMINATE
@@ -465,17 +666,36 @@ class TestVerdictAuditTrail:
         names = {c.name for c in verdict.checks}
         assert names == {"endpoint_margin", "registry_contains_gt", "endpoint_pixel_bounds"}
 
-    def test_different_unit_branch_checks_tuple_includes_affine_fit(self):
+    def test_different_unit_branch_checks_tuple_includes_affine_fit_and_unit_check(self):
         verdict = classify_range_disagreement(
-            label_min=0.8, label_max=1.8, reg_lo=0.0008, reg_hi=0.0018, gt_extents=(0.001,)
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            gt_extents=(0.001,),
+            gt_unit="K^(-1)",
+            printed_unit="1/K",
         )
         names = {c.name for c in verdict.checks}
         assert names == {
             "endpoint_margin",
             "registry_contains_gt",
             "affine_fit",
+            "unit_dimensional_analysis",
             "endpoint_pixel_bounds",
         }
+
+    def test_axis_scale_factor_reason_names_the_unit_check(self):
+        verdict = classify_range_disagreement(
+            label_min=0.8,
+            label_max=1.8,
+            reg_lo=0.0008,
+            reg_hi=0.0018,
+            gt_extents=(0.0008906, 0.001745),
+            gt_unit="K^(-1)",
+            printed_unit="1/K",
+        )
+        assert "unit_dimensional_analysis" in verdict.reason
 
 
 if __name__ == "__main__":

@@ -149,6 +149,21 @@ class TestDimensionlessAndMissingUnit:
         assert _approx(si_to_display_factor("", ""), 1.0)
 
 
+class TestReciprocalUnitNotation:
+    """A bare "1" numerator (e.g. "1/K") is common reciprocal-unit notation
+    on Arrhenius-plot axes (design 7.42) -- found while wiring
+    domain/pairing_checks.py's unit-dimensional check against real
+    axis_pixel_candidates.json data (paper 46278/figure 51437's x-axis:
+    GT unit "K^(-1)", printed axis unit "1/K")."""
+
+    def test_bare_one_over_kelvin_matches_inverse_kelvin_notation(self):
+        assert _approx(si_to_display_factor("K^(-1)", "1/K"), 1.0)
+        assert _approx(si_to_display_factor("K^(-1)", "K^-1"), 1.0)
+
+    def test_bare_one_numerator_with_prefixed_unit(self):
+        assert _approx(si_to_display_factor("s^(-1)", "1/ms"), 1e-3)
+
+
 class TestRealWorldNotationVariants:
     """Regression cases from cross-checking two independent vision-model
     reads of all 111 verified_pairs axis labels (2026-09-01): every
