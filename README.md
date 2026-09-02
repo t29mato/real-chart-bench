@@ -53,7 +53,21 @@ calibration (`x_range`, `y_range`, `x_scale`/`y_scale` — linear or log,
 independently per axis). v0 scope is curve-tracing given calibration, not
 full chart understanding including reading tick labels (design §3.1, mirrors
 CHART-Infographics' task 6a/6b split). Return one `Curve` per detected series
-in data space; the harness handles matching and scoring.
+in data space (whatever unit the given calibration implies — you never need
+to know or convert units yourself, just map pixels to the given range); the
+harness handles matching and scoring.
+
+**Units (design §7.47):** most `verified_pairs` entries store `x_range`/
+`y_range`/`ground_truth` in the *paper's own printed display units* (e.g.
+µV/K, S/cm), not Starrydata's original SI units — converted once, backed by
+independently-verified axis-tick readings, specifically so a human auditing
+the benchmark can compare ground truth against the source chart with no
+mental unit conversion. A minority of entries (no confident conversion
+factor yet, or a genuinely non-linear axis like a raw-log10-printed scale)
+remain in SI; either way, `x_range`/`y_range` and the curves under that
+`figure_id` are always in the *same* unit space as each other, so nothing
+about implementing `ModelRunnerPort` changes — the given calibration is
+self-consistent regardless of which unit convention a particular entry uses.
 
 See `src/real_chart_bench/adapter/naive_cv_extractor.py` for a complete
 reference implementation, and `scripts/eval/run_baselines.py` for how to wire

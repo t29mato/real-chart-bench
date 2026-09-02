@@ -214,11 +214,18 @@ def _derive_factor(
         }
 
     # multiplicative fit failed -- check whether it's actually additive
-    # (display = SI + offset), the degC-vs-K signature.
+    # (display = SI + offset), the degC-vs-K signature. Never valid for a
+    # log-scale axis: log-scale values are strictly positive and plotted
+    # logarithmically, so an additive shift is physically meaningless there
+    # (and, mechanically, can turn small positive values negative -- see
+    # design 7.47, where this false-matched on a log-y entry and corrupted
+    # the stored curve with negative y-values).
     offset_lo = label_min - lo
     offset_hi = label_max - hi
     offset_denom = max(abs(offset_lo), abs(offset_hi), 1.0)
-    additive_agree = abs(offset_lo - offset_hi) / offset_denom <= _FACTOR_AGREEMENT_TOL * 3
+    additive_agree = scale != "log" and abs(offset_lo - offset_hi) / offset_denom <= (
+        _FACTOR_AGREEMENT_TOL * 3
+    )
     if additive_agree:
         return {
             "kind": "additive",
