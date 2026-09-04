@@ -3124,3 +3124,110 @@ import-linter clean。
 無関係)があることの発見につながった。目視レビューUIとドメイン専門家の判断が
 一致しない場面は、単なる「レビュー待ちの1件」として片付けず、ルール側の設計を
 疑う機会として扱うべき、という運用上の教訓を記録する。
+
+### 7.56 rule (f)を新設 — 印字ラベルそのものがlog10値になっている軸(paper 46278の6件、オーナーの目視レビューキュー最大のブロック)を`INDETERMINATE`から救う(2026-09-04、司令塔経由の直接タスク)
+
+**きっかけ**: paper 46278の6件の図(51437〜51442)が`classify_range_disagreement`
+から一貫して`INDETERMINATE`(理由: "degenerate or non-computable label span
+(L=0 or non-positive log labels)")として返り、オーナーの目視レビューキューの
+**単一最大のブロック**になっていた。しかし実際には曖昧なケースではない——
+`data/verified_pairs/crops/46278/fig4a.png`を直接読むと、y軸の**タイトル**は
+`log σ (Scm⁻¹)`、y軸の**目盛りラベル自体**が文字どおり`-1, -2, -3, -4, -5, -6`と
+印字されている。つまりこれは「σの対数軸」ではなく、「**すでにlog10(σ/S·cm⁻¹)を
+プロットした線形軸**」である(`axis_pixel_candidates.json`の`y_min_label=-6`・
+`y_max_label=-1`・`y_axis_unit="Scm^-1"`・`y_axis_label_raw="log σ (Scm⁻¹)"`は
+正しい読み取り)。一方`registry.json`は`y_scale="log"`・`y_range=[0.0001, 10.0]`
+(ohm^-1*m^-1 = S/m)、GT曲線もS/mで0.00083〜3.4を張る。1e-4〜10 S/mはS/cmに
+換算すると1e-6〜1e-1、その常用対数がちょうど**-6〜-1**——印字ラベルと完全一致する。
+**registryとGTは終始正しく、互いに整合していた。**壊れていたのはチェッカー側:
+`scale=LOG`が立っているため印字ラベルにそのまま`log10()`を取ろうとし、
+`log10(-6)`が定義されないため無条件に`INDETERMINATE`へ倒れていた——このケースは
+既に§7.42(初出)・§7.53付近(監査ツール側のアドホックな特殊扱い)で個別に
+認識されていたが、`domain/pairing_checks.py`本体の5値分類ロジックには一度も
+組み込まれていなかった。
+
+**設計判断——検出は構造的に、確定は数値でのみ**: rule (f)
+(`_log_printed_labels_check`)は2段階:
+
+1. **検出**(構造的シグネチャ、ユニット文字列不要): `scale=LOG`かつ印字ラベルの
+   少なくとも一方が非正——このコーパスの他の全log軸は正の目盛り値
+   (10, 100, 1000, ...)を印字しており、`_label_span`/`_transform`が
+   `log10()`を取れない非正ラベルは、それ自体がこの特殊シグネチャの強い
+   構造的手がかりである。
+2. **確定**(実際に判定を決めるのはここ): 両registry端点が正であること、
+   `gt_unit`/`printed_unit`(rule (e)と全く同じ`si_to_display_factor`経由、
+   ラベル値を一切参照しない独立ルート)が次元的に両立すること、そして——
+   最も強い確認——`log10(registry端点 × expected_k)`が印字ラベルを
+   `margin_fraction * L`(Lはラベル自体の生の数値スパン——ラベルは既に
+   「比較空間」にあるため二重にlog10を取らない)以内で再現すること。
+   46278では`log10(0.0001 × 0.01) = -6 = y_min_label`、
+   `log10(10.0 × 0.01) = -1 = y_max_label`と、誤差ゼロで一致する。
+
+軸タイトルのテキスト(`y_axis_label_raw`、例: `"log σ (Scm⁻¹)"`)は確信度を
+上げる裏付けにはなるが、LLM読み取りの自由テキストであり単独の判断根拠には
+しない——本実装はこのテキストを一切パースせず、数値的確定のみで判定する。
+
+**確定した場合の判定値: `BENIGN_MARGIN`(`AXIS_SCALE_FACTOR`ではなく)**。
+この軸の実際の関係は`label = log10(registry * expected_k)`であり、これは
+`_affine_fit`が仮定するアフィン関係(`label = a*registry + b`)では**ない**
+——`AXIS_SCALE_FACTOR`を適用すると`_affine_fit`が端点2点から
+`a=(-1-(-6))/(10-0.0001)≈0.5`という直線当てはめを行い、GTの各点に
+無意味な0.5倍を掛けてしまう。`UNIT_SPACE_DIFFERENCE`も不適合——このケースの
+registryは「まだ表示単位に変換されていないSI値」ではなく、そもそも印字軸が
+どの単位でも線形になっていない。`BENIGN_MARGIN`が実際に正しい:
+`display_conversion`は恒等`(1.0, 0.0)`を返し、registryの値(線形のS/m)を
+`registry.json`が既に宣言している`y_scale="log"`のままプロットすればよく、
+matplotlib自身のlog軸描画が印字チャートの等間隔対数配置を自動的に再現する
+(実際に再生成した`plots/46278_51437_4A_sigma.png`は元図とdecade幅・曲線形状
+とも視覚的に一致することを確認済み)。rule (c)(GT containment)は他の全分岐と
+同様に普遍的にREAL_MISMATCHを発火させうる(確定していても免除しない)。
+rule (d)(pixel bounds)はunit-space-difference分岐と同じ理由(非正のログ軸
+ラベルは`_project_to_pixel`自身の`_transform`でも投影できない)で情報用の
+みとし、判定をゲートしない。**確定できなかった場合は`INDETERMINATE`のまま**
+——推測はしない。
+
+**実装**: `_log_printed_labels_check`(rule (f))を新設し、
+`classify_range_disagreement`冒頭の「Lが計算不能(=0またはNone)なら即
+INDETERMINATE」という早期リターンの直前に割り込ませた。`scale=LOG`かつ
+rule (f)が確定した場合のみ、rule (c)(`_registry_containment_check`)・
+rule (d)(`_pixel_bounds_check`、情報用)を計算して`BENIGN_MARGIN`
+(またはrule (c)失敗時`REAL_MISMATCH`)を返す。確定しない場合・
+`scale=LINEAR`の場合は、既存の単一チェック
+(`endpoint_margin`、`passed=None`)による`INDETERMINATE`を完全にそのまま
+維持(`scale=LOG`で確定しなかった場合のみ、監査証跡として`log_printed_labels`
+チェックを追加で含める)。新規の閾値定数は導入していない——`margin_fraction`
+(既定`_MARGIN_FRACTION`)をrule (e)と同じ流儀でそのまま再利用。
+
+**テスト**: `TestClassifyRangeDisagreementLogPrintedLabels`を新設(7件、
+実データ+意図的な否定ケース): paper 46278/figure 51437のy軸の実数値
+(label -6/-1、`Scm^-1`、registry [0.0001, 10.0]、`y_scale=log`、GT
+`ohm^(-1)*m^(-1)`で0.00083〜3.4)が`BENIGN_MARGIN`に解決すること
+(gap_lo=gap_hi=0で確定)、確定していてもGTがregistry範囲外なら
+`REAL_MISMATCH`のままなこと(rule (c)の普遍性)、印字単位がSI単位と
+同一(`expected_k=1`)で算術が再現しない否定ケースが`INDETERMINATE`のまま
+なこと、unit文字列なし・registry端点が非正の場合もそれぞれ
+`INDETERMINATE`(理由つき)であること、通常の正のラベルを持つlog軸
+(paper 17044/figure 20740のy軸、0.001/0.01)がこの新ルールの影響を
+一切受けないこと(`log_printed_labels`が`checks`に現れない)、
+LINEAR軸の既存の退化スパンテストが1チェックのみの`INDETERMINATE`を
+そのまま維持すること、を確認。pytest 485 passed(478+7)、ruff clean、
+import-linter clean。
+
+**結果(監査を再実行、111件・214軸)**: `benign_margin=189`(§7.55時点の
+183→**189**、+6)、`unit_space_difference=8`(不変)、`axis_scale_factor=6`
+(不変、46278のx軸は本節の変更対象外でそのまま)、`real_mismatch=10`
+(不変)、`indeterminate=1`(§7.55時点の7→**1**、-6)。想定どおり、
+46278の6件のy軸がまるごと`indeterminate`から`benign_margin`へ移動し、
+他の判定には一切波及していない。残る唯一の`indeterminate`
+(21682/fig 4b、y軸)は本タスクと無関係(`printed_unit`が未取得なだけの
+既知の別件)。
+
+**registryとGTの正しさについての明記**: この節が修正したのは
+`domain/pairing_checks.py`のバグであり、`data/verified_pairs/registry.json`
+/`ground_truth.json`/`axis_pixel_candidates.json`のいずれにも誤りは
+なかった(本タスクではこれら3ファイルを一切変更していない)。今回の6件は
+paper 46278の`registry.json`の`evidence`欄(2026-08-30時点)に既に
+「y軸はlog10(σ in S/cm)そのもの」という正しい解釈が明記されていたにも
+関わらず、チェッカー側がその軸を表現できずに機械的に`INDETERMINATE`を
+返し続けていた、という**チェッカーの表現力の限界**であって、データの欠陥
+ではない。
