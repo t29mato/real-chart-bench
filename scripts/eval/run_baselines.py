@@ -35,6 +35,7 @@ import pymupdf
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
+from real_chart_bench.adapter.achromatic_cv_extractor import AchromaticCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.panel_layout import PyMuPdfPanelSplitter  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
@@ -229,8 +230,81 @@ def run(model_id: str, model_name: str, model) -> dict:
     return payload
 
 
+NAIVE_CV_RESULTS_PATH = RESULTS_DIR / "naive-cv-v0.json"
 LINEFORMER_RESULTS_PATH = RESULTS_DIR / "lineformer-pretrained.json"
 LINEFORMER_COMPARABLE_SUBSET_PATH = RESULTS_DIR / "lineformer-pretrained-comparable-subset.json"
+
+
+def _achromatic_vs_hue_zero_subset(achromatic_payload: dict) -> dict | None:
+    """The entire reason achromatic-cv-v0 exists (task brief, 2026-09-04
+    司令塔 instruction): naive-cv-v0's hue-bucket colour mask scores exactly
+    0.0 on several real figures because it structurally cannot see
+    black/grey line art (see docs/experiments/2026-09-02-failure-analysis.md
+    and this module's achromatic-cv-v0 registration below). This filters
+    `achromatic_payload`'s per-figure scores down to exactly the figure_ids
+    where results/naive-cv-v0.json's own already-published summary_score is
+    0.0 -- i.e. the naive baseline's confirmed blind spot -- and reports
+    achromatic-cv's mean there. That is the number that says whether this
+    baseline was worth building; the overall mean_summary_score alone would
+    not show it, since achromatic-cv's own blind spot (saturated colour) is
+    the converse of naive-cv's and the two only partially overlap in
+    figure-level difficulty.
+
+    Deliberately read-only with respect to results/naive-cv-v0.json --
+    reads its already-committed scores rather than re-running naive-cv-v0
+    (which would rewrite that file; out of scope here, see task brief:
+    "Do NOT modify results/naive-cv-v0.json").
+
+    Returns None if results/naive-cv-v0.json isn't present, or if it
+    contains no zero-score figures (nothing to compare against)."""
+    if not NAIVE_CV_RESULTS_PATH.exists():
+        return None
+    naive_cv = json.loads(NAIVE_CV_RESULTS_PATH.read_text())
+    zero_score_figure_ids = [
+        p["figure_id"] for p in naive_cv["per_figure"] if p["summary_score"] == 0.0
+    ]
+    if not zero_score_figure_ids:
+        return None
+
+    by_figure_id = {p["figure_id"]: p for p in achromatic_payload["per_figure"]}
+    missing = [fid for fid in zero_score_figure_ids if fid not in by_figure_id]
+    comparable_figure_ids = [fid for fid in zero_score_figure_ids if fid in by_figure_id]
+    if not comparable_figure_ids:
+        raise ValueError(
+            "achromatic-cv run shares no figures with naive-cv's zero-score set -- "
+            "nothing to compare"
+        )
+
+    per_figure = [by_figure_id[fid] for fid in comparable_figure_ids]
+    mean_score = sum(p["summary_score"] for p in per_figure) / len(per_figure)
+
+    return {
+        "model_id": "achromatic-cv-v0-hue-zero-subset",
+        "model_name": (
+            "Achromatic CV (grey-level clustering baseline) -- "
+            "restricted to naive-cv-v0's zero-score figures"
+        ),
+        "dataset_version": (
+            f"{naive_cv['dataset_version']}-hue-zero-subset-n{len(comparable_figure_ids)}"
+        ),
+        "run_at": achromatic_payload["run_at"],
+        "n_figures": len(per_figure),
+        "mean_summary_score": mean_score,
+        "per_figure": per_figure,
+        "excluded_figure_ids": missing,
+        "comparison_note": (
+            f"Restricted to the {len(zero_score_figure_ids)} figure_id(s) where "
+            f"results/naive-cv-v0.json ({naive_cv['dataset_version']}) scores exactly "
+            "0.0 -- naive-cv-v0's confirmed achromatic-line blind spot (see "
+            "docs/experiments/2026-09-02-failure-analysis.md). naive-cv-v0's own "
+            "mean_summary_score on this identical subset is trivially 0.0 by "
+            "construction (that is the selection criterion), so this file's "
+            f"mean_summary_score ({mean_score:.4f}) *is* the delta achromatic-cv-v0 "
+            "contributes on exactly the figures it was built for. See "
+            "excluded_figure_ids for any naive-cv-v0 zero-score figure achromatic-cv-v0 "
+            "was not scored on (e.g. no longer in the verified registry)."
+        ),
+    }
 
 
 def _lineformer_comparable_subset(full_payload: dict) -> dict | None:
@@ -395,6 +469,21 @@ def main() -> None:
             # longer applies, so remove it rather than leave it stale.
             LINEFORMER_COMPARABLE_SUBSET_PATH.unlink()
             print(f"removed stale {LINEFORMER_COMPARABLE_SUBSET_PATH}", file=sys.stderr)
+
+    achromatic_payload = run(
+        "achromatic-cv-v0",
+        "Achromatic CV (grey-level clustering baseline)",
+        AchromaticCvModelRunner(),
+    )
+    achromatic_out_path = RESULTS_DIR / f"{achromatic_payload['model_id']}.json"
+    achromatic_out_path.write_text(json.dumps(achromatic_payload, indent=2))
+    print(f"wrote {achromatic_out_path}", file=sys.stderr)
+
+    hue_zero_subset_payload = _achromatic_vs_hue_zero_subset(achromatic_payload)
+    if hue_zero_subset_payload is not None:
+        hue_zero_subset_path = RESULTS_DIR / f"{hue_zero_subset_payload['model_id']}.json"
+        hue_zero_subset_path.write_text(json.dumps(hue_zero_subset_payload, indent=2))
+        print(f"wrote {hue_zero_subset_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
