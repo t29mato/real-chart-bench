@@ -1,0 +1,65 @@
+{
+  "_comment": "レビューUIでオーナーが下した判定の追記型ログ。ブラウザのlocalStorageは端末ごとで項目IDが変わると失われるため、判定そのものはここに残す。判定は「エントリについての観察」であり、registry のフィールドを変えないもの(検出ルールが過敏だった等)もあるため registry.json とは分けている。",
+  "decisions": [
+    {
+      "reviewed_at": "2026-09-04T11:13:55Z",
+      "reviewer": "owner",
+      "item_id": "A-12217",
+      "paper_id": "18759",
+      "figure_id": "12217",
+      "figure_reference": "Figure 3(a)",
+      "question": "GT疑義の人間確認",
+      "verdict": "human_confirmed",
+      "note": "GTの間違い。これ、starrydataのデータ収集チームじゃない人がとったデータだわ。",
+      "acted_on": "registry.json の gt_suspect_status を llm_flagged -> human_confirmed に昇格。gt_issues エクスポートに初の実データとして出力された。"
+    },
+    {
+      "reviewed_at": "2026-09-04T11:13:55Z",
+      "reviewer": "owner",
+      "item_id": "C-1527",
+      "paper_id": "10939",
+      "figure_id": "1527",
+      "figure_reference": "3(a)",
+      "question": "レンジ不一致(endpoint_pixel_bounds)",
+      "verdict": "unclear",
+      "note": "ごめん意味がわからない。日本語で説明して。",
+      "acted_on": "検出ルール側の誤検知と判明(886px幅に対し6.30px=0.71%の外挿誤差。軸読み取りメモに「900は印字されていない」と既記載)。rule (d) の許容を固定3px -> 画像サイズの2% に変更し BENIGN_MARGIN に解消。あわせてUIの説明を英語の生ログから日本語の3段構成に作り直した。"
+    },
+    {
+      "reviewed_at": "2026-09-04T11:13:55Z",
+      "reviewer": "owner",
+      "item_id": "C-1529",
+      "paper_id": "10939",
+      "figure_id": "1529",
+      "figure_reference": "3(c)",
+      "question": "レンジ不一致(endpoint_pixel_bounds)",
+      "verdict": "unclear",
+      "note": "数値も XY軸の場所も合ってる気がする。日本語で教えて。また可能ならグラフに何がおかしいと思ってるのか書き込んで。",
+      "acted_on": "オーナーの判断が正しく、検出ルール側の誤検知(643px高に対し3.75px=0.58%。軸読み取りメモに「0.9ラベルはクロップで切れている」と既記載)。rule (d) 修正で BENIGN_MARGIN に解消。図に問題箇所を描き込む診断画像を追加した。"
+    },
+    {
+      "reviewed_at": "2026-09-04T12:16:57Z",
+      "reviewer": "owner",
+      "item_id": "44283_38971_y",
+      "paper_id": "44283",
+      "figure_id": "38971",
+      "figure_reference": "FIGURE3(A)",
+      "question": "図の中の位置がずれている疑い(endpoint_pixel_bounds)",
+      "verdict": "calibration_extrapolation",
+      "note": null,
+      "acted_on": "未反映。これで rule (d) が出した3件すべてがオーナー判断で良性となった(0.58% / 0.71% / 10.75%)。許容を15%に緩めればこの件も解消するが、そうすると rule (d) の残る発火は51%以上の単位空間差だけになり、他ルールでも捕捉済みのため rule (d) が実質無効になる。設計判断としてオーナーに提起する。"
+    },
+    {
+      "reviewed_at": "2026-09-04T12:16:57Z",
+      "reviewer": "owner",
+      "item_id": "17044_20740_y",
+      "paper_id": "17044",
+      "figure_id": "20740",
+      "figure_reference": "2a inset",
+      "question": "登録範囲とデータがはみ出している疑い(registry_contains_gt)",
+      "verdict": "unclear",
+      "note": "starrrydataへのリンクを出して欲しいです。そうすることで元のGTデータを確認できて、curatorによってstarrydataのチームじゃなければ納得するので、",
+      "acted_on": "レビューUIに Starrydata2 の該当論文ページへのリンクを追加した(/paperlist/data/{paper_id}/{projectname})。18759 と同じく curator の来歴で判断したい、という要望。判定自体は保留のまま。"
+    }
+  ]
+}
