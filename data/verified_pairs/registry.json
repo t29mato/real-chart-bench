@@ -977,16 +977,14 @@
     "evidence": "5 ground-truth curves (prop_x=Inverse temperature/K^-1, prop_y=log(Electrical conductivity)/S*m^-1) -- but all 5 curves have x-range exactly (0.0, 0.0), i.e. every x-value collapsed to zero. This is a ground-truth data quality defect (not a pairing/image problem): the underlying digitized data for this figure is unusable regardless of which of the 53 candidate images it might correspond to. Rejected on GT-quality grounds before any image was checked, per the design's 'GT quality check' step of the verification procedure. [2026-09-04 CORRECTION: この却下理由(x-range が (0.0, 0.0))は誤りである。figshare公開スナップショットから復元した実 x は 0.001109〜0.003392 K^-1 で非ゼロ。~1e-3 の値を表示桁不足で 0.0 と記録した表示バグだった。却下自体はオーナー判断で維持されるが、理由は x ではなく y 側(log(σ) の値が -300〜-1000 と対数値としてありえない大きさ)である。data/verified_pairs/rejected_candidates_gt.json 参照。]",
     "license_id": "cc-by",
     "rejection_category": "gt_suspect",
-    "gt_suspect_status": "human_confirmed",
+    "gt_suspect_status": "llm_flagged",
     "rejection_evidence": {
       "axis_range_mismatch": true,
       "point_count_mismatch": null,
       "y_value_offset_magnitude": null,
       "missing_series": null
     },
-    "gt_suspect_reviewed_at": "2026-09-04",
-    "gt_suspect_reviewed_by": "owner",
-    "gt_suspect_review_note": "2026-09-04 owner review: 却下のまま維持(「グラフが理解できない。利用しないで。」)。ただし記録されていた却下理由は誤りであることが判明したため訂正する。evidence は「5曲線すべての x-range が exactly (0.0, 0.0)」としていたが、figshare公開スナップショットから復元した実データの x は 0.001109〜0.003392 K^-1 で明確に非ゼロ。値が ~1e-3 のため表示桁を落として 0.0 と記録されたもの。真の問題は y 側で、prop_y=log(Electrical conductivity) の値が -300〜-1000 と対数値としてありえない大きさ(印刷軸のおよそ100倍)。paper 47139/48697 と同型。"
+    "gt_suspect_review_note": "2026-09-04 owner review: 却下のまま維持(「グラフが理解できない。利用しないで。」)。ただし記録されていた却下理由は誤りであることが判明したため訂正する。evidence は「5曲線すべての x-range が exactly (0.0, 0.0)」としていたが、figshare公開スナップショットから復元した実データの x は 0.001109〜0.003392 K^-1 で明確に非ゼロ。値が ~1e-3 のため表示桁を落として 0.0 と記録されたもの。真の問題は y 側で、prop_y=log(Electrical conductivity) の値が -300〜-1000 と対数値としてありえない大きさ(印刷軸のおよそ100倍)。paper 47139/48697 と同型。 [2026-09-04 撤回: この human_confirmed は取り下げる。確認の根拠として司令塔が「log(σ) の値が -300〜-1000 と対数値としてありえない大きさ」と説明したが、これは誤りだった。本コーパスでは prop_y=log(Electrical conductivity) の値は **100 × log10(σ [S/cm])** で格納されている(design §7.58)。÷100 すると -9.91〜-3.05 となり、印刷軸 -10〜-3.0 とほぼ完全に一致する。同型の 47139/48697 も -6.39〜-4.41 で印刷軸 -7〜-2.5 の内側に収まる。したがってGT自体は正しかった可能性が高く、『約100倍ずれ』という却下理由はこちらの規約の読み違いだった。オーナーの『却下のまま・利用しない』という判断は維持する(status は rejected のまま)。撤回したのは『Starrydata側のデータが誤っている』という主張のみで、これは私の誤情報に基づいて上流への不具合報告に載ってしまっていたため。llm_flagged に戻し、再確認はオーナーの判断を待つ。]"
   },
   {
     "paper_id": "27759",
