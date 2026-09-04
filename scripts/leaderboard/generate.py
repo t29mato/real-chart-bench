@@ -131,17 +131,32 @@ _PENDING_SECTION_TEMPLATE = """<section class="dataset-section">
 </section>"""
 
 # design task 2026-09-02 ("Task 1"): naive-cv-v0 is scored against every
-# currently-VERIFIED figure (111 as of this writing) while
-# lineformer-pretrained.json is stuck at the 42 it was last run against
+# currently-VERIFIED figure (110 as of this writing) while
+# lineformer-pretrained.json is stuck at the 45 it was last run against
 # (LineFormer can't be re-run here -- needs mmcv/mmdetection via a Colab
 # notebook, design §7.16) -- those two mean_summary_scores are NOT
 # comparable on their own. run_baselines.py additionally emits
 # naive-cv-v0-lineformer-subset.json: naive-cv rescored on exactly
-# LineFormer's own figure set (same dataset_version string, reused
-# verbatim -- see scripts/eval/run_baselines.py's
+# LineFormer's own figure set (see scripts/eval/run_baselines.py's
 # _lineformer_comparable_subset). This callout surfaces the one number pair
 # that IS a fair head-to-head, right next to the table, instead of leaving
 # the reader to notice the matching dataset_version themselves.
+#
+# 2026-09-04: LineFormer's original figure set can drift out from under it
+# -- paper 21682/figure 21284 was VERIFIED when LineFormer was scored on it
+# but was later REJECTED (rejection_category "image", printed y-axis has no
+# recoverable unit). When that happens, naive-cv-v0-lineformer-subset.json
+# no longer shares lineformer-pretrained.json's dataset_version (see
+# _lineformer_comparable_subset) -- it gets a distinct one naming the
+# shrunk figure count instead, since reusing LineFormer's original version
+# string would misrepresent comparability to LineFormer's *original*,
+# larger-figure-set score. In that case the fair counterpart is
+# results/lineformer-pretrained-comparable-subset.json: LineFormer's own
+# mean recomputed on that identical shrunk set by pure arithmetic over its
+# already-published per_figure scores (not a re-run) --
+# _render_head_to_head_html prefers that file over lineformer-pretrained.json
+# whenever both exist and only the comparable-subset one actually shares the
+# naive-cv subset's dataset_version.
 _HEAD_TO_HEAD_TEMPLATE = """<div class="head-to-head">
 <strong>Head-to-head, same figures only:</strong> the sections above are
 each scored against a different figure count (see each section's own
@@ -160,9 +175,18 @@ _HEAD_TO_HEAD_ROW_TEMPLATE = (
 
 
 def _render_head_to_head_html(results_by_model_id: dict) -> str:
-    lineformer = results_by_model_id.get("lineformer-pretrained")
     subset = results_by_model_id.get("naive-cv-v0-lineformer-subset")
-    if lineformer is None or subset is None or lineformer.get("status") == "pending_external_run":
+    if subset is None:
+        return ""
+    # Prefer the recomputed-on-the-same-subset LineFormer figure (only
+    # written when the comparable set has drifted from LineFormer's
+    # original run, see scripts/eval/run_baselines.py's
+    # _lineformer_recomputed_subset); fall back to LineFormer's own
+    # published result for the common no-drift case.
+    lineformer = results_by_model_id.get("lineformer-pretrained-comparable-subset")
+    if lineformer is None or lineformer["dataset_version"] != subset["dataset_version"]:
+        lineformer = results_by_model_id.get("lineformer-pretrained")
+    if lineformer is None or lineformer.get("status") == "pending_external_run":
         return ""
     if lineformer["dataset_version"] != subset["dataset_version"]:
         # The two rows were meant to be built on the same figure set (see

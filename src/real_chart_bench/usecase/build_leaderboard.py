@@ -11,13 +11,13 @@ never scored and always rank after every scored row.
 
 Ranking is scoped to dataset_version (2026-09-02, HQ instruction: "never
 rank across figure sets"). Two runs are only a fair comparison if they were
-scored on the *same* figures — a naive baseline scored on 111 verified
-figures and a specialist model stuck at an older, harder 42-figure subset
+scored on the *same* figures — a naive baseline scored on every currently
+VERIFIED figure and a specialist model stuck at an older, harder subset
 (design §7.16: some models can only be re-run externally) are not
 comparable just because both produced a "mean_summary_score". Showing them
 in one globally-sorted table with a single "Rank 1" on the higher raw
 number reads as "the baseline beats the specialist," which is false: on the
-45 figures they share, the specialist wins. So results are grouped by
+figures they share, the specialist wins. So results are grouped by
 dataset_version and ranked *within* each group — each group's own best
 scorer is rank 1, regardless of how its raw score compares to a different
 group's scores.

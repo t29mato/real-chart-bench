@@ -230,6 +230,7 @@ def run(model_id: str, model_name: str, model) -> dict:
 
 
 LINEFORMER_RESULTS_PATH = RESULTS_DIR / "lineformer-pretrained.json"
+LINEFORMER_COMPARABLE_SUBSET_PATH = RESULTS_DIR / "lineformer-pretrained-comparable-subset.json"
 
 
 def _lineformer_comparable_subset(full_payload: dict) -> dict | None:
@@ -237,19 +238,38 @@ def _lineformer_comparable_subset(full_payload: dict) -> dict | None:
     notebook, design §7.16) -- results/lineformer-pretrained.json is stuck
     at whatever verified-pair count it was last run against (currently 42
     real figures + 3 synthetic fixtures), while `full_payload` above is
-    scored against every currently-VERIFIED entry (111, and growing). Those
-    two mean_summary_scores are therefore NOT comparable -- more figures in
-    one run than the other changes the average for reasons that have
-    nothing to do with which model is better.
+    scored against every currently-VERIFIED entry (110, and growing/shrinking
+    as review verdicts land). Those two mean_summary_scores are therefore NOT
+    comparable -- more or fewer figures in one run than the other changes the
+    average for reasons that have nothing to do with which model is better.
 
     This filters `full_payload`'s per-figure scores down to exactly the
-    figure_ids LineFormer was scored on (same dataset_version string,
-    reused verbatim from the LineFormer results file so the two rows are
+    figure_ids LineFormer was scored on that are STILL in the current
+    verified set. If every one of LineFormer's figures is still present
+    (the common case), the subset is the same set LineFormer saw and reuses
+    `lineformer["dataset_version"]` verbatim, so the two rows are
     self-evidently comparable via the leaderboard's existing "same
-    dataset_version" convention -- no new comparability-signalling code
-    needed). Returns None if results/lineformer-pretrained.json isn't
-    present (e.g. a fresh clone before that external run is registered) --
-    the subset has nothing to be comparable *to* in that case."""
+    dataset_version" convention.
+
+    If one or more of LineFormer's figures has since left the verified
+    registry (2026-09-04: paper 21682/figure 21284 was moved
+    VERIFIED -> REJECTED, rejection_category "image", after a second owner
+    review round found the printed y-axis has no unit anywhere in the
+    crop -- see data/verified_pairs/registry.json), the comparable set has
+    genuinely shrunk and this deliberately does NOT reuse
+    `lineformer["dataset_version"]` -- that string names LineFormer's
+    *original* figure set, and reusing it here would silently claim
+    comparability to LineFormer's original (now-stale) mean_summary_score
+    despite scoring fewer figures. It mints a distinct dataset_version
+    instead (see `excluded_figure_ids`) and main(), below, additionally
+    writes results/lineformer-pretrained-comparable-subset.json: LineFormer's
+    own mean recomputed on this identical shrunk set by pure arithmetic over
+    its already-published per_figure scores -- not a re-run.
+
+    Returns None if results/lineformer-pretrained.json isn't present (e.g. a
+    fresh clone before that external run is registered) -- the subset has
+    nothing to be comparable *to* in that case. Raises if the two runs share
+    no figures at all -- there would be nothing left to call "comparable"."""
     if not LINEFORMER_RESULTS_PATH.exists():
         return None
     lineformer = json.loads(LINEFORMER_RESULTS_PATH.read_text())
@@ -257,34 +277,94 @@ def _lineformer_comparable_subset(full_payload: dict) -> dict | None:
 
     by_figure_id = {p["figure_id"]: p for p in full_payload["per_figure"]}
     missing = [fid for fid in lineformer_figure_ids if fid not in by_figure_id]
-    if missing:
-        # A figure LineFormer was scored on has since left the naive-cv run
-        # (e.g. re-classified out of the registry) -- the subset would no
-        # longer be the same set LineFormer saw, so refuse to fabricate a
-        # partial "comparable" number rather than silently comparing on a
-        # smaller, undocumented set.
+    comparable_figure_ids = [fid for fid in lineformer_figure_ids if fid in by_figure_id]
+    if not comparable_figure_ids:
         raise ValueError(
-            "naive-cv run is missing figures LineFormer was scored on, "
-            f"can't build a comparable subset: {missing}"
+            "naive-cv run shares no figures with LineFormer's set -- nothing to compare"
         )
 
-    per_figure = [by_figure_id[fid] for fid in lineformer_figure_ids]
+    if missing:
+        dataset_version = (
+            f"{lineformer['dataset_version']}-comparable-n{len(comparable_figure_ids)}"
+        )
+    else:
+        dataset_version = lineformer["dataset_version"]
+
+    per_figure = [by_figure_id[fid] for fid in comparable_figure_ids]
     mean_score = sum(p["summary_score"] for p in per_figure) / len(per_figure)
 
     return {
         "model_id": "naive-cv-v0-lineformer-subset",
         "model_name": "Naive CV (hue-bucket baseline) -- LineFormer-comparable subset",
-        "dataset_version": lineformer["dataset_version"],
+        "dataset_version": dataset_version,
         "run_at": full_payload["run_at"],
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
         "per_figure": per_figure,
+        "excluded_figure_ids": missing,
         "comparison_note": (
-            "Scored on exactly the figure_ids in results/lineformer-pretrained.json's "
-            "per_figure (same dataset_version, deliberately reused verbatim) so this row "
-            "IS directly comparable to LineFormer's mean_summary_score. The naive-cv-v0 "
-            "row above is scored on every currently-VERIFIED figure and is NOT comparable "
-            "to LineFormer's score -- see docs/experiments/2026-09-02-failure-analysis.md."
+            "Scored on the figure_ids LineFormer was scored on that are still in the "
+            "current verified set (see excluded_figure_ids for any that dropped out "
+            "since LineFormer's run, e.g. after a later verification review). "
+            "dataset_version is only reused verbatim from "
+            "results/lineformer-pretrained.json when the sets match exactly; "
+            "otherwise (excluded_figure_ids non-empty) this is a strictly smaller "
+            "figure set and gets its own distinct dataset_version -- pair it with "
+            "results/lineformer-pretrained-comparable-subset.json (if present) for the "
+            "fair head-to-head, NOT results/lineformer-pretrained.json directly, whose "
+            "mean_summary_score still describes its original, larger figure set."
+        ),
+    }
+
+
+def _lineformer_recomputed_subset(subset_payload: dict) -> dict | None:
+    """Recomputes LineFormer's own mean_summary_score over exactly the
+    figure_ids in `subset_payload` (naive-cv's LineFormer-comparable
+    subset), for the case where that subset excludes one or more figures
+    from LineFormer's original run (see _lineformer_comparable_subset).
+    This is pure arithmetic over results/lineformer-pretrained.json's own
+    already-published per_figure scores -- LineFormer is never re-run here
+    (design §7.16: it needs mmcv/mmdetection via a Colab notebook this repo
+    can't run).
+
+    Returns None when there's nothing to recompute (no figures were
+    excluded from LineFormer's original set, or there's no LineFormer
+    results file at all) -- callers should then make sure any
+    lineformer-pretrained-comparable-subset.json left over from an earlier,
+    now-stale drift is removed rather than left lying around implying a
+    shrink that no longer applies."""
+    if not subset_payload.get("excluded_figure_ids") or not LINEFORMER_RESULTS_PATH.exists():
+        return None
+    lineformer = json.loads(LINEFORMER_RESULTS_PATH.read_text())
+    by_figure_id = {p["figure_id"]: p for p in lineformer["per_figure"]}
+    per_figure = [by_figure_id[p["figure_id"]] for p in subset_payload["per_figure"]]
+    mean_score = sum(p["summary_score"] for p in per_figure) / len(per_figure)
+
+    return {
+        "model_id": "lineformer-pretrained-comparable-subset",
+        "model_name": (
+            "LineFormer (pretrained) -- recomputed on the current "
+            "LineFormer-comparable subset"
+        ),
+        "dataset_version": subset_payload["dataset_version"],
+        "run_at": lineformer["run_at"],
+        "n_figures": len(per_figure),
+        "mean_summary_score": mean_score,
+        "per_figure": per_figure,
+        "excluded_figure_ids": subset_payload["excluded_figure_ids"],
+        "comparison_note": (
+            "Recomputed from results/lineformer-pretrained.json's own published "
+            f"per_figure scores (its own mean_summary_score: "
+            f"{lineformer['mean_summary_score']:.4f} over {lineformer['n_figures']} "
+            f"figures, dataset_version {lineformer['dataset_version']!r}) by dropping "
+            f"{subset_payload['excluded_figure_ids']} -- figure(s) LineFormer was "
+            "originally scored on that have since left the verified registry (see "
+            "data/verified_pairs/registry.json). Arithmetic only, not a re-run: "
+            "LineFormer cannot be re-run in this environment (design §7.16). This "
+            "mean is NOT the same number as lineformer-pretrained.json's own "
+            "mean_summary_score and the two must not be conflated -- that file's "
+            "score is, and remains, the historical record of LineFormer's original, "
+            "larger run."
         ),
     }
 
@@ -302,6 +382,19 @@ def main() -> None:
         subset_path = RESULTS_DIR / f"{subset_payload['model_id']}.json"
         subset_path.write_text(json.dumps(subset_payload, indent=2))
         print(f"wrote {subset_path}", file=sys.stderr)
+
+        recomputed_payload = _lineformer_recomputed_subset(subset_payload)
+        if recomputed_payload is not None:
+            recomputed_path = RESULTS_DIR / f"{recomputed_payload['model_id']}.json"
+            recomputed_path.write_text(json.dumps(recomputed_payload, indent=2))
+            print(f"wrote {recomputed_path}", file=sys.stderr)
+        elif LINEFORMER_COMPARABLE_SUBSET_PATH.exists():
+            # No drift this run (LineFormer's original figures are all back
+            # in the verified set) -- a leftover comparable-subset file from
+            # an earlier drifted run would now misrepresent a shrink that no
+            # longer applies, so remove it rather than leave it stale.
+            LINEFORMER_COMPARABLE_SUBSET_PATH.unlink()
+            print(f"removed stale {LINEFORMER_COMPARABLE_SUBSET_PATH}", file=sys.stderr)
 
 
 if __name__ == "__main__":

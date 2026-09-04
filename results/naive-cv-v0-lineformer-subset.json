@@ -1,10 +1,10 @@
 {
   "model_id": "naive-cv-v0-lineformer-subset",
   "model_name": "Naive CV (hue-bucket baseline) -- LineFormer-comparable subset",
-  "dataset_version": "v0-eval-pilot-n42",
-  "run_at": "2026-09-02T15:06:29.836491+00:00",
-  "n_figures": 45,
-  "mean_summary_score": 0.6067990920549159,
+  "dataset_version": "v0-eval-pilot-n42-comparable-n44",
+  "run_at": "2026-09-04T13:44:31.387914+00:00",
+  "n_figures": 44,
+  "mean_summary_score": 0.6058162625310902,
   "per_figure": [
     {
       "figure_id": "4173-20120",
@@ -124,14 +124,6 @@
       "match_rate": 0.6,
       "mean_curve_distance": 0.6264763707841466,
       "mean_coverage_ratio": 0.9849586546336327,
-      "error": null
-    },
-    {
-      "figure_id": "21682-21284",
-      "summary_score": 0.6500435911032465,
-      "match_rate": 1.0,
-      "mean_curve_distance": 1.0,
-      "mean_coverage_ratio": 0.9501307733097395,
       "error": null
     },
     {
@@ -367,5 +359,8 @@
       "error": null
     }
   ],
-  "comparison_note": "Scored on exactly the figure_ids in results/lineformer-pretrained.json's per_figure (same dataset_version, deliberately reused verbatim) so this row IS directly comparable to LineFormer's mean_summary_score. The naive-cv-v0 row above is scored on every currently-VERIFIED figure and is NOT comparable to LineFormer's score -- see docs/experiments/2026-09-02-failure-analysis.md."
+  "excluded_figure_ids": [
+    "21682-21284"
+  ],
+  "comparison_note": "Scored on the figure_ids LineFormer was scored on that are still in the current verified set (see excluded_figure_ids for any that dropped out since LineFormer's run, e.g. after a later verification review). dataset_version is only reused verbatim from results/lineformer-pretrained.json when the sets match exactly; otherwise (excluded_figure_ids non-empty) this is a strictly smaller figure set and gets its own distinct dataset_version -- pair it with results/lineformer-pretrained-comparable-subset.json (if present) for the fair head-to-head, NOT results/lineformer-pretrained.json directly, whose mean_summary_score still describes its original, larger figure set."
 }
