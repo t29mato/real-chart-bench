@@ -2726,5 +2726,230 @@
     "verified_at": "2026-08-30",
     "license_id": "cc-by",
     "evidence": "3 ground-truth curves (prop_x=Temperature/K, prop_y=ZT/dimensionless), n=16-18 points, same 3 compositions. x-range matches. y-values (already dimensionless, matches chart's 0-1.2 ZT axis): Cu2Se 0.319-1.157 (highest at 900K, matching the chart's top-most green curve reaching ~1.18), Cu1.97Ag0.03Se 0.344-0.961 (red), Cu1.97Ag0.03Se1.009 0.261-0.955 (purple, close to red) -- exact match on magnitude and Cu2Se overtaking the others above ~700K. A 4th un-digitized literature curve (Cu1.98Ag0.2Se, brown, peaking mid-range then declining) is visible but not part of this GT."
+  },
+  {
+    "paper_id": "45914",
+    "figure_id": "45356",
+    "figure_reference": "5a",
+    "image_path": "data/verified_pairs/images/45914/p07_embedded_20.jpg",
+    "panel_label": "a",
+    "x_range": [
+      0.0008,
+      0.0018
+    ],
+    "y_range": [
+      3.162277660168379e-06,
+      3.1622776601683795
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "6 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1) -- Starrydata's own log-derived property), one per pH2O x bulk/total combination (3 pH2O values x 2 fit components), n=8-11 pts each. Image captioned '(a) x=1.00', y-axis 'lg sigma, S cm^-1', x-axis '10^3/T, K^-1' -- an Arrhenius plot, proton-conducting Sr-Zr(Yb) perovskite (DOI 10.3390/ma15124126). KEY FINDING for this whole batch: Starrydata's raw 'log(...)' values here are NOT plain log10(sigma) -- empirically, raw_value/100 = log10(sigma in S/cm). Confirmed by: (1) reproducing every target chart's printed axis range almost exactly across all 10 figures in this batch after the /100 correction (physically absurd before it -- e.g. raw y=-717.8 read literally as ln or log10(S/m) implies an impossible activation energy of tens of eV; /100 gives a plausible -7.178 log10(S/cm)); (2) independently corroborated by existing registry entry 47139/48697's own rejection evidence ('off by ~2 orders of magnitude even after cm<->m conversion') -- that remaining 100x gap is exactly this /100. GT y/100 range across the 6 curves: -7.178 to -2.180 (log10 S/cm), matching the chart's [-7.5, -1.5] y frame (widest curve spans nearly the full frame, matching the visible 3-pH2O x bulk/total spread). GT x*1000 range 0.930-1.745, within printed [0.8, 1.8]. domain/pairing_checks.classify_range_disagreement: x-axis -> AXIS_SCALE_FACTOR (fitted slope exactly 1000x the dimensionally-expected K^-1 factor -- the '10^3/T' axis-label convention, same signature as paper 46278/design 7.53); y-axis -> BENIGN_MARGIN via the log_printed_labels rule (printed labels are themselves log10(sigma) on an otherwise-linear axis; log10(registry-in-S/cm) reproduces [-7.5,-1.5] with gap=0). x_range/y_range recorded as the drawn frame (tick/1000 for x; 10^(label+2) S/m for y, matching paper 46278's S/m-for-a-S/cm-axis convention), not raw GT extent."
+  },
+  {
+    "paper_id": "45914",
+    "figure_id": "45360",
+    "figure_reference": "5b",
+    "image_path": "data/verified_pairs/images/45914/p07_embedded_21.jpg",
+    "panel_label": "b",
+    "x_range": [
+      0.0008,
+      0.0018
+    ],
+    "y_range": [
+      3.162277660168379e-06,
+      3.1622776601683795
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "8 GT curves (same prop/unit and /100=log10(S/cm) finding as figure_id=45356 -- see that entry for the full derivation), companion panel '(b)' on the same page, x=0.98/0.94 compositions (bulk/total split). GT y/100 range -6.661 to -1.979 (log10 S/cm), within printed [-7.5, -1.5]; GT x*1000 range 0.930-1.745, within printed [0.8, 1.8] -- same calibration pattern as panel (a). classify_range_disagreement: x -> AXIS_SCALE_FACTOR (slope exactly 1000x), y -> BENIGN_MARGIN (log_printed_labels confirmed, gap=0)."
+  },
+  {
+    "paper_id": "48032",
+    "figure_id": "51688",
+    "figure_reference": "6",
+    "image_path": "data/verified_pairs/images/48032/p05_embedded_6.jpg",
+    "panel_label": null,
+    "x_range": [
+      0.0008,
+      0.0012
+    ],
+    "y_range": [
+      1e-10,
+      0.01
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "4 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per Sn-content x (0.04/0.08/0.12/0.16), n=6-7 pts each. Paper text (page 5) confirms 'Figure 6 Arrhenius plots of SrHfxSn1-xO3-d conductivity in dry air'; image matches exactly (y-axis 'lg sigma, S cm^-1' -4 to -12, x-axis '1000/T, K^-1' 0.8 to 1.2, 4 colored series). Using the same raw/100=log10(S/cm) transform as figure_id=45356 (see that entry): GT y/100 range -8.112 to -4.834 (log10 S/cm), within printed [-12, -4]. GT x*1000 range 0.852-1.215; the chart's printed ticks stop at 1.2 but the highest-T point (x*1000=1.215) sits ~1.3% past that tick, with 265px of unused image margin past the last tick before the crop edge -- an ordinary framing-headroom overshoot, not a data error (design 7.53's own documented pattern for this kind of small one-sided overshoot). x_range is nonetheless recorded as the standard tick/1000 = [0.0008, 0.0012] (matching every other AXIS_SCALE_FACTOR entry in this batch) rather than a widened frame, so classify_range_disagreement honestly reports the small containment gap (REAL_MISMATCH via registry_contains_gt, ~3.8% of registry span) for human review. y -> BENIGN_MARGIN (log_printed_labels confirmed against printed [-12,-4], gap=0). NEEDS-ATTENTION NOTE: the x-axis will show as real_mismatch in the automated audit -- the framing-headroom evidence above is the resolving context for a human reviewer."
+  },
+  {
+    "paper_id": "48032",
+    "figure_id": "50885",
+    "figure_reference": "7",
+    "image_path": null,
+    "panel_label": null,
+    "x_range": null,
+    "y_range": null,
+    "status": "rejected",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "4 GT curves (prop_x=Doping level/-, prop_y=log(Electrical conductivity)/S*m^(-1)), each n=1 point, and all 4 share the SAME x value (0.08) -- i.e. this is not a curve at all but 4 single-point 'series'. figure_reference says '7'; paper text (page 5) confirms 'Figure 7 Conductivity of SrHfxSn1-xO3-d as a function of Sn-content', a 6-temperature-series plot (550-800C) of log(sigma) vs x spanning x=0-0.16 (found by full-page render, since PyMuPdfFigureExtractor did not extract this specific vector-drawn chart as a raster image -- it sits directly on the page next to Figure 6, unlike every other figure in this paper). Using this batch's raw/100 transform, the 4 GT points (-5.402,-5.686,-6.128,-6.512 log10 S/cm) land suspiciously close to Figure 7's x=0.08 column for its 4 HIGHEST-temperature series (800/750/700/650C read ~-5.4/-5.7/-6.1/-6.5) -- but the 2 lowest-temperature series (600/550C, ~-7.05/-8.1 at x=0.08) are entirely absent from the GT, and no GT point has any x value other than 0.08 despite the chart's x-axis spanning 0 to 0.16 with 5 distinct compositions plotted. A benchmark pairing where the extraction target is a single degenerate x=const slice of a 2-D (x, T) scan, with an unexplained subset of the visible series missing, is not a trustworthy ground truth for this figure even though the y-values themselves are numerically plausible -- rejected rather than force a pairing that would silently under-specify what the figure actually shows (CLAUDE.md: an honestly-rejected candidate is a good outcome).",
+    "rejection_category": "gt_suspect",
+    "gt_suspect_status": "llm_flagged"
+  },
+  {
+    "paper_id": "47247",
+    "figure_id": "48871",
+    "figure_reference": "2",
+    "image_path": "data/verified_pairs/crops/47247/fig2_p05_crop.png",
+    "panel_label": null,
+    "x_range": [
+      0.0008,
+      0.0012
+    ],
+    "y_range": [
+      0.0007744617978025192,
+      4.187935651179185
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "10 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per Sc-content x (0, 0.01, 0.03, 0.10, 0.15, 0.20, 0.25, 0.30, 0.33, 0.37) -- matches the chart's 10-entry legend exactly. Paper text (page 5) confirms 'Fig. 2 Total sigma for the BaSn1-xScxO3-d ceramic materials ... as a functional of reciprocal temperature'; not extracted as a raster image by the collector (vector-drawn, page-render fallback needed), cropped here from a fresh page render of the same PDF page (data/raw/pdfs/47247.pdf, page 5). Using this batch's raw/100=log10(S/cm) transform (see figure_id=45356): GT y/100 range -4.726 to -1.761 (log10 S/cm), within the chart's printed y frame (measured frame edges [-5.111, -1.378], extrapolated from tick spacing past the printed -5/-2 outermost ticks by the same amount of padding visible above/below those ticks in the image). GT x*1000 range 0.822-1.264 -- the highest-x curve (x=0.37) overshoots the printed 1.2 tick by ~5.3% of the tick-derived registry span; the plot frame itself was independently measured and found to extend further right (~52px past the 1.2 tick, i.e. to a genuine but unlabelled ~1.29), so the data point is NOT actually outside the drawn chart -- but x_range is recorded here as the standard tick/1000 = [0.0008, 0.0012] (matching every other AXIS_SCALE_FACTOR entry in this batch) rather than baking that frame measurement into the registry value, so classify_range_disagreement honestly reports the overshoot (REAL_MISMATCH via registry_contains_gt, a 5.3%-of-span containment gap) for human review rather than silently laundering it through a widened range. y -> BENIGN_MARGIN (log_printed_labels confirmed, gap=0). NEEDS-ATTENTION NOTE: the x-axis will show as real_mismatch in the automated audit; the measured frame-edge pixel data above (see axis_pixel_candidates.json notes) is the resolving evidence for a human reviewer."
+  },
+  {
+    "paper_id": "36305",
+    "figure_id": "45818",
+    "figure_reference": "5a",
+    "image_path": "data/verified_pairs/images/36305/p09_embedded_12.jpg",
+    "panel_label": "a",
+    "x_range": [
+      0.000534,
+      0.003101
+    ],
+    "y_range": [
+      0.03162277660168379,
+      1000.0
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "5 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per rare-earth Ln (La/Pr/Nd/Sm/Gd) in Ln(Co,Cr,Fe,Mn,Ni)O3-d -- matches the chart's 5-entry legend exactly. Paper text (page 9) confirms 'Figure 5. (a) Value of the total electrical conductivity ... (b) ... presented in Arrhenius coordinates' -- wait, actually panel (a) here IS the Arrhenius-coordinate plot (log10(sigma[S/cm]) vs 1/T[1/K], dual-axis with a linear sigma[S/cm] scale on the right) and panel (b) plots ln(sigma*T); this GT set's units (K^-1, log(S*m^-1)) match panel (a). Unlike every other figure in this batch, this axis genuinely prints '1/T [1/K]' (not '1000/T') with un-scaled tick values 0.0010-0.0030 -- so the axis IS an identity match, no x1000 factor. Using this batch's raw/100=log10(S/cm) transform: GT y/100 range -3.020 to 0.5017 (log10 S/cm), within the chart's printed [-3.5, 1.0] y frame (which coincides with the plot's outer border on both ends). GT x range 0.000848-0.003093 K^-1; the printed x ticks only run 0.0010-0.0030, but the plot's own frame (measured directly: left border sits ~0.000534, right border ~0.003101, extrapolated from the tick pixel spacing) extends past both -- consistent with the chart's highest-T (900C) point needing 1/T=0.00085 to fit, which is exactly GT's minimum. classify_range_disagreement: x -> BENIGN_MARGIN (identity match, gap=0, using the measured frame endpoints as reg_lo/reg_hi); y -> BENIGN_MARGIN (log_printed_labels confirmed against [-3.5,1.0], gap=0)."
+  },
+  {
+    "paper_id": "28020",
+    "figure_id": "40067",
+    "figure_reference": "7a",
+    "image_path": "data/verified_pairs/images/28020/p06_embedded_11.jpg",
+    "panel_label": "a",
+    "x_range": [
+      280.15,
+      700.0
+    ],
+    "y_range": [
+      0.0001,
+      100.0
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "4 GT curves (prop_x=Temperature/K, prop_y=log(Electrical resistivity)/ohm*m), one per As-content x (0, 0.2, 0.4, 0.6). Unlike the log(Electrical conductivity) curves elsewhere in this batch, this property's raw values are ALREADY plausible log10(resistivity) directly (no /100 needed: range -3.3 to 1.582, i.e. resistivity 5e-4 to 38 ohm*m, physically ordinary) -- confirmed by exact match to the printed chart: panel (a) y-axis 'Log rho (Ohm*m)' -4 to 2, x-axis 'Temperature (K)' 300-700. Per-curve y ranges match the 4 visible series in both magnitude AND relative ordering: x=0 (black squares) -3.3..-2.51 (lowest, matches GT curve range -3.3/-2.512 exactly); x=0.2 (red circles) -2.41..0.49 (matches -2.413/0.4942); x=0.4 (blue triangles) -1.37..1.58 (highest, matches -1.368/1.582); x=0.6 (green diamonds) -1.63..0.34 (matches -1.63/0.3378). GT x range 304.5-663.3K, within the chart's frame (measured: left border ~280K, right border exactly 700K, matching the printed 300-700 ticks with the same small left-padding pattern seen elsewhere in this batch). classify_range_disagreement: x -> BENIGN_MARGIN (identity, gap=0); y -> BENIGN_MARGIN (log_printed_labels confirmed against printed [-4,2] with expected_k=1, i.e. no unit conversion at all needed since unit_y is already plain ohm*m matching the printed 'Ohm*m', gap=0)."
+  },
+  {
+    "paper_id": "32593",
+    "figure_id": "40587",
+    "figure_reference": "1a",
+    "image_path": "data/verified_pairs/images/32593/p02_embedded_3.jpg",
+    "panel_label": "a",
+    "x_range": [
+      0.0008,
+      0.0022
+    ],
+    "y_range": [
+      0.0031622776601683794,
+      10.0
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "2 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per material (Fe2WO6, FeWO4) -- matches the chart's 2-entry legend exactly. Panel a) y-axis 'log(sigma [Ohm^-1 cm^-1])' -2.5 to 1.0, x-axis '10^3/T [K^-1]' 0.8 to 2.2 (dark-background figure). Here the printed unit is already S/cm (Ohm^-1 cm^-1) matching this batch's raw/100 result directly (log10(S/cm), no further cm<->m shift needed, unlike the S*m^-1-tagged entries elsewhere in this batch). GT y/100 range -2.008 to 0.6259 (log10 S/cm), within printed [-2.5, 1.0]. GT x*1000 range 0.812-2.087, within printed [0.8, 2.2] -- both frame edges measured directly and found to coincide EXACTLY with the outermost printed ticks (no padding either side). classify_range_disagreement: x -> AXIS_SCALE_FACTOR (fitted slope exactly 1000x); y -> BENIGN_MARGIN (log_printed_labels confirmed against [-2.5,1.0] with expected_k=1, gap=0)."
+  },
+  {
+    "paper_id": "47265",
+    "figure_id": "48961",
+    "figure_reference": "11",
+    "image_path": "data/verified_pairs/images/47265/p11_embedded_86.jpg",
+    "panel_label": null,
+    "x_range": [
+      0.0008,
+      0.0016
+    ],
+    "y_range": [
+      0.0001,
+      0.1
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "2 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), n=26 pts each (dense, near-continuous). Paper text (page 10-11) confirms 'Figure 11 shows the temperature dependencies of the total conductivity ... in oxidizing and reducing atmospheres'; image matches ('log[sigma, S/cm]' vs '1000/T, K^-1', 0.8-1.6 x 1.0..-4.0, 4 visible traces: LBS5/LBS5+Co x oxidising/reducing). GT has only 2 curves (<= the 4 visible series, satisfying C5) spanning the FULL visible x-range (0.85-1.49 display) each -- consistent with Starrydata digitizing one continuous curve per sample (LBS5, LBS5+Co) across both atmosphere regimes rather than splitting by oxidising/reducing; I could not fully verify which 2 of the 4 colour/fill combinations each GT curve traces (both plausible readings land within the visible cluster), noted here as a residual uncertainty for spot-check. GT y/100 range -3.417 to -1.292 (log10 S/cm), within printed [-4.0, -1.0]; GT x*1000 range 0.851-1.486, within printed [0.8, 1.6] -- both frame edges coincide exactly with the outermost printed ticks. classify_range_disagreement: x -> AXIS_SCALE_FACTOR (slope exactly 1000x); y -> BENIGN_MARGIN (log_printed_labels confirmed, gap=0)."
+  },
+  {
+    "paper_id": "47367",
+    "figure_id": "49128",
+    "figure_reference": "8",
+    "image_path": "data/verified_pairs/crops/47367/fig8_p15_crop.png",
+    "panel_label": null,
+    "x_range": [
+      0.00085,
+      0.0015
+    ],
+    "y_range": [
+      1e-07,
+      0.1
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "1 GT curve (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), n=10 pts. Paper text (page 15) confirms 'Figure 8. Arrhenius dependences of conductivity of the BCGCuO film ...'; image matches ('log sigma, S*cm^-1' vs '1000/T, K^-1', 4 series: BCGCuO/LBNO, BCGCuO(def)/LNO, BCO/BCGCuO/LNO, BCGCu compact). GT y/100 range -2.833 to -1.554 (log10 S/cm) matches the visible green-diamond 'BCGCu compact' series (the shallowest, topmost curve, labelled 0.42(1)eV, visually spanning about -1.6 to -2.85 across the plotted range) closely -- the other 3 series (black/red/orange, steeper, reaching down to -5..-6.5) do not match this GT curve's range. GT x*1000 range 0.890-1.487, within the chart's visible x-span. NOTE ON CONFIDENCE: pixel-tick detection on this figure (cropped from a full-page PDF render, not a clean extracted raster) was noisy -- only one internal x tick (1.0) was reliably isolated from the busy multi-curve plot area; x_range/label positions below are a lower-confidence estimate (visual proportion + the one confirmed tick) rather than a clean multi-tick fit, flagged here for a human spot-check. y-axis calibration (frame top/bottom = -1/-7) is comfortably supported since those labels sit visually right at the plot border. classify_range_disagreement (with the above estimated calibration): x -> AXIS_SCALE_FACTOR (slope exactly 1000x); y -> BENIGN_MARGIN (log_printed_labels confirmed, gap=0)."
+  },
+  {
+    "paper_id": "45906",
+    "figure_id": "45323",
+    "figure_reference": "8a",
+    "image_path": "data/verified_pairs/images/45906/p12_embedded_41.jpg",
+    "panel_label": "a",
+    "x_range": [
+      0.0008,
+      0.0032
+    ],
+    "y_range": [
+      0.003981071705534973,
+      1995.2623149688789
+    ],
+    "x_scale": "linear",
+    "y_scale": "log",
+    "status": "verified",
+    "verified_at": "2026-09-04",
+    "license_id": "cc-by",
+    "evidence": "6 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per (Ti-content x {0.1,0.2,0.3}) x (air/5% H2-Ar) combination -- matches the chart's 3x2=6-entry legend exactly. Paper text (page 12) confirms 'Figure 8. (a) Electrical conductivity of Sr2Fe1.4TixMo0.6-xO6-d (x=0.1,0.2,0.3) oxides in air and 5 vol.% H2/Ar'; image matches ('log sigma [S cm^-1]' vs '1000/T [K^-1]', 0.8-3.2 x roughly -2..3, 6 series). GT y/100 range -2.428 to 1.248 (log10 S/cm); the chart's labelled y ticks run -2..3, and the lowest GT value (-2.428, curve for x=0.2 in H2/Ar) sits visibly below the '-2' label but still inside the frame, matching the green/red open-triangle traces that dip below -2 near the high-1000/T end of the image. GT x*1000 range 0.849-3.188, and the frame's outermost printed ticks (0.8, 3.2) coincide exactly with the plot border on both ends. NOTE ON CONFIDENCE: y-axis tick pixel detection was noisy in the busy plot area (many overlapping curves cross the tick-mark search band); y_min_label/y_max_label (-2.4/3.3) are estimated from the frame border position plus visible label offsets rather than a clean multi-tick fit -- flagged for human spot-check, though the x-axis calibration (13 clean, evenly-spaced ticks) is solid. classify_range_disagreement: x -> AXIS_SCALE_FACTOR (slope exactly 1000x); y -> BENIGN_MARGIN (log_printed_labels confirmed, gap=0)."
   }
 ]

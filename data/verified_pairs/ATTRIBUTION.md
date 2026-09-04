@@ -45,6 +45,7 @@ underlying data (curve values) is unchanged either way.
 | [10.1007/s40145-021-0480-3](https://doi.org/10.1007/s40145-021-0480-3) | cc-by | `data/verified_pairs/crops/36342/fig5a.png` | yes |
 | [10.1007/s40145-021-0480-3](https://doi.org/10.1007/s40145-021-0480-3) | cc-by | `data/verified_pairs/crops/36342/fig5c.png` | yes |
 | [10.1007/s40145-021-0480-3](https://doi.org/10.1007/s40145-021-0480-3) | cc-by | `data/verified_pairs/crops/36342/fig5d.png` | yes |
+| [10.1007/s40145-022-0599-x](https://doi.org/10.1007/s40145-022-0599-x) | cc-by | `data/verified_pairs/crops/47247/fig2_p05_crop.png` | yes |
 | [10.1007/s40243-014-0026-5](https://doi.org/10.1007/s40243-014-0026-5) | cc-by | `data/verified_pairs/crops/3733/fig2a.png` | yes |
 | [10.1007/s40243-014-0026-5](https://doi.org/10.1007/s40243-014-0026-5) | cc-by | `data/verified_pairs/crops/3733/fig2b.png` | yes |
 | [10.1007/s40243-014-0026-5](https://doi.org/10.1007/s40243-014-0026-5) | cc-by | `data/verified_pairs/crops/3733/fig2c.png` | yes |
@@ -52,6 +53,7 @@ underlying data (curve values) is unchanged either way.
 | [10.1007/s40243-014-0026-5](https://doi.org/10.1007/s40243-014-0026-5) | cc-by | `data/verified_pairs/crops/3733/fig2e.png` | yes |
 | [10.1007/s40243-014-0026-5](https://doi.org/10.1007/s40243-014-0026-5) | cc-by | `data/verified_pairs/crops/3733/fig2f.png` | yes |
 | [10.1007/s40820-022-00967-6](https://doi.org/10.1007/s40820-022-00967-6) | cc-by | `data/verified_pairs/crops/47998/fig3c.png` | yes |
+| [10.1021/acsami.0c19341](https://doi.org/10.1021/acsami.0c19341) | cc-by | `data/verified_pairs/images/32593/p02_embedded_3.jpg` | no |
 | [10.1038/ncomms10892](https://doi.org/10.1038/ncomms10892) | cc-by | `data/verified_pairs/crops/34286/fig4c.png` | yes |
 | [10.1038/ncomms10892](https://doi.org/10.1038/ncomms10892) | cc-by | `data/verified_pairs/crops/34286/fig4d.png` | yes |
 | [10.1038/s41467-018-04958-3](https://doi.org/10.1038/s41467-018-04958-3) | cc-by | `data/verified_pairs/crops/18869/fig3a.png` | yes |
@@ -60,7 +62,6 @@ underlying data (curve values) is unchanged either way.
 | [10.1038/s41467-018-04958-3](https://doi.org/10.1038/s41467-018-04958-3) | cc-by | `data/verified_pairs/crops/18869/fig4c.png` | yes |
 | [10.1038/s41467-018-04958-3](https://doi.org/10.1038/s41467-018-04958-3) | cc-by | `data/verified_pairs/crops/18869/fig4e.png` | yes |
 | [10.1038/s41467-019-08784-z](https://doi.org/10.1038/s41467-019-08784-z) | cc-by | `data/verified_pairs/crops/21682/fig4a.png` | yes |
-| [10.1038/s41467-019-08784-z](https://doi.org/10.1038/s41467-019-08784-z) | cc-by | `data/verified_pairs/crops/21682/fig4b.png` | yes |
 | [10.1038/s41598-018-28043-3](https://doi.org/10.1038/s41598-018-28043-3) | cc-by | `data/verified_pairs/crops/18759/fig3a.png` | yes |
 | [10.1038/s41598-019-39786-y](https://doi.org/10.1038/s41598-019-39786-y) | cc-by | `data/verified_pairs/crops/22102/fig3a.png` | yes |
 | [10.1038/s41598-019-39786-y](https://doi.org/10.1038/s41598-019-39786-y) | cc-by | `data/verified_pairs/crops/22102/fig3c.png` | yes |
@@ -101,6 +102,7 @@ underlying data (curve values) is unchanged either way.
 | [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4a.png` | yes |
 | [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4b.png` | yes |
 | [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4c.png` | yes |
+| [10.15826/chimtech.2023.10.1.13](https://doi.org/10.15826/chimtech.2023.10.1.13) | cc-by | `data/verified_pairs/images/48032/p05_embedded_6.jpg` | no |
 | [10.3389/fchem.2014.00106](https://doi.org/10.3389/fchem.2014.00106) | cc-by | `data/verified_pairs/crops/44283/fig1a.png` | yes |
 | [10.3389/fchem.2014.00106](https://doi.org/10.3389/fchem.2014.00106) | cc-by | `data/verified_pairs/crops/44283/fig2_inset.png` | yes |
 | [10.3389/fchem.2014.00106](https://doi.org/10.3389/fchem.2014.00106) | cc-by | `data/verified_pairs/crops/44283/fig2_main.png` | yes |
@@ -125,3 +127,10 @@ underlying data (curve values) is unchanged either way.
 | [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig6c.png` | yes |
 | [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig8a.png` | yes |
 | [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig8b.png` | yes |
+| [10.3390/ma12162545](https://doi.org/10.3390/ma12162545) | cc-by | `data/verified_pairs/crops/47367/fig8_p15_crop.png` | yes |
+| [10.3390/ma13092164](https://doi.org/10.3390/ma13092164) | cc-by | `data/verified_pairs/images/28020/p06_embedded_11.jpg` | no |
+| [10.3390/ma14185264](https://doi.org/10.3390/ma14185264) | cc-by | `data/verified_pairs/images/36305/p09_embedded_12.jpg` | no |
+| [10.3390/ma15124126](https://doi.org/10.3390/ma15124126) | cc-by | `data/verified_pairs/images/45914/p07_embedded_20.jpg` | no |
+| [10.3390/ma15124126](https://doi.org/10.3390/ma15124126) | cc-by | `data/verified_pairs/images/45914/p07_embedded_21.jpg` | no |
+| [10.3390/ma15228268](https://doi.org/10.3390/ma15228268) | cc-by | `data/verified_pairs/images/45906/p12_embedded_41.jpg` | no |
+| [10.3390/membranes12111084](https://doi.org/10.3390/membranes12111084) | cc-by | `data/verified_pairs/images/47265/p11_embedded_86.jpg` | no |
