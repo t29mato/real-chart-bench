@@ -41,9 +41,20 @@
    「CC BY」と書く。特定の図で版を明記したい場合は出版社側で確認してから。
 2. **改変の有無は `ATTRIBUTION.md` を引く。** ファイル単位で
    `Modified from original?` を持っている。推測しない。
-3. **軸校正は `printed_axis` のラベル値から作る。** `x_range`/`y_range` は
-   印字された最外目盛より外まで伸びていることがある(通常の作図マージン)。
-   例: `446/8724` は印刷軸 0–400 ℃ に対し `x_range` は `[0, 450]`。
+3. **軸校正は印字ラベル値から作る。`x_range`/`y_range` は使わない。**
+   `x_range`/`y_range` は**描画された軸フレーム(プロット枠)の外縁**であり、
+   印字された目盛値ではない(design §7.57)。GTデータが最外目盛より外側に
+   はみ出すことがあるため(通常の作図マージン)、意図的にフレーム側を
+   別途保持している — 例: `446/8724` は印刷軸 0–400 ℃ に対し `x_range` は
+   `[0, 450]`。2026-09-04以降、レビュー済み36件(全111件中)については
+   `x_tick_range`/`y_tick_range`(+ `tick_range_source: "owner_reviewed"`)
+   として印字目盛値そのものもregistry.jsonに直接載せてある。この2つは
+   72軸中24軸で数値が異なる(全111件では218軸中73軸)ので、
+   **必ず`x_tick_range`/`y_tick_range`がある方をそちらから、無い場合は
+   従来通り`axis_pixel_candidates.json`の`x_min_label`/`x_max_label`等
+   (ただしそちらは111件中73件が`status: "llm_candidate"`の未レビュー
+   LLM出力なので注意)から** 軸校正を作ること。`x_range`/`y_range`は
+   フレーム外縁であり校正には使わない。
 4. **`sample_id` / `samplename` は本リポジトリに存在しない。** Starrydata の生CSVには
    あるが、収集パイプラインが保持していない(`adapter/starrydata_csv.py` の docstring 参照)。
 5. **`bd67d16` 以降を使う。** それ以前の clone では paper 446 の x 値がケルビンのまま

@@ -18,6 +18,7 @@ from real_chart_bench.domain.verified_pairing import (
     GtSuspectStatus,
     RejectionCategory,
     RejectionEvidence,
+    TickRangeProvenance,
     VerificationStatus,
     VerifiedPairing,
 )
@@ -66,6 +67,13 @@ def _parse_entry(raw: dict[str, Any]) -> VerifiedPairing:
             else None
         ),
         rejection_evidence=_parse_rejection_evidence(raw.get("rejection_evidence")),
+        x_tick_range=_parse_range(raw.get("x_tick_range")),
+        y_tick_range=_parse_range(raw.get("y_tick_range")),
+        tick_range_source=(
+            TickRangeProvenance(raw["tick_range_source"])
+            if raw.get("tick_range_source") is not None
+            else None
+        ),
     )
 
 
@@ -131,6 +139,12 @@ def serialize_entry(
     for key, value in (
         ("license_id", pairing.license_id),
         ("excluded_reason", pairing.excluded_reason),
+        ("x_tick_range", _serialize_range(pairing.x_tick_range)),
+        ("y_tick_range", _serialize_range(pairing.y_tick_range)),
+        (
+            "tick_range_source",
+            pairing.tick_range_source.value if pairing.tick_range_source is not None else None,
+        ),
     ):
         if value is not None or key in out:
             out[key] = value

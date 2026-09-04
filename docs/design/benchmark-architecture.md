@@ -3231,3 +3231,138 @@ paper 46278の`registry.json`の`evidence`欄(2026-08-30時点)に既に
 関わらず、チェッカー側がその軸を表現できずに機械的に`INDETERMINATE`を
 返し続けていた、という**チェッカーの表現力の限界**であって、データの欠陥
 ではない。
+
+### 7.57 印字目盛値を`registry.json`に第一級データとして昇格 —— フレームは目盛りではない(2026-09-04、司令塔経由の直接タスク)
+
+**背景**: `registry.json`の`x_range`/`y_range`は**描画された軸フレーム
+(プロット枠)の外縁**を記録しており、印字された目盛(tick)の値では
+ない。これは意図的な設計(§7.44以降、`domain/pairing_checks.py`の
+`_registry_containment_check`等が前提としている): GTデータは最外目盛
+より外側にはみ出すことが普通にあり(通常の作図マージン)、例えば
+`3733/11784`はGTのxが419.3まで下がるのに最初の印字目盛は500、
+`4965/13164`はGTのyが26.7 µV/Kまで下がるのに最初の印字目盛は50——
+目盛値でフレームを校正してしまうと、実データの方が校正範囲の外に
+出てしまう。
+
+しかし**印字された目盛値自体もground truthである**、という点がこれまで
+`registry.json`に反映されていなかった。理由は2つ:
+
+1. **v1で計画している「軸の読み取りを含むエンドツーエンド抽出タスク」が
+   これでは採点できない。** チャートを読むモデルが読めるのは**印字された
+   目盛だけ**であり、フレームの外縁はどこにも印字されておらず、原理的に
+   読み取り不可能。つまり印字目盛値こそがv1の軸読み取りタスクの正解
+   データであり、それが"candidate"(候補)という名のファイルの中にしか
+   存在しないのは筋が悪い。
+2. `data/verified_pairs/axis_pixel_candidates.json`は111件中`status:
+   "owner_reviewed"`が**36件**のみで、**73件が`llm_candidate`**(未
+   レビューのLLM出力)、2件が`excluded`(本タスクで実測して確認 ——
+   `Counter({'llm_candidate': 73, 'owner_reviewed': 36, 'excluded': 2})`)。
+   未レビューのLLM出力を無条件に正解データへ混ぜることは、§7.48が
+   `llm_flagged`/`human_confirmed`の区別で明示的に防ごうとしている失敗
+   そのものである。
+
+**スキーマ**: `src/real_chart_bench/domain/verified_pairing.py`に
+`TickRangeProvenance`(enum、現在は`OWNER_REVIEWED`の1値のみ)を追加し、
+`VerifiedPairing`に`x_tick_range` / `y_tick_range` /
+`tick_range_source`の3フィールドを追加した(いずれもオプショナル)。
+既存の`x_range`/`y_range`は**改名しない**(Starrydata3チームが2日前に
+これらのキー名で受け取ったinteropバンドルがある。
+`docs/interop/README.md`参照)——代わりにフィールドコメントで「これは
+フレームの外縁であって印字目盛ではない」と明記した。
+
+**プロヴェナンスマーカーの設計判断**: `x_tick_range`/`y_tick_range`が
+`x_range`/`y_range`とは別フィールドである時点で、「フレーム値」と
+「昇格された目盛値」はフィールド名だけで区別できる。それでもなお
+`tick_range_source`という第3のフィールドを追加したのは、「このtick
+rangeがどのレビュー水準を経て入ったか」を**registry.jsonを開くだけで**
+主張できるようにするため——`axis_pixel_candidates.json`を突き合わせな
+くても、tick rangeを見た消費者が「これは`owner_reviewed`品質である」と
+確認できる(単なるbool値ではなくenumにしたのは、将来これと異なる
+レビュー経路——例えば`axis_pixel_candidates.json`を介さない別の人手
+入力——が生まれたときに、boolの意味を上書きするのではなく新しい
+メンバーを追加できるようにするため)。§7.48の`GtSuspectStatus`
+(`llm_flagged`/`human_confirmed`/`human_rejected`)と同型の設計判断
+である。
+
+**バリデーション(`__post_init__`)**:
+
+- `x_tick_range`が設定されているなら`x_range`(フレーム)も設定されて
+  いなければならない(y軸も同様、軸ごとに独立)。tick rangeはそのフレーム
+  の"精緻化"という位置づけであり、精緻化する対象のフレームがない
+  tick rangeは不整合として`ValueError`にした。実データでは起こらない
+  (`axis_pixel_candidates.json`にエントリがある = 対応する
+  `registry.json`エントリは常に`VERIFIED`で、`VERIFIED`エントリは
+  常に両フレームを持つ)が、将来の移行スクリプトのバグを黙らせないため
+  に構築時エラーとして強制した。
+- `tick_range_source`は`x_tick_range`または`y_tick_range`のいずれかが
+  設定されているとき必須、どちらも設定されていないとき禁止(§7.48の
+  `gt_suspect_status`と同じ相互拘束パターン)。
+
+**`promote_tick_range`(ドメイン層の純関数)**: `VerifiedPairing`と
+`x_tick_range`/`y_tick_range`候補値、`axis_pixel_candidates.json`の
+生の`status`文字列を受け取り、新しい`VerifiedPairing`を返す。
+`candidate_status != "owner_reviewed"`なら**`ValueError`で拒否する**
+——これが本タスクの核心的なガード: 未レビューのLLM軸読み取りを
+検証済みレジストリに混入させ、それをv1採点の正解として使ってしまう
+ことを、型レベルで防ぐ。ファイルI/Oは一切行わない純関数(候補データの
+検索はアダプタ/スクリプト側の責務)。
+
+**アダプタ**: `adapter/verified_pairing_registry.py`の`_parse_entry`/
+`serialize_entry`を拡張。`serialize_entry(pairing, base=raw)`は既存の
+`license_id`/`excluded_reason`と同じ「`None`かつ`base`に無ければ省略、
+`base`にあれば明示的に更新」というパターンに従う。
+
+**TDD**: `tests/domain/test_verified_pairing_tick_range.py`・
+`tests/adapter/test_verified_pairing_registry_tick_range.py`を新設
+(22件)。境界ケース: 両レンジがラウンドトリップしてキー順序・未知キーが
+保たれること、フレームのみ(昇格されていない多数派)、tick rangeが
+フレーム無しでは不正であること(上記の設計判断どおり構築時エラー)、
+`promote_tick_range`が`llm_candidate`/`excluded`を拒否すること。
+pytest 485 → **507 passed**(+22)、ruff clean、import-linter clean。
+
+**移行**: `scripts/eval/promote_tick_ranges.py`(一回限りの移行
+スクリプト)で`data/verified_pairs/registry.json`を更新。
+`axis_pixel_candidates.json`の`status == "owner_reviewed"`な**36件**
+(paper_id/figure_id/panel_labelで1対1に一致、重複なし・不一致なしを
+事前に確認済み)に`x_tick_range`/`y_tick_range`/
+`tick_range_source: "owner_reviewed"`を追加。既存フィールドは1バイトも
+変更していないことをdiff後に再検証済み(各エントリの`evidence`行末に
+コンマが付く行変更を除き、他の全フィールドが移行前後で完全一致する
+ことをスクリプトで確認)。
+
+**結果**:
+
+- **昇格件数**: 36件(全111件中)。
+- **フレーム vs 目盛りの乖離**: 昇格した36件・72軸のうち、**24軸
+  (21件)**でフレーム値(`x_range`/`y_range`)と目盛り値
+  (`x_tick_range`/`y_tick_range`)が完全一致では**ない**(浮動小数点の
+  完全一致で比較)。
+- **参考(未レビュー分も含めた全体)**: `axis_pixel_candidates.json`に
+  対応エントリがある111件・222軸のうち4軸(paper 44283の4件、いずれも
+  `llm_candidate`でx目盛りラベル欠落)を除いた**218軸中73軸**で
+  フレーム値と目盛り値が食い違う——司令塔の実測(73/218)と一致した。
+  この218件のうち72軸(36件)分だけが今回`registry.json`へ昇格されて
+  おり、残る146軸(=218-72)は`axis_pixel_candidates.json`側が
+  `llm_candidate`のままなので昇格していない。
+
+**残された宿題(未解決のまま次タスクへ)**: **v1の軸読み取りタスクは、
+残り73件の`llm_candidate`エントリが人手レビューされるまで採点できない**。
+`axis_pixel_candidates.json`は`model_disagreement_px`(2つの独立モデルの
+ピクセル位置の不一致量)をエントリごとに記録している——これは「モデル
+同士が読み違えた=人間が確認する価値が高い」箇所の代理指標になるので、
+73件のレビュー優先順位は`model_disagreement_px`の降順に並べることを
+提案する(不一致が大きい軸ほど、両モデルが偶然同じ間違いをした/読み取り
+自体が曖昧、という可能性が高い)。
+
+**このタスク自体について、v1まで持たないと考える点**: `tick_range_source`
+は現状メンバーが1つしかないenumであり、「`owner_reviewed`とだけ言えれば
+十分」という前提に立っている。しかし73件のレビューが進むにつれ、
+レビュー方法(人間が生画像を直接見た/複数モデルの一致を人間が承認しただけ、
+等)にバリエーションが生まれる可能性があり、そのときはこのenumに
+メンバーを追加するだけで対応できる設計にはしてあるが、「1メンバーの
+enumで妥当か」は73件のレビューが進んだ時点で再検討が要る。また、
+`x_tick_range`/`y_tick_range`は現状「フレームの精緻化」という位置づけで
+フレーム必須にしているが、将来仮に「フレームは取れないが目盛りだけは
+読める」ような画像(例えば枠線のないチャート)が対象に入ってくると、
+この構築時エラーがむしろ障害になる可能性がある——現時点でそのような
+実データは無いため先送りにした。
