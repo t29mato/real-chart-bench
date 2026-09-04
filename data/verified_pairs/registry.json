@@ -192,7 +192,18 @@
       0.001,
       0.01
     ],
-    "tick_range_source": "owner_reviewed"
+    "tick_range_source": "owner_reviewed",
+    "rejection_category": "gt_suspect",
+    "gt_suspect_status": "human_confirmed",
+    "gt_suspect_reviewed_at": "2026-09-04",
+    "gt_suspect_reviewed_by": "owner",
+    "gt_suspect_review_note": "2026-09-04 owner review (human_confirmed): 抵抗率に負の値が3点あるのはデジタイザの限界によるもので、これらは 0 にすべき、というオーナー判断。該当点: curve0 T=290.9K y=-0.000161、curve1 T=296.4K y=-0.000161、curve0 T=300.0K y=-0.000452 (いずれも Ω·m、高温側の裾)。抵抗率が負になることは物理的にありえず、また y_scale=log のため対数軸にはそもそもプロットできない。※ 曲線の値は本リポジトリでは書き換えていない — 上流Starrydataで直すべきデータであり、かつ「0にする」だけでは log10(0) が -inf になり対数軸の問題は解決しないため、ローカルでの扱いは別途判断が要る。",
+    "rejection_evidence": {
+      "axis_range_mismatch": true,
+      "point_count_mismatch": null,
+      "y_value_offset_magnitude": null,
+      "missing_series": null
+    }
   },
   {
     "paper_id": "17044",
@@ -469,9 +480,9 @@
       2e-05
     ],
     "x_scale": "linear",
-    "status": "verified",
+    "status": "rejected",
     "verified_at": "2026-08-21",
-    "evidence": "3 ground-truth curves (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1), all negative), one per bulk Fe-based superconductor reference material, same source page render as figure_id=21283 (panel b of the same 3-panel figure). x-range 0-300K matches. y-values (uV/K): -105.6..-1.4 ('La(Fe0.9Co0.1)AsO', purple, highest-magnitude peak ~-110), -86.1..-1.4 ('LaFeAs(O0.9F0.1)', orange), -51.4..1.4 ('Ba(Fe0.9Co0.1)2As2', dark red, lowest-magnitude peak ~-50) -- ordering and magnitudes match the chart's 3 labeled/arrow-annotated curves exactly. Same manual-crop workaround as figure 21283 applies (crop bbox x=[530,790] y=[90,460] on the same page render); see that entry's evidence for the full explanation. [2026-08-30 CORRECTION: y_range was stored as the printed chart-display unit numbers instead of the SI values the harness/ground_truth.json actually use (VerifiedPairing.y_range feeds ExtractionTask.y_range, compared against ground_truth.json's SI-unit curve data) -- corrected to match. Found via a systematic registry-range-vs-ground_truth.json containment audit across all verified entries, prompted by an owner request to double-check axis-pixel/unit correctness.]",
+    "evidence": "3 ground-truth curves (prop_x=Temperature/K, prop_y=Seebeck coefficient/V*K^(-1), all negative), one per bulk Fe-based superconductor reference material, same source page render as figure_id=21283 (panel b of the same 3-panel figure). x-range 0-300K matches. y-values (uV/K): -105.6..-1.4 ('La(Fe0.9Co0.1)AsO', purple, highest-magnitude peak ~-110), -86.1..-1.4 ('LaFeAs(O0.9F0.1)', orange), -51.4..1.4 ('Ba(Fe0.9Co0.1)2As2', dark red, lowest-magnitude peak ~-50) -- ordering and magnitudes match the chart's 3 labeled/arrow-annotated curves exactly. Same manual-crop workaround as figure 21283 applies (crop bbox x=[530,790] y=[90,460] on the same page render); see that entry's evidence for the full explanation. [2026-08-30 CORRECTION: y_range was stored as the printed chart-display unit numbers instead of the SI values the harness/ground_truth.json actually use (VerifiedPairing.y_range feeds ExtractionTask.y_range, compared against ground_truth.json's SI-unit curve data) -- corrected to match. Found via a systematic registry-range-vs-ground_truth.json containment audit across all verified entries, prompted by an owner request to double-check axis-pixel/unit correctness.] [2026-09-04 オーナー判断により VERIFIED から REJECTED に変更: 「このグラフは元論文読まないと判断できないので、利用せずで。」 印刷されたy軸にはクロップ内のどこにも単位が示されておらず(axis_pixel_candidates.json の y_axis_unit も null)、軸校正の正しさを画像だけからは検証できない。クロップ右上に見える文字は隣のパネル c のラベルがはみ出したものであり、この軸の単位ではない。rejection_category=image(必要な情報が画像側に無い、こちら側の制約)。]",
     "license_id": "cc-by",
     "x_tick_range": [
       0.0,
@@ -481,7 +492,8 @@
       -400.0,
       0.0
     ],
-    "tick_range_source": "owner_reviewed"
+    "tick_range_source": "owner_reviewed",
+    "rejection_category": "image"
   },
   {
     "paper_id": "83",
@@ -962,16 +974,19 @@
     "y_range": null,
     "status": "rejected",
     "verified_at": "2026-08-19",
-    "evidence": "5 ground-truth curves (prop_x=Inverse temperature/K^-1, prop_y=log(Electrical conductivity)/S*m^-1) -- but all 5 curves have x-range exactly (0.0, 0.0), i.e. every x-value collapsed to zero. This is a ground-truth data quality defect (not a pairing/image problem): the underlying digitized data for this figure is unusable regardless of which of the 53 candidate images it might correspond to. Rejected on GT-quality grounds before any image was checked, per the design's 'GT quality check' step of the verification procedure.",
+    "evidence": "5 ground-truth curves (prop_x=Inverse temperature/K^-1, prop_y=log(Electrical conductivity)/S*m^-1) -- but all 5 curves have x-range exactly (0.0, 0.0), i.e. every x-value collapsed to zero. This is a ground-truth data quality defect (not a pairing/image problem): the underlying digitized data for this figure is unusable regardless of which of the 53 candidate images it might correspond to. Rejected on GT-quality grounds before any image was checked, per the design's 'GT quality check' step of the verification procedure. [2026-09-04 CORRECTION: この却下理由(x-range が (0.0, 0.0))は誤りである。figshare公開スナップショットから復元した実 x は 0.001109〜0.003392 K^-1 で非ゼロ。~1e-3 の値を表示桁不足で 0.0 と記録した表示バグだった。却下自体はオーナー判断で維持されるが、理由は x ではなく y 側(log(σ) の値が -300〜-1000 と対数値としてありえない大きさ)である。data/verified_pairs/rejected_candidates_gt.json 参照。]",
     "license_id": "cc-by",
     "rejection_category": "gt_suspect",
-    "gt_suspect_status": "llm_flagged",
+    "gt_suspect_status": "human_confirmed",
     "rejection_evidence": {
       "axis_range_mismatch": true,
       "point_count_mismatch": null,
       "y_value_offset_magnitude": null,
       "missing_series": null
-    }
+    },
+    "gt_suspect_reviewed_at": "2026-09-04",
+    "gt_suspect_reviewed_by": "owner",
+    "gt_suspect_review_note": "2026-09-04 owner review: 却下のまま維持(「グラフが理解できない。利用しないで。」)。ただし記録されていた却下理由は誤りであることが判明したため訂正する。evidence は「5曲線すべての x-range が exactly (0.0, 0.0)」としていたが、figshare公開スナップショットから復元した実データの x は 0.001109〜0.003392 K^-1 で明確に非ゼロ。値が ~1e-3 のため表示桁を落として 0.0 と記録されたもの。真の問題は y 側で、prop_y=log(Electrical conductivity) の値が -300〜-1000 と対数値としてありえない大きさ(印刷軸のおよそ100倍)。paper 47139/48697 と同型。"
   },
   {
     "paper_id": "27759",
