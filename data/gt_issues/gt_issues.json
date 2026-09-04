@@ -3,12 +3,34 @@
   "source": "real-chart-bench (data/verified_pairs/registry.json)",
   "note": "One-way export of human-confirmed Starrydata ground-truth issues. Only entries a human has reviewed and confirmed as wrong are listed here -- see summary.awaiting_human_review for suspicions an LLM raised that no human has adjudicated yet. Nothing in this repository writes back to starrydata2.org; see data/gt_issues/README.md.",
   "summary": {
-    "total_gt_suspect": 4,
-    "human_confirmed": 1,
+    "total_gt_suspect": 5,
+    "human_confirmed": 3,
     "human_rejected": 0,
-    "awaiting_human_review": 3
+    "awaiting_human_review": 2
   },
   "issues": [
+    {
+      "paper_id": "17044",
+      "figure_id": "20740",
+      "doi": "10.1038/srep23415",
+      "properties": [
+        {
+          "prop_x": "Temperature",
+          "unit_x": "K",
+          "prop_y": "Electrical resistivity",
+          "unit_y": "ohm*m"
+        }
+      ],
+      "gt_suspect_status": "human_confirmed",
+      "verified_at": "2026-08-22",
+      "evidence": "2 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical resistivity/ohm*m), n=37/38 points, x=2.9-300.0K matches the inset's 0-300K axis. y max 0.0128-0.0151 ohm*m sits just below the inset's 10^-2 top gridline, decreasing toward ~10^-3 at high T -- matches the inset's log-y axis and visible curve shape exactly. Note: both GT curves include a small negative-value outlier near the y-axis origin (-0.00045 and -0.00016 ohm*m respectively) which is physically implausible for resistivity and likely digitization/fitting noise at the axis edge -- flagged here rather than silently dropped, does not affect the overall shape match. Cropped tightly to the inset box (x=[310,733] y=[195,480] on the parent embedded image, 733x1072px) to avoid mixing with the main panel's S-vs-T curves (same black/red color scheme, would otherwise contaminate a naive-cv-style pixel extractor).",
+      "rejection_evidence": {
+        "axis_range_mismatch": true,
+        "point_count_mismatch": null,
+        "y_value_offset_magnitude": null,
+        "missing_series": null
+      }
+    },
     {
       "paper_id": "18759",
       "figure_id": "12217",
@@ -28,6 +50,21 @@
         "axis_range_mismatch": true,
         "point_count_mismatch": null,
         "y_value_offset_magnitude": 100.0,
+        "missing_series": null
+      }
+    },
+    {
+      "paper_id": "46123",
+      "figure_id": "45876",
+      "doi": "10.15330/pcss.22.4.664-686",
+      "properties": [],
+      "gt_suspect_status": "human_confirmed",
+      "verified_at": "2026-08-19",
+      "evidence": "5 ground-truth curves (prop_x=Inverse temperature/K^-1, prop_y=log(Electrical conductivity)/S*m^-1) -- but all 5 curves have x-range exactly (0.0, 0.0), i.e. every x-value collapsed to zero. This is a ground-truth data quality defect (not a pairing/image problem): the underlying digitized data for this figure is unusable regardless of which of the 53 candidate images it might correspond to. Rejected on GT-quality grounds before any image was checked, per the design's 'GT quality check' step of the verification procedure. [2026-09-04 CORRECTION: この却下理由(x-range が (0.0, 0.0))は誤りである。figshare公開スナップショットから復元した実 x は 0.001109〜0.003392 K^-1 で非ゼロ。~1e-3 の値を表示桁不足で 0.0 と記録した表示バグだった。却下自体はオーナー判断で維持されるが、理由は x ではなく y 側(log(σ) の値が -300〜-1000 と対数値としてありえない大きさ)である。data/verified_pairs/rejected_candidates_gt.json 参照。]",
+      "rejection_evidence": {
+        "axis_range_mismatch": true,
+        "point_count_mismatch": null,
+        "y_value_offset_magnitude": null,
         "missing_series": null
       }
     }
