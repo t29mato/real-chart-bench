@@ -228,6 +228,241 @@ class TestClassifyRangeDisagreementBenignMargin:
         assert margin_check.passed is None
 
 
+class TestPixelToleranceIsRelativeToImageSize:
+    """Rule (d)'s tolerance used to be a fixed 3px (`_PIXEL_TOLERANCE_PX`).
+    A 2026-09-02 measurement projected every registry endpoint of all 208
+    axes across the 111 verified entries through its axis's printed-label
+    pixel calibration and found 90% overshoot by exactly 0, then a benign
+    cluster at 0.58-1.00% of the axis's own image dimension (three axes,
+    two independently documented in their own `axis_pixel_candidates.json`
+    `notes`: paper 10939/figure 1527's x-axis frame extends to an
+    unlabelled ~900 past the last *printed* tick 800; paper 10939/figure
+    1529's y-axis topmost label 0.9 is clipped by the crop so 0.8 was used
+    as the calibration reference instead), then an empty band up to 51%+
+    where every remaining overshoot is a genuine unit-space difference (SI
+    registry vs. display-unit axis) that rule (e) already classifies
+    separately. `_PIXEL_TOLERANCE_FRACTION` (default 0.02, i.e. 2% of the
+    image dimension) replaces the fixed 3px so the tolerance scales with
+    both image size and calibration-extrapolation distance -- see its own
+    docstring for the full reasoning, including why 44283's two axes
+    (3.00% and 10.75%) are deliberately still NOT cleared.
+
+    Real numbers throughout, cited by paper_id/figure_id, per this file's
+    existing convention -- these are the actual registry/label/pixel/GT
+    values behind the measurement above, not invented ones.
+    """
+
+    def test_paper_10939_figure_1527_x_axis_unlabelled_frame_is_no_longer_real_mismatch(self):
+        # x-axis: labels 300..800 (only these are printed), but the plot
+        # frame -- and thus the registry range -- extends to 900. Projected
+        # through the actual tick-pixel calibration, registry's 900 lands at
+        # pixel 892.30, 6.30px (0.71%) past the right edge of the 886px-wide
+        # image. axis_pixel_candidates.json's own notes for this entry say
+        # "900" is never printed and the frame runs unlabelled to ~900 --
+        # this is deliberate axis framing, not a bad registry endpoint.
+        calibration = AxisPixelCalibration(
+            label_lo_px=161.5, label_hi_px=770.5, image_extent_px=886.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=900.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(
+                300.6192, 865.1647, 296.0577, 851.8479, 294.8003, 854.9087, 300.1595, 852.6536,
+            ),
+            calibration=calibration,
+            gt_unit="K",
+            printed_unit="K",
+        )
+
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is True
+
+    def test_paper_10939_figure_1529_y_axis_clipped_top_label_is_no_longer_real_mismatch(self):
+        # y-axis: the topmost printed label (0.9) is clipped by the crop, so
+        # axis_pixel_candidates.json used 0.8 (fully visible) as the
+        # calibration reference instead -- its own notes say so explicitly.
+        # Projected through that calibration, registry's true 0.9 endpoint
+        # lands at pixel -3.75, 3.75px (0.58%) above the top of the 643px-
+        # tall image. The registry's 0.9 is correct; the calibration
+        # reference just isn't the outermost value.
+        calibration = AxisPixelCalibration(
+            label_lo_px=531.25, label_hi_px=103.25, image_extent_px=643.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=0.4,
+            label_max=0.8,
+            reg_lo=0.4,
+            reg_hi=0.9,
+            scale=ScaleType.LINEAR,
+            gt_extents=(
+                0.492233, 0.6669903, 0.5007282, 0.6220874,
+                0.4473301, 0.6026699, 0.4885922, 0.8114078,
+            ),
+            calibration=calibration,
+            gt_unit="W*m^(-1)*K^(-1)",
+            printed_unit="W/(m·K)",
+        )
+
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is True
+
+    def test_paper_43697_figure_39917_x_axis_one_percent_overshoot_is_cleared(self):
+        # x-axis: registry [210, 335] vs printed labels [220, 330] --
+        # registry's 335 endpoint projects to pixel 978.65, 9.65px (1.00%)
+        # past the right edge of the 969px-wide image. No per-entry note for
+        # this one, but it sits in the same sub-1%-of-image-dimension range
+        # as the two documented cases above, not the 51%+ band where a real
+        # unit-space difference lives.
+        calibration = AxisPixelCalibration(
+            label_lo_px=153.0, label_hi_px=942.75, image_extent_px=969.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=220.0,
+            label_max=330.0,
+            reg_lo=210.0,
+            reg_hi=335.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(213.1, 332.9, 212.9, 333.1, 213.1, 333.2),
+            calibration=calibration,
+            gt_unit="K",
+            printed_unit="K",
+        )
+
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is True
+
+    def test_paper_44283_figure_38971_y_axis_ten_percent_overshoot_still_flagged(self):
+        # y-axis: registry [0, 15] vs printed labels [3, 15] -- registry's 0
+        # endpoint projects to pixel 443.00, 43.00px (10.75%) past the
+        # bottom of the 400px-tall image -- an order of magnitude past the
+        # benign cluster (0.58-1.00%) and well above the 2% default. This
+        # paper (44283) has an independently-noted multi-panel calibration
+        # concern (axis_pixel_candidates.json's notes for this entry: a
+        # shared-x stacked panel pair), so this stays in the review lane
+        # rather than being waved through by a looser tolerance.
+        calibration = AxisPixelCalibration(
+            label_lo_px=372.0, label_hi_px=88.0, image_extent_px=400.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=3.0,
+            label_max=15.0,
+            reg_lo=0.0,
+            reg_hi=15.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(
+                0.9942857, 1.817143, 1.40571, 2.12571, 1.50857, 7.57714,
+                1.817143, 6.445714, 1.817143, 13.69714,
+            ),
+            calibration=calibration,
+            gt_unit="ohm*m",
+            printed_unit="mΩ·cm",
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is False
+
+    def test_paper_4173_figure_20121_x_axis_fifty_percent_overshoot_still_flags_pixel_check(self):
+        # x-axis: registry is in Kelvin [723.15, 1123.15], printed labels
+        # are in Celsius [450, 850] -- a genuine unit-space difference
+        # (design 7.47's display-unit backlog), one of the 11 axes measured
+        # at 51%+ overshoot. Rule (b) fails (gap = 273.15, the K/degC
+        # offset) so this routes to the different-unit-space branch, where
+        # rule (e) correctly confirms UNIT_SPACE_DIFFERENCE from the unit
+        # strings alone -- that overall verdict is unaffected by this
+        # change. But rule (d) is still computed informationally there, and
+        # must still report the endpoint as falling outside the image (its
+        # registry-space value projected through a Celsius-calibrated pixel
+        # mapping lands 365.38px, 51.17%, past the right edge of the 714px-
+        # wide image) -- nowhere near being absorbed by a 2% tolerance.
+        calibration = AxisPixelCalibration(
+            label_lo_px=105.0, label_hi_px=684.0, image_extent_px=714.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=450.0,
+            label_max=850.0,
+            reg_lo=723.15,
+            reg_hi=1123.15,
+            scale=ScaleType.LINEAR,
+            gt_extents=(
+                774.6808, 1073.769, 774.0825, 1073.657, 773.6217, 1073.272, 773.6292, 1073.725,
+            ),
+            calibration=calibration,
+            gt_unit="K",
+            printed_unit="°C",
+        )
+
+        assert verdict.verdict is Verdict.UNIT_SPACE_DIFFERENCE
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is False
+
+    def test_pixel_tolerance_fraction_is_a_parameter_not_only_a_constant(self):
+        # A caller can tighten the pixel tolerance without editing the
+        # module -- e.g. shrink it to recover pre-2026-09-04 fixed-3px-like
+        # strictness for a single call. Reuses paper 10939/figure 1527's
+        # 6.30px/0.71% overshoot (cleared by the 2% default above): a much
+        # smaller fraction (with a floor also forced down to 0) must not
+        # clear it.
+        calibration = AxisPixelCalibration(
+            label_lo_px=161.5, label_hi_px=770.5, image_extent_px=886.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=300.0,
+            label_max=800.0,
+            reg_lo=300.0,
+            reg_hi=900.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(
+                300.6192, 865.1647, 296.0577, 851.8479, 294.8003, 854.9087, 300.1595, 852.6536,
+            ),
+            calibration=calibration,
+            gt_unit="K",
+            printed_unit="K",
+            pixel_tolerance_fraction=0.001,
+            pixel_tolerance_floor_px=0.0,
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is False
+
+    def test_pixel_tolerance_floor_px_protects_a_small_image(self):
+        # A tiny image (100px) at the 2% default fraction alone would give
+        # only a 2px tolerance -- below the few-px inter-model calibration
+        # read noise the floor exists to absorb. A 2.5px overshoot exceeds
+        # that bare 2% (2px) but must still pass because the floor (default
+        # 3.0px) dominates here.
+        calibration = AxisPixelCalibration(
+            label_lo_px=0.0, label_hi_px=100.0, image_extent_px=100.0
+        )
+
+        verdict = classify_range_disagreement(
+            label_min=0.0,
+            label_max=10.0,
+            reg_lo=0.0,
+            reg_hi=10.25,  # projects 2.5px past the right edge (102.5px)
+            scale=ScaleType.LINEAR,
+            gt_extents=(1.0, 9.0),
+            calibration=calibration,
+        )
+
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        pixel_check = _check(verdict, "endpoint_pixel_bounds")
+        assert pixel_check.passed is True
+
+
 class TestRegistryContainmentMargin:
     """Rule (c) (`registry_contains_gt`) originally required EXACT
     containment (no margin). A 2026-09-02 measurement across all 222 axes
