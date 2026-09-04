@@ -218,10 +218,89 @@ _MARGIN_FRACTION = 0.25
 # analysis this measurement is drawn from.
 _CONTAINMENT_MARGIN_FRACTION = 0.02
 
-# ~2x the observed inter-model pixel disagreement (see
-# axis_pixel_candidates.json's `model_disagreement_px`, typically well under
-# 1px, occasionally a few px on a hard read) plus line width, at 150dpi.
-_PIXEL_TOLERANCE_PX = 3.0
+# Rule (d) (`endpoint_pixel_bounds`) tolerance, as a FRACTION of the axis's
+# own image dimension (width for x, height for y) -- not a fixed pixel
+# count. A fixed-px tolerance (this was 3.0px, "~2x the observed inter-model
+# pixel disagreement... plus line width, at 150dpi") cannot express two
+# recurring, documented, benign patterns in this corpus, because how far a
+# registry endpoint legitimately overshoots the image scales with (a) how
+# far the endpoint sits past the outermost *printed* tick that a two-point
+# calibration is extrapolated from, and (b) the image's own size -- not a
+# constant pixel count independent of either.
+#
+# A 2026-09-02 measurement projected every registry endpoint of all 208
+# axes across the 111 verified entries through its axis's printed-label
+# pixel calibration and recorded the overshoot past the image bounds, both
+# in pixels and as a fraction of that axis's image dimension (width for x,
+# height for y). 90% of the 208 axes overshoot by exactly 0. Every axis that
+# overshoots at all:
+#
+#   3.75px ( 0.58%)  10939/1529 y   (image 643px)
+#   6.30px ( 0.71%)  10939/1527 x   (image 886px)
+#   9.65px ( 1.00%)  43697/39917 x  (image 969px)
+#  13.12px ( 3.00%)  44283/38965 y  (image 437px)
+#  43.00px (10.75%)  44283/38971 y  (image 400px)
+#  --------------- gap ---------------
+# 365.38px (51.17%)  4173/20121 x   (and 10 more axes at 51%+)
+#
+# The three lowest are each traceable to one of two documented, benign
+# practices in this corpus, not to a bad registry endpoint:
+#   - 10939/1527's x-axis: the plot frame extends to an unlabelled ~900,
+#     past the last *printed* tick (800) -- axis_pixel_candidates.json's own
+#     `notes` for this entry say so explicitly ("900" is never printed).
+#     Extrapolating the two-point (300, 800) calibration to a registry
+#     endpoint of 900 necessarily overshoots a frame that was always meant
+#     to extend a bit past the last label.
+#   - 10939/1529's y-axis: the topmost printed label (0.9) is clipped by the
+#     crop, so the calibration was built from 0.4/0.8 instead -- again
+#     documented in that entry's own `notes`. The registry's 0.9 is right;
+#     the label captured to calibrate against just isn't the outermost one.
+#   - 43697/39917's x-axis has no comparable per-entry note but sits in the
+#     same sub-1%-of-image-dimension range as the two documented cases,
+#     consistent with the same kind of ordinary calibration/extrapolation
+#     slack rather than a distinct failure mode.
+#
+# 0.02 (2%) was chosen over the two once-considered alternatives:
+#   - A tolerance below ~1% would not clear 43697/39917 (1.00%) even though
+#     it shows no evidence of being a real defect.
+#   - A tolerance at or above ~3% would also clear 44283/38965's 3.00% --
+#     but that whole paper (44283) has an independently-noted multi-panel
+#     calibration concern (see axis_pixel_candidates.json's `notes` for
+#     44283/38971: shared-x stacked panels, ticks read off the wrong
+#     sub-panel), and 44283/38971 itself overshoots by 10.75% -- an order of
+#     magnitude past the benign cluster. The cost asymmetry that motivates
+#     this whole module (a false ACCEPT silently corrupts ground truth,
+#     while a false REJECT only costs a human a few seconds of review)
+#     argues for keeping both of 44283's flagged axes in the review lane
+#     rather than trading a short review list for closing this specific gap.
+#   - 2% sits with comfortable headroom above the 1.00% top of the benign
+#     cluster and well below the 51%+ band where every overshoot so far
+#     measured is a genuine unit-space difference (registry still in raw SI
+#     while the printed axis is in display units) that rule (e)
+#     (`unit_dimensional_analysis`), not this rule, is responsible for and
+#     already classifies correctly.
+#
+# This is a DETECTION threshold, not a physical constant, and the basis
+# above is 208 axes from one materials-science corpus -- like
+# `_CONTAINMENT_MARGIN_FRACTION`, it should be re-derived (not merely
+# re-tuned to keep some list short) as the verified set grows into other
+# domains/image sizes.
+_PIXEL_TOLERANCE_FRACTION = 0.02
+
+# Absolute floor under the fraction above. Without one, an unusually small
+# image could shrink the tolerance below the few-px inter-model calibration
+# read noise the now-retired fixed `_PIXEL_TOLERANCE_PX` (3.0px) was sized
+# to absorb (axis_pixel_candidates.json's `model_disagreement_px`: typically
+# well under 1px, occasionally a few px on a hard read) -- that noise floor
+# is roughly constant in pixels regardless of image size, so a purely
+# relative tolerance is the wrong shape at the small end. The smallest image
+# in this corpus is 260px (crops/21682/fig4b.png); 2% of that is 5.2px,
+# already above this floor, so the floor is not currently binding anywhere
+# -- it exists for a future smaller crop, not to loosen anything measured
+# above. Reuses the old fixed constant's value rather than inventing a new
+# one, since 3.0px's own justification (inter-model disagreement plus line
+# width at 150dpi) is unchanged and still applies at the small end.
+_PIXEL_TOLERANCE_FLOOR_PX = 3.0
 
 # GT_span / L expected band. A 2026-09-02 measurement across 202
 # same-unit-space axes found p5 = 0.376, p50 = 0.900, p95 = 1.093, with
@@ -843,17 +922,21 @@ def _pixel_bounds_check(
     scale: ScaleType,
     calibration: AxisPixelCalibration | None,
     *,
-    tolerance_px: float,
+    tolerance_fraction: float,
+    tolerance_floor_px: float,
 ) -> CheckResult:
     """Rule (d): both registry endpoints, projected through the
     label->pixel calibration, land inside the image bounds (+/-
-    tolerance_px). NOT optional in the same-unit-space branch -- catches
-    cases (paper 10939, figure 1528) where the gap passes rule (b) but the
-    endpoint still falls outside the actual image. Computed (and reported)
-    in the unit-space-difference branch too, but only informationally
-    there -- it speaks to whether the *printed axis calibration* is
-    accurate, which is orthogonal to whether the registry and GT are
-    self-consistent in a different unit space."""
+    `max(tolerance_fraction * image_extent_px, tolerance_floor_px)`, see
+    `_PIXEL_TOLERANCE_FRACTION`'s docstring for the measured basis of the
+    2% default and why it's relative to the image dimension rather than a
+    fixed pixel count). NOT optional in the same-unit-space branch --
+    catches cases (paper 10939, figure 1528) where the gap passes rule (b)
+    but the endpoint still falls outside the actual image. Computed (and
+    reported) in the unit-space-difference branch too, but only
+    informationally there -- it speaks to whether the *printed axis
+    calibration* is accurate, which is orthogonal to whether the registry
+    and GT are self-consistent in a different unit space."""
     name = "endpoint_pixel_bounds"
     if calibration is None:
         return CheckResult(
@@ -872,13 +955,15 @@ def _pixel_bounds_check(
             "log-axis value)",
         )
 
+    tolerance_px = max(tolerance_fraction * calibration.image_extent_px, tolerance_floor_px)
     bound_lo = -tolerance_px
     bound_hi = calibration.image_extent_px + tolerance_px
     lo_ok = bound_lo <= lo_px <= bound_hi
     hi_ok = bound_lo <= hi_px <= bound_hi
     detail = (
         f"reg_lo={reg_lo:g} -> {lo_px:.2f}px, reg_hi={reg_hi:g} -> {hi_px:.2f}px "
-        f"(image bounds [0, {calibration.image_extent_px:g}] +/-{tolerance_px:g}px)"
+        f"(image bounds [0, {calibration.image_extent_px:g}] +/-{tolerance_px:.2f}px = "
+        f"max({tolerance_fraction:g}*{calibration.image_extent_px:g}, {tolerance_floor_px:g}))"
     )
     if lo_ok and hi_ok:
         return CheckResult(name, True, detail)
@@ -897,7 +982,8 @@ def classify_range_disagreement(
     gt_unit: str | None = None,
     printed_unit: str | None = None,
     margin_fraction: float = _MARGIN_FRACTION,
-    pixel_tolerance_px: float = _PIXEL_TOLERANCE_PX,
+    pixel_tolerance_fraction: float = _PIXEL_TOLERANCE_FRACTION,
+    pixel_tolerance_floor_px: float = _PIXEL_TOLERANCE_FLOOR_PX,
     scale_factor_tol: float = _CLEAN_POWER_OF_TEN_TOL,
     containment_margin_fraction: float = _CONTAINMENT_MARGIN_FRACTION,
 ) -> RangeDisagreementVerdict:
@@ -922,7 +1008,8 @@ def classify_range_disagreement(
        `_CONTAINMENT_MARGIN_FRACTION`'s docstring for the measured basis of
        its 0.02 default) AND rule (d) (`endpoint_pixel_bounds`: both
        registry endpoints, projected through the label->pixel calibration,
-       land inside the image, +/- `pixel_tolerance_px`) both pass. Either
+       land inside the image, +/- `max(pixel_tolerance_fraction *
+       image_extent_px, pixel_tolerance_floor_px)`) both pass. Either
        failing -> REAL_MISMATCH (rule (d) is NOT optional -- see paper
        10939/figure 1528, design review 2026-09: gap passes rule (b) at
        only 0.125L but the registry endpoint still projects above the top
@@ -985,7 +1072,14 @@ def classify_range_disagreement(
         reg_lo, reg_hi, gt_extents, scale=scale, margin_fraction=containment_margin_fraction
     )
     pixel_check = _pixel_bounds_check(
-        label_min, label_max, reg_lo, reg_hi, scale, calibration, tolerance_px=pixel_tolerance_px
+        label_min,
+        label_max,
+        reg_lo,
+        reg_hi,
+        scale,
+        calibration,
+        tolerance_fraction=pixel_tolerance_fraction,
+        tolerance_floor_px=pixel_tolerance_floor_px,
     )
 
     if margin_check.passed is None:
