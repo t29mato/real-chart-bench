@@ -913,6 +913,156 @@ class TestClassifyRangeDisagreementUnitSpaceDifference:
         assert affine_check.passed is None
 
 
+class TestClassifyRangeDisagreementLogPrintedLabels:
+    """Rule (f): an axis whose PRINTED tick labels are themselves log10
+    values of the plotted quantity (e.g. "-6, -5, -4, -3, -2, -1" under a
+    y-axis titled "log sigma"), while the registry/GT stay in the linear
+    quantity. `_transform`/`_label_span` can't take log10() of a label
+    that's already a log10 value -- half the labels are non-positive, the
+    rest would be double-logging -- so this used to bail out to an
+    unconditional INDETERMINATE before rule (b) was even evaluated. See
+    module docstring's "A sixth signature" section.
+
+    Real numbers from paper 46278/figure 51437 (the owner's manual review
+    queue's single largest block: six figures, 51437-51442, all hitting
+    this same axis shape): registry y_range [0.0001, 10.0] ohm^-1*m^-1
+    (S/m), y_scale=log, printed y-axis titled "log sigma (Scm^-1)" with
+    labels -6..-1. `0.0001 S/m = 1e-6 S/cm -> log10 = -6`; `10 S/m = 0.1
+    S/cm -> log10 = -1` -- exact.
+    """
+
+    def test_paper_46278_figure_51437_y_axis_resolves_to_benign_margin(self):
+        verdict = classify_range_disagreement(
+            label_min=-6.0,
+            label_max=-1.0,
+            reg_lo=0.0001,
+            reg_hi=10.0,
+            scale=ScaleType.LOG,
+            gt_extents=(0.00083368, 3.4041),  # real GT min/max across all 3 curves
+            gt_unit="ohm^(-1)*m^(-1)",
+            printed_unit="Scm^-1",
+        )
+
+        assert verdict.verdict is Verdict.BENIGN_MARGIN
+        log_check = _check(verdict, "log_printed_labels")
+        assert log_check.passed is True
+        assert "confirmed" in log_check.detail
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is True
+
+    def test_confirmed_but_gt_outside_registry_is_still_real_mismatch(self):
+        # Rule (c) (GT containment) is universal across every branch of
+        # this module -- a confirmed log-printed-labels signature does not
+        # exempt an axis from it.
+        verdict = classify_range_disagreement(
+            label_min=-6.0,
+            label_max=-1.0,
+            reg_lo=0.0001,
+            reg_hi=10.0,
+            scale=ScaleType.LOG,
+            gt_extents=(0.00083368, 1000.0),  # far outside the registry range
+            gt_unit="ohm^(-1)*m^(-1)",
+            printed_unit="Scm^-1",
+        )
+
+        assert verdict.verdict is Verdict.REAL_MISMATCH
+        containment_check = _check(verdict, "registry_contains_gt")
+        assert containment_check.passed is False
+
+    def test_wrong_expected_factor_does_not_reproduce_labels_stays_indeterminate(self):
+        # Same axis shape (non-positive log labels, positive registry
+        # endpoints, usable unit strings) but the printed unit is the SAME
+        # as the SI unit (expected_k=1, no S/m->S/cm conversion) -- so
+        # log10(registry) does NOT reproduce the printed -6..-1 labels
+        # (predicts -4..1 instead). Detected but not confirmed -> must not
+        # guess.
+        verdict = classify_range_disagreement(
+            label_min=-6.0,
+            label_max=-1.0,
+            reg_lo=0.0001,
+            reg_hi=10.0,
+            scale=ScaleType.LOG,
+            gt_extents=(0.00083368, 3.4041),
+            gt_unit="ohm^(-1)*m^(-1)",
+            printed_unit="ohm^(-1)*m^(-1)",
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        log_check = _check(verdict, "log_printed_labels")
+        assert log_check.passed is False
+        assert "not confirmed" in log_check.detail
+
+    def test_without_unit_strings_stays_indeterminate(self):
+        verdict = classify_range_disagreement(
+            label_min=-6.0,
+            label_max=-1.0,
+            reg_lo=0.0001,
+            reg_hi=10.0,
+            scale=ScaleType.LOG,
+            gt_extents=(0.00083368, 3.4041),
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        log_check = _check(verdict, "log_printed_labels")
+        assert log_check.passed is None
+        assert "no usable unit strings" in log_check.detail
+
+    def test_non_positive_registry_endpoint_cannot_be_tested_stays_indeterminate(self):
+        verdict = classify_range_disagreement(
+            label_min=-6.0,
+            label_max=-1.0,
+            reg_lo=0.0,
+            reg_hi=10.0,
+            scale=ScaleType.LOG,
+            gt_extents=(),
+            gt_unit="ohm^(-1)*m^(-1)",
+            printed_unit="Scm^-1",
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        log_check = _check(verdict, "log_printed_labels")
+        assert log_check.passed is None
+        assert "not both positive" in log_check.detail
+
+    def test_ordinary_positive_log_labels_are_unaffected(self):
+        # Regression guard: this new rule only fires on the specific
+        # degenerate-L (non-positive label) path -- an ordinary log axis
+        # with real positive tick labels (design 7.53's own example,
+        # paper 17044/figure 20740's y-axis: 0.001..0.01) must never even
+        # reach `_log_printed_labels_check`.
+        verdict = classify_range_disagreement(
+            label_min=0.001,
+            label_max=0.01,
+            reg_lo=0.001,
+            reg_hi=0.01,
+            scale=ScaleType.LOG,
+            gt_extents=(0.0015, 0.009),
+        )
+
+        assert "log_printed_labels" not in [c.name for c in verdict.checks]
+        margin_check = _check(verdict, "endpoint_margin")
+        assert margin_check.passed is True
+
+    def test_degenerate_label_span_on_linear_axis_is_still_untouched(self):
+        # The pre-existing degenerate-span short-circuit for a LINEAR axis
+        # (equal labels, nothing to do with log10 at all) must produce
+        # exactly the same single-check INDETERMINATE it always did --
+        # `_log_printed_labels_check` isn't even applicable off a log
+        # axis, and must not be added to the checks tuple for one.
+        verdict = classify_range_disagreement(
+            label_min=5.0,
+            label_max=5.0,
+            reg_lo=4.0,
+            reg_hi=6.0,
+            scale=ScaleType.LINEAR,
+            gt_extents=(4.5, 5.5),
+        )
+
+        assert verdict.verdict is Verdict.INDETERMINATE
+        assert len(verdict.checks) == 1
+        assert verdict.checks[0].name == "endpoint_margin"
+
+
 class TestContainment:
     def test_within_bounds_passes(self):
         result = containment((310.0, 780.0), label_min=300.0, label_max=800.0)

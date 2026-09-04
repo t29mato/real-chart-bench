@@ -111,6 +111,81 @@ by GT containment alone (rule (c), independent of the unit question) --
 one of its four GT curves has y-extents around 662-1029, which falls
 *outside* `[25000, 135000]` entirely.
 
+## A sixth signature: the printed labels ARE log10 of the quantity
+
+Found 2026-09-04 via the owner's manual review queue, where paper
+46278's six figures (51437-51442) were its single largest block: an
+Arrhenius-plot y-axis titled `"log sigma (Scm^-1)"` printing raw log10
+values `-6, -5, -4, -3, -2, -1` directly as its tick labels, while
+`registry.json`/`ground_truth.json` stay in linear conductivity
+(`ohm^(-1)*m^(-1)`, i.e. S/m) -- `y_scale` is `"log"` and `y_range` is
+`[0.0001, 10.0]`.
+
+Every other axis in this corpus that declares `scale=LOG` prints
+ordinary positive tick values (`10, 100, 1000, ...`) at their true
+(unlabeled-log) pixel positions -- `_transform`'s `log10(value)` recovers
+"comparison space" from them directly. This axis is different: the
+*printed numbers themselves* are already log10 values of the physical
+quantity (in the axis's own display unit), evenly spaced in pixel space
+exactly the way an ordinary LINEAR axis would be. Taking `log10()` of a
+label that is already a log10 value is undefined half the time
+(`log10(-6)`) and wrong the rest of the time -- there is no valid
+`_transform` for this axis at all, which is exactly why `_label_span`
+returns `None` and the whole classifier used to bail out to
+INDETERMINATE unconditionally, without even looking at the unit strings
+or GT extents. It is not genuinely ambiguous: `_log_printed_labels_check`
+(rule (f), see its own docstring) detects the signature structurally
+(`scale=LOG` plus labels that can't themselves be log10'd) and confirms
+it independently, the same way rule (e) confirms a unit-space
+difference -- by converting the raw registry endpoints into the printed
+unit (`si_to_display_factor`, no reference to the label values) and
+checking that `log10()` of *that* reproduces the printed labels. For
+46278: `log10(0.0001 * 0.01) = -6 = y_min_label`, `log10(10.0 * 0.01) =
+-1 = y_max_label`, exactly.
+
+The axis title text (`y_axis_label_raw`, e.g. `"log sigma (Scm^-1)"`) is
+corroborating evidence that a human or another check could use to raise
+confidence, but this module deliberately does not parse it -- it is free
+text from an LLM read of the image, not a stable machine-checkable
+signal, and the numeric confirmation above is sufficient on its own.
+
+**Verdict chosen: BENIGN_MARGIN, not AXIS_SCALE_FACTOR.** The two other
+non-INDETERMINATE outcomes this module can reach in a same-axis-shape
+situation are AXIS_SCALE_FACTOR (the registry-to-label relationship is
+still affine, just a clean power-of-ten multiplier away from the
+dimensionally-expected one) and UNIT_SPACE_DIFFERENCE (a plain
+multiplicative/additive unit conversion). Neither model fits: the actual
+registry->label relationship here is `label = log10(registry *
+expected_k)`, which is NOT affine at all (nothing multiplies or shifts
+linearly onto the labels -- see `_affine_fit`'s own limits). Concretely,
+`display_conversion(AXIS_SCALE_FACTOR, ...)` would apply `_affine_fit`'s
+straight-line fit through the endpoints, which for this axis computes
+`a=(-1-(-6))/(10-0.0001)=~0.5` -- multiplying every GT point by ~0.5 is
+numerically nonsensical for a value that needs a log10 transform, not a
+scale factor. `UNIT_SPACE_DIFFERENCE` is wrong for a different reason: it
+exists for "the registry/GT are self-consistent but haven't been
+converted to the printed axis's LINEAR display unit yet" -- here the
+registry is already the only sensible representation, since the printed
+axis isn't linear in any unit at all. BENIGN_MARGIN is the verdict that
+actually matches what a re-plot needs to do: apply the `(1.0, 0.0)`
+identity conversion and plot the untouched registry-space (linear S/m)
+values on a `y_scale="log"` axis exactly as `registry.json` already
+declares -- matplotlib's own log-scale renderer then reproduces the
+printed chart's evenly-log-spaced appearance for free, without this
+module trying to model the paper's own log10-labeling choice as an
+affine map it manifestly isn't. Rule (c) (GT containment) still gates
+REAL_MISMATCH universally, same as every other branch; rule (d) (pixel
+bounds) is retained only informationally here, the same way it already
+is in the unit-space-difference branch, because `_project_to_pixel`'s
+own `_transform` can't project through a non-positive log-scale label
+either -- it isn't a genuine pass/fail signal for this axis shape.
+
+**When NOT confirmed, stay INDETERMINATE** -- this signature is detected
+structurally (a real, common failure shape now that it's been found
+once), but the confirming arithmetic is what actually decides the
+verdict; a structural match with unconfirmed unit arithmetic must not
+guess.
+
 ## Scope
 
 Pure domain: no I/O, no file paths, no plotting/imaging libraries, no
@@ -893,6 +968,124 @@ def _unit_dimensional_check(
     )
 
 
+def _log_printed_labels_check(
+    scale: ScaleType,
+    label_min: float,
+    label_max: float,
+    reg_lo: float,
+    reg_hi: float,
+    gt_unit: str | None,
+    printed_unit: str | None,
+    *,
+    margin_fraction: float,
+) -> tuple[CheckResult, bool]:
+    """Rule (f): detects and independently confirms the "printed labels are
+    themselves log10 values" signature (see module docstring, paper
+    46278/figures 51437-51442: a y-axis titled "log sigma (Scm^-1)"
+    printing raw log10(sigma) values -6..-1 directly, while the
+    registry/GT stay in linear conductivity).
+
+    **Detection** (structural, no unit strings needed): `scale` is
+    declared `LOG`, but at least one printed label is non-positive -- the
+    exact condition that makes `_label_span`/`_transform` unable to take
+    `log10()` of the label itself. Every *ordinary* log axis in this
+    corpus prints positive tick values (10, 100, 1000, ...), so a
+    non-positive label under a declared log scale is already a strong
+    structural signature of this specific mislabeling, not of a data
+    error -- it is this module's job to tell the two apart rather than
+    conflate them into one unconditional INDETERMINATE.
+
+    **Confirmation** (the actual thing that decides the verdict): both
+    registry endpoints must be positive (physically required for a
+    quantity that's meaningfully log10'able at all), `gt_unit`/
+    `printed_unit` must be present and dimensionally compatible
+    (`si_to_display_factor`, the SAME independent unit-string route rule
+    (e) uses -- no reference to the label values), and -- the strong
+    check -- `log10(registry_endpoint * expected_k)` must reproduce the
+    corresponding printed label within `margin_fraction * L`, where `L`
+    is the RAW numeric span of the printed labels themselves (they are
+    already in "comparison space" -- there is no second log10 to take of
+    them, unlike every other rule in this module that works in
+    log10-of-value space on a log axis).
+
+    Returns `(CheckResult, confirmed)`. `confirmed=False` covers both
+    "not even the right shape" (linear axis, positive labels, degenerate
+    span) and "right shape but the arithmetic doesn't confirm it" --
+    either way the caller must not guess and stays INDETERMINATE; the
+    `CheckResult.detail` distinguishes the two for the audit trail.
+    """
+    name = "log_printed_labels"
+    if scale is not ScaleType.LOG:
+        return (
+            CheckResult(name, None, "axis is not log-scaled -- not applicable"),
+            False,
+        )
+    if label_min == label_max:
+        return CheckResult(name, None, "degenerate label span -- not applicable"), False
+    if label_min > 0 and label_max > 0:
+        return (
+            CheckResult(
+                name,
+                None,
+                "printed labels are both positive -- ordinary log axis, not applicable",
+            ),
+            False,
+        )
+    if reg_lo <= 0 or reg_hi <= 0:
+        return (
+            CheckResult(
+                name,
+                None,
+                f"non-positive log-axis labels [{label_min:g}, {label_max:g}] suggest the "
+                f"printed axis IS log10 of the plotted quantity, but registry endpoints "
+                f"[{reg_lo:g}, {reg_hi:g}] are not both positive -- cannot test it",
+            ),
+            False,
+        )
+    if _is_missing_or_ambiguous_unit(gt_unit) or _is_missing_or_ambiguous_unit(printed_unit):
+        return (
+            CheckResult(
+                name,
+                None,
+                f"non-positive log-axis labels [{label_min:g}, {label_max:g}] suggest the "
+                "printed axis IS log10 of the plotted quantity, but no usable unit strings "
+                f"supplied (gt_unit={gt_unit!r}, printed_unit={printed_unit!r}) to confirm it",
+            ),
+            False,
+        )
+
+    try:
+        expected_k = si_to_display_factor(gt_unit, printed_unit)
+    except (IncompatibleUnitsError, UnitParseError) as exc:
+        return (
+            CheckResult(
+                name,
+                None,
+                f"non-positive log-axis labels [{label_min:g}, {label_max:g}] suggest the "
+                f"printed axis IS log10 of the plotted quantity, but unit strings "
+                f"{gt_unit!r} -> {printed_unit!r} could not confirm it ({exc})",
+            ),
+            False,
+        )
+
+    predicted_min = math.log10(reg_lo * expected_k)
+    predicted_max = math.log10(reg_hi * expected_k)
+    L = abs(label_max - label_min)
+    gap_lo = abs(predicted_min - label_min)
+    gap_hi = abs(predicted_max - label_max)
+    tol = margin_fraction * L
+    detail = (
+        f"non-positive log-axis labels [{label_min:g}, {label_max:g}] tested as "
+        f"log10(registry*k): expected_k={expected_k:.6g} (from {gt_unit!r} -> "
+        f"{printed_unit!r}); log10(registry*k)=[{predicted_min:.6g}, {predicted_max:.6g}] vs "
+        f"printed [{label_min:.6g}, {label_max:.6g}] (gap_lo={gap_lo:.6g}, gap_hi={gap_hi:.6g}, "
+        f"tol={tol:.6g})"
+    )
+    if gap_lo <= tol + _EPS and gap_hi <= tol + _EPS:
+        return CheckResult(name, True, detail + " -- confirmed"), True
+    return CheckResult(name, False, detail + " -- not confirmed"), False
+
+
 def _project_to_pixel(
     value: float,
     label_min: float,
@@ -1051,18 +1244,82 @@ def classify_range_disagreement(
 
     Any branch with a degenerate/non-computable `L` (equal labels, or
     non-positive labels on a log axis) short-circuits to INDETERMINATE
-    before rule (b) is even evaluated.
+    before rule (b) is even evaluated -- UNLESS `scale` is `LOG` and rule
+    (f) (`_log_printed_labels_check`, see module docstring's "sixth
+    signature" section) both detects and confirms that the non-positive
+    labels are themselves log10 values of the (unit-converted) registry
+    endpoints, e.g. paper 46278: a y-axis titled "log sigma (Scm^-1)"
+    printing raw log10 values -6..-1 while the registry stays linear.
+    Confirmed -> BENIGN_MARGIN (subject to the same universal rule (c)
+    containment gate as every other branch; rule (d) pixel bounds is
+    informational only here, same as the unit-space-difference branch,
+    since it can't itself project through a non-positive log-scale
+    label). Detected but not confirmed by the unit arithmetic -> stays
+    INDETERMINATE, same as before.
     """
     L = _label_span(label_min, label_max, scale)
     if L is None or L == 0:
-        degenerate = CheckResult(
-            "endpoint_margin",
-            None,
-            "degenerate or non-computable label span (L=0 or non-positive log labels) -- "
-            "cannot evaluate margin",
+        log_labels_check, log_labels_confirmed = _log_printed_labels_check(
+            scale,
+            label_min,
+            label_max,
+            reg_lo,
+            reg_hi,
+            gt_unit,
+            printed_unit,
+            margin_fraction=margin_fraction,
         )
+        if log_labels_confirmed:
+            containment_check = _registry_containment_check(
+                reg_lo, reg_hi, gt_extents, scale=scale, margin_fraction=containment_margin_fraction
+            )
+            pixel_check = _pixel_bounds_check(
+                label_min,
+                label_max,
+                reg_lo,
+                reg_hi,
+                scale,
+                calibration,
+                tolerance_fraction=pixel_tolerance_fraction,
+                tolerance_floor_px=pixel_tolerance_floor_px,
+            )
+            checks = (log_labels_check, containment_check, pixel_check)
+            if containment_check.passed is False:
+                # Universal, same as every other branch: a registry range
+                # that doesn't even bound its own GT curve is a real
+                # problem regardless of the log-labels confirmation.
+                return RangeDisagreementVerdict(
+                    Verdict.REAL_MISMATCH,
+                    checks,
+                    f"REAL_MISMATCH: {containment_check.name} ({containment_check.detail})",
+                )
+            return RangeDisagreementVerdict(
+                Verdict.BENIGN_MARGIN,
+                checks,
+                f"BENIGN_MARGIN: {log_labels_check.name} ({log_labels_check.detail})",
+            )
+
+        if scale is ScaleType.LOG:
+            checks = (
+                CheckResult(
+                    "endpoint_margin",
+                    None,
+                    "degenerate or non-computable label span (L=0 or non-positive log labels) "
+                    "-- cannot evaluate margin",
+                ),
+                log_labels_check,
+            )
+        else:
+            checks = (
+                CheckResult(
+                    "endpoint_margin",
+                    None,
+                    "degenerate or non-computable label span (L=0 or non-positive log labels) "
+                    "-- cannot evaluate margin",
+                ),
+            )
         return RangeDisagreementVerdict(
-            Verdict.INDETERMINATE, (degenerate,), f"INDETERMINATE: {degenerate.detail}"
+            Verdict.INDETERMINATE, checks, f"INDETERMINATE: {checks[0].detail}"
         )
 
     margin_check = _margin_check(
