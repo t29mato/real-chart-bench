@@ -4,9 +4,32 @@
   "note": "One-way export of human-confirmed Starrydata ground-truth issues. Only entries a human has reviewed and confirmed as wrong are listed here -- see summary.awaiting_human_review for suspicions an LLM raised that no human has adjudicated yet. Nothing in this repository writes back to starrydata2.org; see data/gt_issues/README.md.",
   "summary": {
     "total_gt_suspect": 4,
-    "human_confirmed": 0,
+    "human_confirmed": 1,
     "human_rejected": 0,
-    "awaiting_human_review": 4
+    "awaiting_human_review": 3
   },
-  "issues": []
+  "issues": [
+    {
+      "paper_id": "18759",
+      "figure_id": "12217",
+      "doi": "10.1038/s41598-018-28043-3",
+      "properties": [
+        {
+          "prop_x": "Temperature",
+          "unit_x": "K",
+          "prop_y": "Electrical conductivity",
+          "unit_y": "ohm^(-1)*m^(-1)"
+        }
+      ],
+      "gt_suspect_status": "human_confirmed",
+      "verified_at": "2026-08-16",
+      "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical conductivity/ohm^(-1)*m^(-1)). x-values ~223-399K match the chart's printed x-axis range. 3 of 4 curves have y-values in 61130-103454 ohm^-1*m^-1, consistent with the chart's printed y-axis 'Electrical conductivity sigma, ohm^-1 cm^-1' spanning ~250-1250 after unit conversion (ohm^-1 cm^-1 * 100 = ohm^-1 m^-1). One of the 4 curves has an outlier range (662-1028 ohm^-1*m^-1, ~2 orders of magnitude below the other three) not yet independently reconciled against the chart -- flagged here for a future re-check rather than silently dropped. [2026-08-30 correction: image_path repointed from the original composite multi-panel image (data/verified_pairs/images/18759/p04_embedded_4.jpg) to a single-panel crop matching this entry's panel_label; the composite image was ambiguous for any pixel-position ground truth work, see github.com/t29mato/real-chart-bench/issues/5.]",
+      "rejection_evidence": {
+        "axis_range_mismatch": true,
+        "point_count_mismatch": null,
+        "y_value_offset_magnitude": 100.0,
+        "missing_series": null
+      }
+    }
+  ]
 }
