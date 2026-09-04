@@ -15,6 +15,7 @@ itself is a usecase concern (see usecase/real_image_gate.py).
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from enum import Enum
 
@@ -81,6 +82,22 @@ class GtSuspectStatus(Enum):
         return self is GtSuspectStatus.HUMAN_CONFIRMED
 
 
+class TickRangeProvenance(Enum):
+    """Where a promoted x_tick_range/y_tick_range came from (design §7.57).
+
+    The only member today is OWNER_REVIEWED: VerifiedPairing.promote_tick_range
+    refuses to attach a tick range unless the source reading in
+    axis_pixel_candidates.json carries status "owner_reviewed" -- see that
+    function's docstring, and GtSuspectStatus above for the sibling
+    llm_flagged/human_confirmed discipline this mirrors. Modelled as an enum
+    (rather than a bare bool) so that if a second, differently-sourced review
+    tier is ever introduced, it adds a member here instead of overloading
+    what "True" means.
+    """
+
+    OWNER_REVIEWED = "owner_reviewed"
+
+
 @dataclass(frozen=True)
 class RejectionEvidence:
     """Structured findings for *what* disagreed between a candidate image
@@ -115,6 +132,16 @@ class VerifiedPairing:
     figure_id: str
     image_path: str | None
     panel_label: str | None
+    # x_range / y_range: the extent of the drawn axis FRAME (the plot box),
+    # not the printed tick labels -- design §7.57. This is deliberate: GT
+    # data routinely lies outside the outermost printed tick (ordinary
+    # plotting margin), so a tick-valued calibration would put real data
+    # outside the calibrated range. These names are kept as-is for external
+    # consumers keyed on them (see docs/interop/README.md) even though
+    # "frame_range" would now be the more accurate name. For the printed
+    # tick values themselves -- the only axis-reading ground truth a model
+    # reading the chart could ever produce, since the frame extent is not
+    # printed anywhere -- see x_tick_range / y_tick_range below.
     x_range: tuple[float, float] | None
     y_range: tuple[float, float] | None
     status: VerificationStatus
@@ -163,6 +190,18 @@ class VerifiedPairing:
     # PAIRING rejection can still note a point_count_mismatch that helped
     # spot the wrong match.
     rejection_evidence: RejectionEvidence | None = None
+    # x_tick_range / y_tick_range: the printed tick-label extent read off
+    # the chart (e.g. axis_pixel_candidates.json's x_min_label/x_max_label),
+    # as opposed to x_range/y_range above which is the drawn frame extent
+    # (design §7.57). Optional and, deliberately, promoted only for the
+    # minority of entries whose axis reading has been human-reviewed -- see
+    # promote_tick_range below and TickRangeProvenance. None for an entry
+    # whose axis reading is still an unreviewed LLM candidate.
+    x_tick_range: tuple[float, float] | None = None
+    y_tick_range: tuple[float, float] | None = None
+    # Required iff x_tick_range or y_tick_range is set, forbidden otherwise
+    # -- enforced in __post_init__. See TickRangeProvenance.
+    tick_range_source: TickRangeProvenance | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -188,6 +227,29 @@ class VerifiedPairing:
                 f"(got rejection_category={self.rejection_category})"
             )
 
+        # design §7.57: a tick range is a refinement of the frame range for
+        # the same axis, so it cannot exist for an axis that has no frame
+        # range at all (in practice this never arises: every entry that has
+        # a reviewed axis_pixel_candidates.json reading is VERIFIED and
+        # VERIFIED entries always carry both frame ranges) -- illegal rather
+        # than merely undocumented, so a future migration bug fails loudly
+        # instead of silently producing an axis with a tick range but no
+        # frame to have refined.
+        if self.x_tick_range is not None and self.x_range is None:
+            raise ValueError("x_tick_range requires x_range (frame extent) to be set")
+        if self.y_tick_range is not None and self.y_range is None:
+            raise ValueError("y_tick_range requires y_range (frame extent) to be set")
+
+        has_tick_range = self.x_tick_range is not None or self.y_tick_range is not None
+        if has_tick_range and self.tick_range_source is None:
+            raise ValueError(
+                "tick_range_source is required when x_tick_range or y_tick_range is set"
+            )
+        if not has_tick_range and self.tick_range_source is not None:
+            raise ValueError(
+                "tick_range_source is only allowed when x_tick_range or y_tick_range is set"
+            )
+
     @property
     def needs_rejection_classification(self) -> bool:
         """True for a REJECTED entry that has not (yet) been assigned a
@@ -203,3 +265,42 @@ class VerifiedPairing:
         LLM_FLAGGED-only entry is never a confirmed GT error -- see
         GtSuspectStatus.is_confirmed_gt_error."""
         return self.gt_suspect_status is not None and self.gt_suspect_status.is_confirmed_gt_error
+
+
+def promote_tick_range(
+    pairing: VerifiedPairing,
+    *,
+    x_tick_range: tuple[float, float] | None,
+    y_tick_range: tuple[float, float] | None,
+    candidate_status: str,
+) -> VerifiedPairing:
+    """Return a copy of ``pairing`` with printed-tick axis ranges attached
+    (design §7.57).
+
+    ``candidate_status`` is the raw ``status`` string carried by the
+    matching entry in ``axis_pixel_candidates.json``
+    ("owner_reviewed" / "llm_candidate" / "excluded"). Promotion is refused
+    -- ``ValueError`` -- unless it is exactly "owner_reviewed": promoting an
+    unreviewed LLM axis reading into the verified registry, and then
+    scoring the v1 axis-reading task against it, is exactly the failure
+    design §7.48's llm_flagged/human_confirmed discipline (see
+    GtSuspectStatus) exists to prevent. ``registry.json`` is verified data;
+    axis_pixel_candidates.json stays the raw LLM output and audit trail.
+
+    Pure: does not read axis_pixel_candidates.json or any other file --
+    the caller (an adapter/script) is responsible for looking up the
+    matching candidate entry and passing its already-parsed fields in.
+    """
+    if candidate_status != "owner_reviewed":
+        raise ValueError(
+            "refusing to promote a tick range whose source axis reading is "
+            f"not owner_reviewed (got candidate_status={candidate_status!r}) "
+            "-- only human-reviewed axis readings may enter the verified "
+            "registry (design §7.57, mirrors §7.48's llm_flagged discipline)"
+        )
+    return dataclasses.replace(
+        pairing,
+        x_tick_range=x_tick_range,
+        y_tick_range=y_tick_range,
+        tick_range_source=TickRangeProvenance.OWNER_REVIEWED,
+    )
