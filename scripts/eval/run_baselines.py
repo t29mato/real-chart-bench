@@ -14,10 +14,15 @@ domain/verified_pairing.py, usecase/real_image_gate.py). REJECTED entries
 in that registry are excluded by construction, not by convention. This run
 therefore uses:
 
-  - every VERIFIED real pair in the registry (currently 1: paper 18759,
-    "Figure 3(a)", electrical conductivity vs temperature)
+  - every VERIFIED real pair in the registry that is not excluded from
+    scoring, which select_verified_pairings decides by `excluded_reason`
+    (design §7.61). A pairing carrying one is correct as a pairing but
+    cannot be scored meaningfully -- its ground truth covers fewer series
+    than the figure draws, is confirmed wrong, or the figure defeats the
+    harness. Do not count VERIFIED entries to predict this number: 139 are
+    VERIFIED and 112 are scored.
   - 3 synthetic fixtures with exact known ground truth, to exercise the
-    harness across scenarios a single real example can't cover alone
+    harness across scenarios the real figures can't cover alone
     (multi-series, log x-axis, missing/black series the naive baseline
     can't see)
 
