@@ -1835,8 +1835,8 @@
     "x_scale": "linear",
     "y_scale": "log",
     "pixel_bbox_mean": {
-      "x_min_px": 97.0,
-      "x_max_px": 549.0,
+      "x_min_px": 112.9,
+      "x_max_px": 537.6,
       "y_min_px": 393.5,
       "y_max_px": 39.5
     },
@@ -1859,7 +1859,8 @@
       "y軸は対数軸。印字ラベルは2,3,4,5,10,20,30。2が下枠(393.5)、30が上枠(39.5)。",
       "Log y-axis; printed labels 2,3,4,5,10,20,30. Verified: 10 predicted at py=183.1 vs detected tick 183.",
       "y軸は対数軸(kappa_tot)、印字ラベルは2と30(10のべき乗表記ではなく実数値)。",
-      "Log y-axis (kappa_tot); printed labels are the plain values 2 and 30 (not powers of ten)."
+      "Log y-axis (kappa_tot); printed labels are the plain values 2 and 30 (not powers of ten).",
+      "2026-09-07 訂正: x軸の画素位置。印刷ラベルの梯子(7段・間隔60.5px)から 2.0@112.9、30.0@537.6。GT点が図のインクに乗る割合 80%→100%。"
     ],
     "status": "llm_candidate",
     "x_axis_label_raw": "T (K)",
@@ -3710,8 +3711,8 @@
     "pixel_bbox_mean": {
       "x_min_px": 162.0,
       "x_max_px": 768.75,
-      "y_min_px": 544.75,
-      "y_max_px": 47.5
+      "y_min_px": 521.0,
+      "y_max_px": 69.5
     },
     "model_estimates": {
       "claude-opus-5": {
@@ -3732,7 +3733,8 @@
       "y軸0.0〜1.0を0.2刻み。",
       "y labels 0.0..1.0 step 0.2 at rows 522.5,431.5,341.5,251,160.5,70; x ticks 162(300)..769(900) step 101.2.",
       "フレームは0.0/1.0のさらに外側にわずかにパディングがある(実測で列/行方向に確認)。",
-      "The frame has a small amount of padding just beyond the 0.0/1.0 labels (confirmed by direct row measurement)."
+      "The frame has a small amount of padding just beyond the 0.0/1.0 labels (confirmed by direct row measurement).",
+      "2026-09-07 訂正: y軸の画素位置。保存値(0.0→544.75, 1.0→47.5)は2モデルの読み(522.5と567.0)を平均したもので、どちらのモデルも主張していない位置。印刷ラベルの梯子(6段・間隔90.5px)から 0.0@521.0、1.0@69.5。GT点が図のインクに乗る割合 68%→88%。オーナーが「Y軸の位置が違う」と判定済み。"
     ],
     "status": "llm_candidate",
     "x_axis_label_raw": "T (K)",
@@ -4900,7 +4902,8 @@
     },
     "notes": [
       "Frame/tick pixel positions measured mechanically (dark/bright-pixel row and column profiling of the extracted image, thresholded and clustered into tick groups) rather than via a dual vision-LLM pass -- single-source reading, recorded as llm_candidate per the existing convention with no model_disagreement_px (only one source).",
-      "Crop is fig2_p05_crop.png (550x305px), offset (60,545) from a 2x-scale full-page render of data/raw/pdfs/47247.pdf page 5 (original render 1191x1582px; frame in that render: top566/bottom785/left184.5/right467.5, x ticks 184.5/300/415.5 = 0.8/1.0/1.2, y ticks 602.5/659.5/720.5/778.5 = -2/-3/-4/-5). Registry's y_range uses the measured FRAME edges (extrapolated past the outermost -5/-2 tick via the tick spacing: [-5.111,-1.378]), not the plain printed-tick values -- see evidence. x_range uses the plain tick/1000 = [0.0008,0.0012] (the frame's actual right edge was measured further out, ~1.29, but that measurement is recorded as supporting evidence rather than baked into x_range -- see the registry entry's NEEDS-ATTENTION note)."
+      "Crop is fig2_p05_crop.png (550x305px), offset (60,545) from a 2x-scale full-page render of data/raw/pdfs/47247.pdf page 5 (original render 1191x1582px; frame in that render: top566/bottom785/left184.5/right467.5, x ticks 184.5/300/415.5 = 0.8/1.0/1.2, y ticks 602.5/659.5/720.5/778.5 = -2/-3/-4/-5). Registry's y_range uses the measured FRAME edges (extrapolated past the outermost -5/-2 tick via the tick spacing: [-5.111,-1.378]), not the plain printed-tick values -- see evidence. x_range uses the plain tick/1000 = [0.0008,0.0012] (the frame's actual right edge was measured further out, ~1.29, but that measurement is recorded as supporting evidence rather than baked into x_range -- see the registry entry's NEEDS-ATTENTION note).",
+      "2026-09-07 補足(値の変更なし): 記録値は正しく、読み方に2つの罠がある。① y軸ラベルが log (sigma [S·cm⁻¹]) で、印刷された数字(-5〜-2)自体が対数。値をlog10してから*線形に*写像する必要があり、対数軸として扱うと負のラベルのlog10を取ることになり破綻する。② x軸は 1000/T (K⁻¹) 表記で、GTはK⁻¹(0.00082〜0.0011)なので×1000が必要。この2点を適用してGT点が図のインクに乗る割合 76%→100%。"
     ],
     "x_axis_label_raw": "1000/T (K^-1)",
     "x_axis_unit": "K^-1",
@@ -5069,5 +5072,63 @@
     "y_axis_label_raw": "log sigma [Scm^-1]",
     "y_axis_unit": "ohm^(-1)*cm^(-1)",
     "status": "llm_candidate"
+  },
+  {
+    "paper_id": "29352",
+    "figure_id": "29155",
+    "image_path": "data/verified_pairs/crops/29352/fig5a.png",
+    "panel_label": null,
+    "x_min_label": 300,
+    "x_max_label": 550,
+    "y_min_label": 100,
+    "y_max_label": 450,
+    "x_scale": "linear",
+    "y_scale": "linear",
+    "pixel_bbox_mean": {
+      "x_min_px": 252.0,
+      "x_max_px": 952.6,
+      "y_min_px": 739.0,
+      "y_max_px": 99.5
+    },
+    "model_estimates": {},
+    "model_disagreement_px": null,
+    "notes": [
+      "2026-09-07 新規: これまで軸読みが未登録だった。印刷ラベルの位置を実測して作成。x梯子6段(300〜550, 間隔140.1px)、y梯子8段(100〜450, 間隔91.4px)。切り出し画像にパネルBが含まれており、枠の自動検出は左端を168pxと誤検出していた(実際の300は252px)。GT点が図のインクに乗る割合 33%→100%。",
+      "2026-09-07 new entry: no axis reading existed. Positions measured from the printed label ladders (x: 6 rungs 140.1 px apart; y: 8 rungs 91.4 px apart). The crop includes panel B, so frame detection mistook 168 px for x=300 when the printed 300 is at 252. Ground-truth ink-hit 33% -> 100%. Not owner-reviewed."
+    ],
+    "status": "llm_candidate",
+    "x_axis_label_raw": "T(K)",
+    "x_axis_unit": "K",
+    "y_axis_label_raw": "σ (S/cm)",
+    "y_axis_unit": "S/cm"
+  },
+  {
+    "paper_id": "29352",
+    "figure_id": "29160",
+    "image_path": "data/verified_pairs/crops/29352/fig7a.png",
+    "panel_label": null,
+    "x_min_label": 300,
+    "x_max_label": 550,
+    "y_min_label": 0.4,
+    "y_max_label": 2.0,
+    "x_scale": "linear",
+    "y_scale": "linear",
+    "pixel_bbox_mean": {
+      "x_min_px": 238.4,
+      "x_max_px": 945.7,
+      "y_min_px": 738.0,
+      "y_max_px": 102.5
+    },
+    "model_estimates": {},
+    "model_disagreement_px": null,
+    "notes": [
+      "2026-09-07 新規: これまで軸読みが未登録だった。印刷ラベルの位置を実測して作成。x梯子6段(300〜550, 間隔141.5px)、y梯子9段(0.4〜2.0, 間隔79.4px)。5(a)と同じくパネルBを含む切り出しで、枠検出が左端を174pxと誤検出していた(実際の300は238.4px)。GT点が図のインクに乗る割合 38%→100%。",
+      "2026-09-07 new entry: no axis reading existed. Positions measured from the printed label ladders (x: 6 rungs 141.5 px apart; y: 9 rungs 79.4 px apart). Same crop problem as 5(a): frame detection mistook 174 px for x=300 when the printed 300 is at 238.4. Ground-truth ink-hit 38% -> 100%. Not owner-reviewed."
+    ],
+    "status": "llm_candidate",
+    "x_axis_label_raw": "T(K)",
+    "x_axis_unit": "K",
+    "y_axis_label_raw": "κ (W m⁻¹ K⁻¹)",
+    "y_axis_unit": "W·m^-1·K^-1"
   }
 ]
