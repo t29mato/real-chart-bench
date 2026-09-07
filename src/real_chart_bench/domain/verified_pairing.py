@@ -16,7 +16,7 @@ itself is a usecase concern (see usecase/real_image_gate.py).
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from real_chart_bench.domain.curve import ScaleType
@@ -80,6 +80,42 @@ class GtSuspectStatus(Enum):
     @property
     def is_confirmed_gt_error(self) -> bool:
         return self is GtSuspectStatus.HUMAN_CONFIRMED
+
+
+class FigureKind(Enum):
+    """How a figure's data is drawn on the page (design §7.59).
+
+    A binary, deliberately: it answers only "are there discrete markers",
+    never "how were the points connected".
+
+    - MARKERS: discrete markers are drawn; the markers are the data,
+      whether or not any stroke also connects or fits them. A bare
+      connecting polyline, a smooth fitted curve through the markers, or no
+      stroke at all are all MARKERS as long as markers are present -- the
+      stroke's nature is not part of this taxonomy.
+    - LINE_ONLY: no markers anywhere; the stroke itself is the data (e.g. a
+      continuous trace with nothing marking individual observations).
+
+    History: three earlier rounds tried to classify figures as
+    line/scatter/mixed, hinging on whether a drawn stroke *connects* the
+    data points (a plain polyline) or is a *fitted curve* over them (design
+    §7.59 has the failure of each round). The owner cut the distinction
+    entirely -- "the plot points are the experimental values ... if there
+    are plot markers, it should be recognised as markers" -- because
+    connector-vs-fit turned out too hard to call reliably from the image
+    alone, and a controlled comparison found it made no material
+    difference to scores either way (§7.59). "scatter" is also avoided as
+    a name: in materials science it implies many different samples, while
+    a single sample's measurement sweep rendered as markers is not a
+    statistical scatter.
+
+    Optional on VerifiedPairing: older entries predate this taxonomy and
+    carry no figure_kind at all -- None, not a member, is how "not yet
+    classified" is represented.
+    """
+
+    MARKERS = "markers"
+    LINE_ONLY = "line_only"
 
 
 class TickRangeProvenance(Enum):
@@ -202,6 +238,20 @@ class VerifiedPairing:
     # Required iff x_tick_range or y_tick_range is set, forbidden otherwise
     # -- enforced in __post_init__. See TickRangeProvenance.
     tick_range_source: TickRangeProvenance | None = None
+    # design §7.59: how this figure's data is drawn (markers vs a bare
+    # stroke). None for entries verified before this taxonomy existed --
+    # "not yet classified", not a third value of the enum itself.
+    figure_kind: FigureKind | None = None
+    # design §7.59: observation-quality tags carried over from the
+    # markers/line_only classification pass, e.g. "inset", "error_bars",
+    # "dense_overlap" -- see the migration script / docs/design §7.59 for
+    # the full set. Deliberately excludes "fitting_line": that tag encoded
+    # exactly the connector-vs-fit judgement the owner abandoned as
+    # unreliable, and carrying it forward would invite rebuilding that
+    # distinction on data nobody trusts. Empty tuple (not None) when an
+    # entry has been through the pass but has no tags -- mirrors
+    # GroundTruthCurve.quality_flags's tuple[str, ...] convention.
+    figure_tags: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if (

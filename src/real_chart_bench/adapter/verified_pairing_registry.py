@@ -15,6 +15,7 @@ from typing import Any
 
 from real_chart_bench.domain.curve import ScaleType
 from real_chart_bench.domain.verified_pairing import (
+    FigureKind,
     GtSuspectStatus,
     RejectionCategory,
     RejectionEvidence,
@@ -74,6 +75,10 @@ def _parse_entry(raw: dict[str, Any]) -> VerifiedPairing:
             if raw.get("tick_range_source") is not None
             else None
         ),
+        figure_kind=(
+            FigureKind(raw["figure_kind"]) if raw.get("figure_kind") is not None else None
+        ),
+        figure_tags=tuple(raw["figure_tags"]) if "figure_tags" in raw else (),
     )
 
 
@@ -164,6 +169,14 @@ def serialize_entry(
         out["rejection_evidence"] = serialized_evidence
     elif "rejection_evidence" in out:
         del out["rejection_evidence"]
+
+    if pairing.figure_kind is not None:
+        out["figure_kind"] = pairing.figure_kind.value
+    elif "figure_kind" in out:
+        del out["figure_kind"]
+
+    if pairing.figure_tags or "figure_tags" in out:
+        out["figure_tags"] = list(pairing.figure_tags)
 
     return out
 
