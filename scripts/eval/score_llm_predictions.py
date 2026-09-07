@@ -50,6 +50,26 @@ MODELS = {
     "claude-haiku-4-5": "Claude Haiku 4.5",
 }
 
+# How hard each model actually worked, from its agent run. This belongs in the
+# results because the four runs are not comparable as "model reads chart": each
+# model was free to use tools, and they used wildly different amounts. Fable
+# wrote a colour-segmentation pipeline; Opus read magnified crops across 94 tool
+# calls; Sonnet and Haiku answered from the images in about 15. A reader
+# comparing the scores without this would conclude something about eyesight
+# that the numbers do not support.
+EFFORT = {
+    "claude-opus-5": {"tool_uses": 94, "tokens": 170675, "seconds": 1399,
+                      "method": "拡大クロップを多数作って目視で読み取り。軸は枠端ではなく"
+                                "印刷目盛で校正したと明記。fig_09では凡例の参照線2本も系列として報告。"},
+    "claude-sonnet-5": {"tool_uses": 15, "tokens": 57590, "seconds": 186,
+                        "method": "画像を直接読んで回答。補助スクリプトなし。"},
+    "claude-fable-5": {"tool_uses": 58, "tokens": 153838, "seconds": 925,
+                       "method": "自前のCVパイプラインを記述 — 色分割したブロブ重心から"
+                                 "ガイド線を除去し、検出した目盛で校正。重ね描きで検証。"},
+    "claude-haiku-4-5": {"tool_uses": 14, "tokens": 51153, "seconds": 180,
+                         "method": "画像を直接読んで回答。補助スクリプトなし。"},
+}
+
 
 class ReplayRunner:
     """Serves one model's recorded answers as a ModelRunnerPort."""
@@ -67,7 +87,15 @@ class ReplayRunner:
         return self._preds[name]
 
 
-def parse_curves(raw, x_scale: ScaleType, y_scale: ScaleType) -> list[Curve]:
+def parse_curves(raw, x_scale: ScaleType) -> list[Curve]:
+    """Model answers as Curves, built the way an extractor adapter builds them.
+
+    `Curve` carries x_scale and no y_scale, and the CV adapters set x_scale
+    from the task -- see adapter/naive_cv_extractor.py. Matching that exactly
+    matters: the metric is what compares these against the ground truth, and a
+    difference here would show up as a score difference that has nothing to do
+    with how well the model read the chart.
+    """
     out = []
     for c in raw:
         xs, ys = c.get("x") or [], c.get("y") or []
@@ -77,7 +105,7 @@ def parse_curves(raw, x_scale: ScaleType, y_scale: ScaleType) -> list[Curve]:
             continue
         out.append(Curve(x_values=tuple(p[0] for p in pairs),
                          y_values=tuple(p[1] for p in pairs),
-                         x_scale=x_scale, y_scale=y_scale))
+                         x_scale=x_scale))
     return out
 
 
@@ -99,9 +127,11 @@ def main() -> None:
                 x_range=tuple(t["x_range"]), y_range=tuple(t["y_range"]),
                 x_scale=ScaleType(t["x_scale"]), y_scale=ScaleType(t["y_scale"]),
             ),
+            # Built exactly as run_baselines.py's _ground_truth_for does --
+            # no scale arguments, series_label from prop_y -- so these figures
+            # are scored against the same ground truth the CV baselines face.
             ground_truth=[Curve(x_values=tuple(c["x"]), y_values=tuple(c["y"]),
-                                x_scale=ScaleType(t["x_scale"]),
-                                y_scale=ScaleType(t["y_scale"])) for c in gt],
+                                series_label=c.get("prop_y")) for c in gt],
         ))
         order.append(t["id"])
 
@@ -116,8 +146,7 @@ def main() -> None:
         preds = {}
         for t in tasks:
             if t["id"] in raw:
-                preds[t["id"]] = parse_curves(
-                    raw[t["id"]], ScaleType(t["x_scale"]), ScaleType(t["y_scale"]))
+                preds[t["id"]] = parse_curves(raw[t["id"]], ScaleType(t["x_scale"]))
         results = evaluate_model_on_dataset(ReplayRunner(preds, order), items, matcher=matcher)
         per_figure = [{
             "figure_id": r.figure_id,
@@ -135,6 +164,7 @@ def main() -> None:
             "n_figures": len(per_figure),
             "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
             "per_figure": per_figure,
+            "agent_effort": EFFORT.get(model_id),
             "notes": (
                 "Claude Code のサブエージェントとして各モデルを起動し、"
                 "図の画像と軸レンジ(ExtractionTask と同じ情報)だけを与えて抽出させた結果。"
@@ -143,7 +173,15 @@ def main() -> None:
                 "正解データはプロンプトに含めず、リポジトリを探索しないよう指示した。"
                 "ただしこれは緩和策でありサンドボックスではない — "
                 "Bash を持つエージェントが探しにいけばリポジトリに到達しうる。"
-                "10図のみの試行であり、112図の本評価とは別の dataset_version を持つ。"
+                "実際にコピーが起きていないことは事後に確認した: モデル間で完全一致する"
+                "(x,y)点は0〜1.4%で、独立に読み取った場合の水準である。"
+                "重要な限界として、4モデルは同じ作業量では走っていない — agent_effort 参照。"
+                "Fable は自前のCVパイプラインを書き、Opus は拡大クロップを多数作って読んだ一方、"
+                "Sonnet と Haiku はツール実行15回前後で回答している。"
+                "したがってこれは『どのモデルが図をよく読めるか』ではなく"
+                "『ツールと時間を与えられたエージェントとしてどれだけ抽出できるか』の比較である。"
+                "10図のみの試行であり、順位を確定させるには小さすぎる。"
+                "112図の本評価とは別の dataset_version を持つ。"
             ),
         }
         out = RESULTS / f"{model_id}-v0.json"
