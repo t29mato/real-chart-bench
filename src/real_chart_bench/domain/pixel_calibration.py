@@ -44,6 +44,20 @@ class PixelCalibration:
         y = _scale_frac(y_frac, self.y_range, self.y_scale, axis_name="y")
         return x, y
 
+    def to_pixel(self, x: float, y: float) -> tuple[float, float]:
+        """Inverse of :meth:`to_data`: where a data point sits in the image.
+
+        Extrapolates past the bounding box rather than clamping — ground truth
+        routinely lies outside the outermost printed tick (design §7.57).
+        """
+        px0, py0, px1, py1 = self.pixel_bbox
+        x_frac = _unscale_frac(x, self.x_range, self.x_scale, axis_name="x")
+        y_frac = _unscale_frac(y, self.y_range, self.y_scale, axis_name="y")
+
+        pixel_x = px0 + x_frac * (px1 - px0)
+        pixel_y = py1 - y_frac * (py1 - py0)  # invert: data-up -> pixel-down
+        return pixel_x, pixel_y
+
 
 def _scale_frac(
     frac: float, value_range: tuple[float, float], scale: ScaleType, *, axis_name: str
@@ -57,6 +71,23 @@ def _scale_frac(
         log_value = math.log10(lo) + frac * (math.log10(hi) - math.log10(lo))
         return 10**log_value
     return lo + frac * (hi - lo)
+
+
+def _unscale_frac(
+    value: float, value_range: tuple[float, float], scale: ScaleType, *, axis_name: str
+) -> float:
+    lo, hi = value_range
+    if scale is ScaleType.LOG:
+        if lo <= 0 or hi <= 0:
+            raise ValueError(
+                f"log {axis_name}_scale requires a strictly positive {axis_name}_range"
+            )
+        if value <= 0:
+            raise ValueError(
+                f"log {axis_name}_scale requires a strictly positive {axis_name} value"
+            )
+        return _safe_frac(math.log10(value), math.log10(lo), math.log10(hi))
+    return _safe_frac(value, lo, hi)
 
 
 def _safe_frac(value: float, lo: float, hi: float) -> float:

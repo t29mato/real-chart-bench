@@ -4,6 +4,41 @@
 渡した際の内容**を記録する。渡した内容を後から再現・監査できるようにするためであり、
 本ベンチマークの評価パイプラインはここを一切参照しない。
 
+## `starrydata3-e2e-fixtures-2026-09-09.json`(2026-09-09)
+
+**渡し先**: Starrydata3 のデジタイズ画面の **E2E 回帰テスト**。
+**渡した場所**: `/var/tmp/real-chart-bench-e2e-fixtures-2026-09-09/`
+(`fixtures.json` + `images/` 9枚 + `overlays/` 9枚 + `README.md`)。
+ここに記録してあるのは `fixtures.json` と同梱 README(`.md`)のみ(画像は再生成できるので置かない)。
+
+**生成**: `python scripts/export/build_starrydata3_e2e_fixtures.py <出力先>`(再現可能)。
+committed な束の陳腐化は `tests/adapter/test_starrydata3_e2e_fixture_bundle.py` が検知する
+(軸座標が再修正されたらCIで落ちる)。
+
+**2026-09-04 の束との違い**: 先方の要件が「軸校正の**ピクセル座標**と、各点の**ピクセル座標**」
+だったが、前回の束はピクセル座標を一切持っていなかった。今回は
+
+- 軸校正は `axis_pixel_candidates.json` の実測ピクセル(`status: owner_reviewed` のみ)、
+- 各点のピクセルは**そこから逆写像して導出**(本リポジトリは点のピクセルを保持していない)、
+  `domain/pixel_calibration.py::PixelCalibration.to_pixel`(本作業で追加)を使う
+
+という構成。導出ピクセルが実際の描画マーカーに乗ることは、9枚すべてオーバーレイで目視確認し、
+最近傍インクまでの距離でも機械的に確認した(塗りマーカーの図で中央値 0〜1.4px)。
+
+**選定**(9枚、性質を散らす): 27759/25217(log-y 5桁)、5902/15112(**log-x**、プール唯一)、
+47534/49581(反転配色・小数点カンマ)、16111/15452(14系列1259点)、446/8725(黄背景スキャン)、
+10939/1531(近似色4系列)、17040/21020(左右2軸・校正は左)、22102/21245(`line_only`)、
+17038/20816(2系列6点・エラーバー)。
+
+**選定条件**: registry が `verified` かつ `tick_range_source: owner_reviewed`、軸エントリが
+`owner_reviewed`、registry の tick_range と軸ラベルが一致、かつ全点が枠内に写像される
+(K vs ℃ や SI vs 印字単位のズレを機械的に弾く)。この条件を満たす候補は他に41枚ある。
+
+**⚠️ 前回の束の誤り**: `83/9049` は**正解データと図中マーカーが系統的にずれている**
+(最近傍インクまで中央値6.4px・最大42px、マーカー重心まで21px。正解yが描画yの約0.85倍に
+相当する形で、両極小は一致)。前回の束(2026-09-04)にはこの図が含まれていた。
+今回は除外し、先方にも明示した。**原因調査は未着手**(registry上は `verified` のまま)。
+
 ## `starrydata3-fixture-bundle.json`(2026-09-04)
 
 **渡し先**: Starrydata3(`~/repos/starrydata2`、ブランチ `starrydata3`)のデータ登録画面。
