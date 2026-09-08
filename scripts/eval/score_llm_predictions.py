@@ -38,10 +38,29 @@ from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 RESULTS = REPO / "results"
-WORK = pathlib.Path(
+SCRATCH = pathlib.Path(
     "/tmp/claude-1000/-home-mato-repos-real-chart-bench/"
-    "628beb76-383b-42e9-bf21-8d4188daf8dc/scratchpad/llm_eval"
+    "628beb76-383b-42e9-bf21-8d4188daf8dc/scratchpad"
 )
+
+# Two conditions over the same ten figures, the same ground truth and the same
+# metric. The only difference is whether the model was handed the axis extent
+# -- which is the part that decides whether these scores mean "chart reading is
+# solved" or "marker locating is solved given a perfect calibration".
+CONDITIONS = {
+    "calibrated": {
+        "work": SCRATCH / "llm_eval",
+        "pred": lambda work, m: work / m / "predictions.json",
+        "suffix": "",
+        "label": "軸レンジを与えた条件",
+    },
+    "noaxis": {
+        "work": SCRATCH / "llm_eval_noaxis",
+        "pred": lambda work, m: work / m / "predictions.json",
+        "suffix": "-noaxis",
+        "label": "軸レンジを与えない条件（モデルが目盛を自分で読む）",
+    },
+}
 
 MODELS = {
     "claude-opus-5": "Claude Opus 5",
@@ -110,8 +129,17 @@ def parse_curves(raw, x_scale: ScaleType) -> list[Curve]:
 
 
 def main() -> None:
-    tasks = json.loads((WORK / "tasks.json").read_text())
-    key = json.loads((WORK / "_key.json").read_text())
+    name = sys.argv[1] if len(sys.argv) > 1 else "calibrated"
+    if name not in CONDITIONS:
+        raise SystemExit(f"条件は {list(CONDITIONS)} のいずれか (指定: {name})")
+    cond = CONDITIONS[name]
+    work = cond["work"]
+
+    # The task list in the noaxis condition carries no ranges, so the ranges
+    # needed to build ExtractionTask always come from the calibrated export.
+    # The model never saw them there; they are only used to score.
+    tasks = json.loads((SCRATCH / "llm_eval" / "tasks.json").read_text())
+    key = json.loads((SCRATCH / "llm_eval" / "_key.json").read_text())
     gt_all = json.loads((REPO / "data/verified_pairs/ground_truth.json").read_text())
     reg = {p.figure_id: p for p in load_registry(REPO / "data/verified_pairs/registry.json")}
 
@@ -138,7 +166,7 @@ def main() -> None:
     matcher = HungarianCurveMatcher(metric=NormalizedYDistanceMetric())
     written = []
     for model_id, model_name in MODELS.items():
-        path = WORK / model_id / "predictions.json"
+        path = cond["pred"](work, model_id)
         if not path.exists():
             print(f"  {model_id}: 予測ファイルがない → スキップ")
             continue
@@ -157,14 +185,16 @@ def main() -> None:
             "error": r.error,
         } for r in results]
         payload = {
-            "model_id": model_id,
-            "model_name": model_name,
-            "dataset_version": f"v0-eval-pilot-n112-llm-subset-n{len(items)}",
+            "model_id": model_id + cond["suffix"],
+            "model_name": model_name + ("（軸レンジなし）" if cond["suffix"] else ""),
+            "dataset_version": (
+                f"v0-eval-pilot-n112-llm-subset-n{len(items)}{cond['suffix']}"),
             "run_at": datetime.now(UTC).isoformat(),
             "n_figures": len(per_figure),
             "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
             "per_figure": per_figure,
-            "agent_effort": EFFORT.get(model_id),
+            "agent_effort": EFFORT.get(model_id) if not cond["suffix"] else None,
+            "condition": cond["label"],
             "notes": (
                 "Claude Code のサブエージェントとして各モデルを起動し、"
                 "図の画像と軸レンジ(ExtractionTask と同じ情報)だけを与えて抽出させた結果。"
@@ -184,7 +214,7 @@ def main() -> None:
                 "112図の本評価とは別の dataset_version を持つ。"
             ),
         }
-        out = RESULTS / f"{model_id}-v0.json"
+        out = RESULTS / f"{model_id}-v0{cond['suffix']}.json"
         out.write_text(json.dumps(payload, indent=2) + "\n")
         written.append((model_id, payload["mean_summary_score"], len(preds)))
         print(f"  {model_id:<20} 平均 {payload['mean_summary_score']:.4f}  "
