@@ -3301,7 +3301,7 @@
       "x_min_px": 64.5,
       "x_max_px": 550.75,
       "y_min_px": 401.0,
-      "y_max_px": 112.75
+      "y_max_px": 113.8
     },
     "model_estimates": {
       "claude-opus-5": {
@@ -3324,7 +3324,8 @@
       "右上にインセット(D vs Temperature)が重なるが対象は外側メインプロット。",
       "An inset (D vs Temperature) overlaps upper-right; target is the outer main plot.",
       "パスB表記に小文字kの誤植あり('T (K)')。論文自体の表記ゆれ(同図の他パネルは大文字K)。パスA('T (K)')を採用。",
-      "パスB表記に小文字kの誤植あり('K (W/(m k))')。論文自体の表記ゆれ(同図の他パネルは大文字K)。パスA('K (W/(m K))')を採用。"
+      "パスB表記に小文字kの誤植あり('K (W/(m k))')。論文自体の表記ゆれ(同図の他パネルは大文字K)。パスA('K (W/(m K))')を採用。",
+      "2026-09-08 訂正(y_max_px 112.75→113.8): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: y ticks interior, spacing 143.8px (right spine 401.3/113.9). x=300 on left frame (cols 63-66), x=800 interior 551.0 (spacing 97.3)."
     ],
     "status": "llm_candidate",
     "x_axis_label_raw": "T (K)",
@@ -4967,7 +4968,7 @@
       "x_min_px": 124.5,
       "x_max_px": 355.5,
       "y_min_px": 239.0,
-      "y_max_px": 57.5
+      "y_max_px": 52.6
     },
     "notes": [
       "Frame/tick pixel positions measured mechanically (dark/bright-pixel row and column profiling of the extracted image, thresholded and clustered into tick groups) rather than via a dual vision-LLM pass -- single-source reading, recorded as llm_candidate per the existing convention with no model_disagreement_px (only one source).",
@@ -4975,7 +4976,8 @@
       "2026-09-07 補足(値の変更なし): 記録値は正しく、読み方に2つの罠がある。① y軸ラベルが log (sigma [S·cm⁻¹]) で、印刷された数字(-5〜-2)自体が対数。値をlog10してから*線形に*写像する必要があり、対数軸として扱うと負のラベルのlog10を取ることになり破綻する。② x軸は 1000/T (K⁻¹) 表記で、GTはK⁻¹(0.00082〜0.0011)なので×1000が必要。この2点を適用してGT点が図のインクに乗る割合 76%→100%。",
       "2026-09-08 訂正: y軸下端の画素位置を 233.5 → 239.0 (+5.50px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
       "2026-09-08 owner review: y軸下端の位置修正のみをオーナーが目視確認し承認。この図で確認されたのは y_min_px の位置だけであり、目盛の値(x_min_label等)および他3参照点の位置は未レビューのため status は llm_candidate のまま据え置く。promote_tick_range は owner_reviewed を要求する(設計§7.57)ので、ここで昇格させると誰も確認していない tick range の公開を許してしまう。",
-      "2026-09-08 owner review: 目盛の値をオーナーが確認し承認。位置は y下端のみ確認済みで、残る3参照点は Claude Fable 5 による独立測定の結果待ちのため status は据え置く。"
+      "2026-09-08 owner review: 目盛の値をオーナーが確認し承認。位置は y下端のみ確認済みで、残る3参照点は Claude Fable 5 による独立測定の結果待ちのため status は据え置く。",
+      "2026-09-08 訂正(y_max_px 57.5→52.6): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: medium)。 測定側の注記: Small low-res figure (550x305). Outward ticks 2-3px long. x=0.8 coincides with left frame (cols 124-125, centre 124.6), x=1.2 interior 355.6 (spacing 115.5px). y=-5 on bottom frame (rows 239-240, centre 239.2), y=-2 interior tick at 52.6 (spacing 62.2px). Ticks isolated on the outer 0-3px band to exclude the nearby label glyphs."
     ],
     "x_axis_label_raw": "1000/T (K^-1)",
     "x_axis_unit": "K^-1",
@@ -4995,14 +4997,15 @@
     "x_scale": "linear",
     "y_scale": "log",
     "pixel_bbox_mean": {
-      "x_min_px": 429.0,
-      "x_max_px": 1368.5,
+      "x_min_px": 312.2,
+      "x_max_px": 1250.6,
       "y_min_px": 1236.0,
       "y_max_px": 265.5
     },
     "notes": [
       "Frame/tick pixel positions measured mechanically (dark/bright-pixel row and column profiling of the extracted image, thresholded and clustered into tick groups) rather than via a dual vision-LLM pass -- single-source reading, recorded as llm_candidate per the existing convention with no model_disagreement_px (only one source).",
-      "image 3030x1425px, left panel only (right panel 'b' is a different y-quantity, ln(sigma*T), not this figure_id). Frame: top264-267, bottom1235-1238, left210-212, right1414-1416. Minor ticks step 0.00025 from px312(0.00075) to px1368.5(0.0030); major (labelled) ticks at 0.0010/0.0015/0.0020/0.0025/0.0030 = px429/664/899/1133.5/1368.5. y minor ticks step 0.25 from px265.5(1.0) to px1236(-3.5), 19 positions; major (labelled) every 0.5. Registry x_range uses the measured PLOT FRAME (px210/1416, extrapolated via the tick spacing to values 0.000534/0.003101), which extends further than the printed tick labels on both ends -- see evidence."
+      "image 3030x1425px, left panel only (right panel 'b' is a different y-quantity, ln(sigma*T), not this figure_id). Frame: top264-267, bottom1235-1238, left210-212, right1414-1416. Minor ticks step 0.00025 from px312(0.00075) to px1368.5(0.0030); major (labelled) ticks at 0.0010/0.0015/0.0020/0.0025/0.0030 = px429/664/899/1133.5/1368.5. y minor ticks step 0.25 from px265.5(1.0) to px1236(-3.5), 19 positions; major (labelled) every 0.5. Registry x_range uses the measured PLOT FRAME (px210/1416, extrapolated via the tick spacing to values 0.000534/0.003101), which extends further than the printed tick labels on both ends -- see evidence.",
+      "2026-09-08 訂正(x_min_px 429.0→312.2、x_max_px 1368.5→1250.6): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Two-panel figure; labels refer to left panel (a). Outward ticks. x=0.0010 and 0.0030 interior ticks (312.2, 1250.6; spacing 234.6px). y=1.0 on top frame (rows 264-267, centre 265.4), y=-3.5 on bottom frame (rows 1235-1238, centre 1236.3). Spacing 107.9px."
     ],
     "x_axis_label_raw": "1/T [1/K]",
     "x_axis_unit": "K^-1",
@@ -5049,14 +5052,15 @@
     "x_scale": "linear",
     "y_scale": "log",
     "pixel_bbox_mean": {
-      "x_min_px": 432.5,
-      "x_max_px": 2394.5,
+      "x_min_px": 562.0,
+      "x_max_px": 2395.5,
       "y_min_px": 2551.5,
-      "y_max_px": 307.5
+      "y_max_px": 298.0
     },
     "notes": [
       "Frame/tick pixel positions measured mechanically (dark/bright-pixel row and column profiling of the extracted image, thresholded and clustered into tick groups) rather than via a dual vision-LLM pass -- single-source reading, recorded as llm_candidate per the existing convention with no model_disagreement_px (only one source).",
-      "image 5017x2927px (white-on-black figure; thresholded on brightness, not darkness). Frame: top~298, bottom~2554, left~432, right~2395, coinciding exactly with the outermost printed ticks on both axes. x ticks 0.8/1.0/1.2 confirmed at px432.5/562/695 (step 130.5px/0.2), right frame at 2395=2.2 by the same spacing. y ticks 1.0..-2.5 step 0.5, major at px307.5/620/942.5/1264/1585.5/1908.5/2230/2551.5."
+      "image 5017x2927px (white-on-black figure; thresholded on brightness, not darkness). Frame: top~298, bottom~2554, left~432, right~2395, coinciding exactly with the outermost printed ticks on both axes. x ticks 0.8/1.0/1.2 confirmed at px432.5/562/695 (step 130.5px/0.2), right frame at 2395=2.2 by the same spacing. y ticks 1.0..-2.5 step 0.5, major at px307.5/620/942.5/1264/1585.5/1908.5/2230/2551.5.",
+      "2026-09-08 訂正(x_min_px 432.5→562.0、x_max_px 2394.5→2395.5、y_max_px 307.5→298.0): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: White-on-black two-panel figure; labels refer to left panel (a). Lines are ~17px thick; measured on inverted brightness. x=0.8 first interior inward tick at 562.0 (spacing 262px), x=2.2 coincides with right frame (cols 2388-2403, centre 2395.5). y=1.0 on top frame (rows 290-306, centre 298.0), y=-2.5 on bottom frame (rows 2544-2560, centre 2552.0). Spacing 322px."
     ],
     "x_axis_label_raw": "10^3/T [K^-1]",
     "x_axis_unit": "K^-1",
@@ -5159,14 +5163,15 @@
     "pixel_bbox_mean": {
       "x_min_px": 252.0,
       "x_max_px": 952.6,
-      "y_min_px": 739.0,
-      "y_max_px": 99.5
+      "y_min_px": 740.2,
+      "y_max_px": 101.0
     },
     "model_estimates": {},
     "model_disagreement_px": null,
     "notes": [
       "2026-09-07 新規: これまで軸読みが未登録だった。印刷ラベルの位置を実測して作成。x梯子6段(300〜550, 間隔140.1px)、y梯子8段(100〜450, 間隔91.4px)。切り出し画像にパネルBが含まれており、枠の自動検出は左端を168pxと誤検出していた(実際の300は252px)。GT点が図のインクに乗る割合 33%→100%。",
-      "2026-09-07 new entry: no axis reading existed. Positions measured from the printed label ladders (x: 6 rungs 140.1 px apart; y: 8 rungs 91.4 px apart). The crop includes panel B, so frame detection mistook 168 px for x=300 when the printed 300 is at 252. Ground-truth ink-hit 33% -> 100%. Not owner-reviewed."
+      "2026-09-07 new entry: no axis reading existed. Positions measured from the printed label ladders (x: 6 rungs 140.1 px apart; y: 8 rungs 91.4 px apart). The crop includes panel B, so frame detection mistook 168 px for x=300 when the printed 300 is at 252. Ground-truth ink-hit 33% -> 100%. Not owner-reviewed.",
+      "2026-09-08 訂正(y_min_px 739.0→740.2、y_max_px 99.5→101.0): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Panel A of a two-panel figure (outer border at row 45/col 1006 ignored). Outward ticks; x majors 140.2px apart, x=300 interior at 252.5, x=550 coincides with right frame (cols 952-955, centre 953.4). y=450 on top frame (centre 101.0), y=100 on bottom frame (per-column centroid median 740.2; tick centroid 740.1). Major spacing 91.4px."
     ],
     "status": "llm_candidate",
     "x_axis_label_raw": "T(K)",
@@ -5189,13 +5194,14 @@
       "x_min_px": 238.4,
       "x_max_px": 945.7,
       "y_min_px": 738.0,
-      "y_max_px": 102.5
+      "y_max_px": 103.5
     },
     "model_estimates": {},
     "model_disagreement_px": null,
     "notes": [
       "2026-09-07 新規: これまで軸読みが未登録だった。印刷ラベルの位置を実測して作成。x梯子6段(300〜550, 間隔141.5px)、y梯子9段(0.4〜2.0, 間隔79.4px)。5(a)と同じくパネルBを含む切り出しで、枠検出が左端を174pxと誤検出していた(実際の300は238.4px)。GT点が図のインクに乗る割合 38%→100%。",
-      "2026-09-07 new entry: no axis reading existed. Positions measured from the printed label ladders (x: 6 rungs 141.5 px apart; y: 9 rungs 79.4 px apart). Same crop problem as 5(a): frame detection mistook 174 px for x=300 when the printed 300 is at 238.4. Ground-truth ink-hit 38% -> 100%. Not owner-reviewed."
+      "2026-09-07 new entry: no axis reading existed. Positions measured from the printed label ladders (x: 6 rungs 141.5 px apart; y: 9 rungs 79.4 px apart). Same crop problem as 5(a): frame detection mistook 174 px for x=300 when the printed 300 is at 238.4. Ground-truth ink-hit 38% -> 100%. Not owner-reviewed.",
+      "2026-09-08 訂正(y_max_px 102.5→103.5): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Panel A. x=300 and 550 are interior outward ticks (238.9, 946.0; spacing 141.4px; right frame at 958.8 is not a labelled tick). y=2.0 on top frame (rows 103-104, centre 103.5), y=0.4 on bottom frame (rows 738-740, centre 738.9). Major spacing 79.5px."
     ],
     "status": "llm_candidate",
     "x_axis_label_raw": "T(K)",

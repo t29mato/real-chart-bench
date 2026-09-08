@@ -36,16 +36,29 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 AXP = REPO / "data/verified_pairs/axis_pixel_candidates.json"
-WORK = pathlib.Path(
-    "/tmp/claude-1000/-home-mato-repos-real-chart-bench/"
-    "d1d6d9ff-97be-43f5-ae89-32fbeb7fe7d9/scratchpad/fable_axis"
-)
+# Which measurement batch to apply. The first covered the 21 figures the owner
+# had flagged; the second, every remaining llm_candidate reading.
+BATCHES = {
+    "1": "fable_axis",
+    "2": "fable_axis2",
+}
+# Positions only. Where a figure needs its tick *values* changed the fix is not
+# mechanical -- it changes what the axis means -- so those are excluded here and
+# put to the owner instead. 45906/45323 is the one such case in batch 2: the
+# recorded pixels are the frame, but the values attached to them (-2.4, 3.3) are
+# neither the frame's (-2.5, 3.5) nor the printed ticks' (-2, 3).
+VALUE_QUESTIONS = {"45323"}
 MIN_DIFF = 1.0
 KEYS = ["x_min_px", "x_max_px", "y_min_px", "y_max_px"]
 
 
 def main() -> None:
     apply = "--apply" in sys.argv
+    batch = next((a for a in sys.argv[1:] if a in BATCHES), "1")
+    WORK = pathlib.Path(
+        "/tmp/claude-1000/-home-mato-repos-real-chart-bench/"
+        "d1d6d9ff-97be-43f5-ae89-32fbeb7fe7d9/scratchpad/" + BATCHES[batch]
+    )
     data = json.loads(AXP.read_text(), object_pairs_hook=collections.OrderedDict)
     by_id = {a["figure_id"]: a for a in data if "figure_id" in a}
     key = json.loads((WORK / "_key.json").read_text())
@@ -62,6 +75,9 @@ def main() -> None:
             continue
         if a.get("status") == "owner_reviewed":
             skipped["人が確認済み"] += 1
+            continue
+        if k["figure_id"] in VALUE_QUESTIONS:
+            skipped["値の確認が必要（オーナーへ）"] += 1
             continue
         bb = a.get("pixel_bbox_mean") or {}
         edits = []
