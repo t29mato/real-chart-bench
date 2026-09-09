@@ -115,3 +115,24 @@ def test_every_figure_carries_the_attribution_a_cc_by_redistribution_needs(bundl
         assert attribution["license_display"] == "CC BY"
         assert "4.0" not in attribution["line"]
         assert attribution["modified_from_original"] in {"yes", "no"}
+
+
+def test_no_shipped_figure_has_since_been_excluded_or_flagged(bundle):
+    """If a figure we handed over is later taken out of scoring or flagged
+    gt_suspect, Starrydata3 is testing against an oracle we no longer trust --
+    they have to be told. This fails so that someone tells them.
+    """
+    registry = {
+        (e["paper_id"], e["figure_id"]): e
+        for e in json.loads((VP / "registry.json").read_text())
+    }
+    for figure in bundle["figures"]:
+        entry = registry[(figure["paper_id"], figure["figure_id"])]
+        assert not entry.get("excluded_reason"), (
+            f"{figure['paper_id']}/{figure['figure_id']} was handed to Starrydata3 and has "
+            f"since been excluded: {entry['excluded_reason']}"
+        )
+        assert entry.get("gt_suspect_status") is None, (
+            f"{figure['paper_id']}/{figure['figure_id']} was handed to Starrydata3 and has "
+            f"since been flagged gt_suspect: {entry['gt_suspect_status']}"
+        )

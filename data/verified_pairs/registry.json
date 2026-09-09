@@ -1812,9 +1812,17 @@
     "status": "verified",
     "verified_at": "2026-08-30",
     "license_id": "cc-by",
-    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical resistivity/ohm*m) for Sr1-xBaxSi2 (x=0.00/0.07/0.10/0.14). x-range 7.6-299.4K matches the chart's 0-300K axis. Converting GT y to the chart's mOhm cm units (x1e5): x=0.00 1.37-2.13 (black circles, near-flat and lowest, sitting near the bottom of the shared 0-18 axis), x=0.07 1.37-17.6 (magenta triangles, highest peak, matches body text describing Ba substitution's 'strong semiconducting characteristics with a negative TCR'), x=0.10 1.89-13.3 (cyan squares), x=0.14 2.65-12.3 (green diamonds) -- exact match on magnitude and ordering. All 4 series share the same single right-side y-axis (0-18 mOhm cm); panel B of FIGURE 5.",
+    "evidence": "4 ground-truth curves (prop_x=Temperature/K, prop_y=Electrical resistivity/ohm*m) for Sr1-xBaxSi2 (x=0.00/0.07/0.10/0.14). x-range 7.6-299.4K matches the chart's 0-300K axis. Converting GT y to the chart's mOhm cm units (x1e5): x=0.00 1.37-2.13 (black circles, near-flat and lowest, sitting near the bottom of the shared 0-18 axis), x=0.07 1.37-17.6 (magenta triangles, highest peak, matches body text describing Ba substitution's 'strong semiconducting characteristics with a negative TCR'), x=0.10 1.89-13.3 (cyan squares), x=0.14 2.65-12.3 (green diamonds) -- exact match on magnitude and ordering. All 4 series share the same single right-side y-axis (0-18 mOhm cm); panel B of FIGURE 5. [2026-09-09 ALIGNMENT SWEEP: flagged as gt_suspect/llm_flagged. Mapping this entry's GT through the recorded axis reading places the points a median 3.16 px from the nearest ink, WORSE than the 2.70 px a deliberately wrong placement (2% diagonal shift) scores on the same image; every other non-excluded figure in the sweep scores well below its own wrong-placement baseline. On a 3x crop of the low-T region, three of the four GT curves follow no drawn series -- only x=0.00 lines up. The range/ordering checks in the evidence above all still hold, which is the point: they cannot see a distortion that stays inside the right range. NOT a confirmed GT error (design §7.48 -- only a human promotes to human_confirmed), and this entry's axis reading is itself still llm_candidate, so a wrong axis reading is not ruled out; the printed y ticks 0/3/6/9/12/15 do match the recorded labels on inspection. Scoring unchanged pending owner review. See docs/experiments/2026-09-09-gt-image-alignment-sweep.md.]",
     "figure_kind": "markers",
-    "figure_tags": []
+    "figure_tags": [],
+    "rejection_category": "gt_suspect",
+    "gt_suspect_status": "llm_flagged",
+    "rejection_evidence": {
+      "axis_range_mismatch": false,
+      "point_count_mismatch": null,
+      "y_value_offset_magnitude": null,
+      "missing_series": true
+    }
   },
   {
     "paper_id": "44283",

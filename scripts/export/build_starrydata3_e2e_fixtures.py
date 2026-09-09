@@ -21,6 +21,10 @@ calibration handed over is human-reviewed rather than raw LLM output:
   - registry's x_tick_range/y_tick_range agree with the axis file's tick labels
   - every GT point maps inside the plot frame (catches unit-space mismatches --
     a registry in K against a printed degC axis, or SI against printed units)
+  - no excluded_reason and no gt_suspect flag: a figure this repo has already
+    taken out of its own scoring, or flagged as GT-suspect, must not be handed
+    to anyone else as an oracle. Enforced in build() rather than left to the
+    hand-maintained FIGURES list, so a later flag removes a figure by itself.
 
 Run: python scripts/export/build_starrydata3_e2e_fixtures.py <output_dir>
 """
@@ -154,6 +158,12 @@ def build(out_dir: Path) -> dict:
     figures = []
     for key, why in FIGURES.items():
         reg, ax = registry[key], axes[key]
+        if reg.get("excluded_reason") or reg.get("gt_suspect_status"):
+            raise SystemExit(
+                f"{key[0]}/{key[1]} is excluded from scoring or flagged gt_suspect "
+                f"({reg.get('excluded_reason') or reg.get('gt_suspect_status')}) -- "
+                "it must not be exported as an oracle. Drop it from FIGURES."
+            )
         src = REPO / reg["image_path"]
         dest_name = f"{key[0]}_{key[1]}{src.suffix}"
         shutil.copyfile(src, images_dir / dest_name)
