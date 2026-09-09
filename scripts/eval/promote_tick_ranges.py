@@ -59,8 +59,21 @@ def main() -> None:
         if candidate is None or candidate["status"] != "owner_reviewed":
             continue
 
-        x_tick_range = (float(candidate["x_min_label"]), float(candidate["x_max_label"]))
-        y_tick_range = (float(candidate["y_min_label"]), float(candidate["y_max_label"]))
+        # An axis can be unreadable from the crop even when the reading as a
+        # whole is owner_reviewed -- paper 44283's panels share an x axis with
+        # a panel outside the image, so their x labels are null. promote_tick_
+        # range accepts None per axis, so promote the axis that exists rather
+        # than dropping the whole entry.
+        def _range(lo_key: str, hi_key: str) -> tuple[float, float] | None:
+            lo, hi = candidate.get(lo_key), candidate.get(hi_key)
+            if lo is None or hi is None:
+                return None
+            return (float(lo), float(hi))
+
+        x_tick_range = _range("x_min_label", "x_max_label")
+        y_tick_range = _range("y_min_label", "y_max_label")
+        if x_tick_range is None and y_tick_range is None:
+            continue
 
         # Correctness check: build the domain object and promote it through
         # the real promote_tick_range helper, which re-validates every
@@ -78,15 +91,15 @@ def main() -> None:
         assert promoted_pairing.x_tick_range == x_tick_range
         assert promoted_pairing.y_tick_range == y_tick_range
 
-        entry["x_tick_range"] = list(x_tick_range)
-        entry["y_tick_range"] = list(y_tick_range)
+        entry["x_tick_range"] = list(x_tick_range) if x_tick_range else None
+        entry["y_tick_range"] = list(y_tick_range) if y_tick_range else None
         entry["tick_range_source"] = "owner_reviewed"
 
         entry_diverged = False
-        if list(entry["x_range"]) != list(x_tick_range):
+        if x_tick_range and list(entry["x_range"]) != list(x_tick_range):
             entry_diverged = True
             diverging_axes += 1
-        if list(entry["y_range"]) != list(y_tick_range):
+        if y_tick_range and list(entry["y_range"]) != list(y_tick_range):
             entry_diverged = True
             diverging_axes += 1
 
@@ -95,9 +108,9 @@ def main() -> None:
                 "key": _key(entry),
                 "figure_reference": entry.get("figure_reference"),
                 "x_range": entry["x_range"],
-                "x_tick_range": list(x_tick_range),
+                "x_tick_range": list(x_tick_range) if x_tick_range else None,
                 "y_range": entry["y_range"],
-                "y_tick_range": list(y_tick_range),
+                "y_tick_range": list(y_tick_range) if y_tick_range else None,
                 "diverges": entry_diverged,
             }
         )
