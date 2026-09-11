@@ -83,21 +83,43 @@ FIGURES: dict[tuple[str, str], str] = {
         "Sparsest case: 2 series, 6 points total, with error bars drawn on "
         "every point."
     ),
+    # --- 2026-09-11: sibling figures, so the bundle has papers carrying more
+    # than one figure. Starrydata3's demo needs a multi-figure paper to
+    # exercise its figure list and its image-per-figure overlay rendering;
+    # the original 9 happened to be one paper each.
+    ("28331", "28492"): "Paper 28331, panel 4(a). 5 figures from this paper are in the bundle.",
+    ("28331", "28495"): "Paper 28331, panel 4(c) -- sibling of 4(a).",
+    ("28331", "28498"): "Paper 28331, panel 4(e) -- sibling of 4(a).",
+    ("28331", "28500"): "Paper 28331, panel 5(a) -- a second figure of the same paper.",
+    ("28331", "28502"): "Paper 28331, panel 5(c) -- sibling of 5(a).",
+    ("446", "8724"): "Sibling of 446 4(b): same scanned yellow figure, panel 4(a).",
+    ("446", "8726"): "Sibling of 446 4(b): same scanned yellow figure, panel 4(c).",
+    ("10939", "1536"): "Sibling of 10939 4(a): panel 5(b), same 4 samples.",
+    ("10939", "1537"): "Sibling of 10939 4(a): panel 5(c), 3 series.",
+    ("27759", "25218"): "Sibling of 27759 fig 7: figure 8, linear y, same 4 samples.",
+    ("27759", "25222"): "Sibling of 27759 fig 7: figure 16(a), a second log-y axis.",
+    ("22102", "21246"): 'Sibling of 22102 3a: panel 3c, also "line_only".',
 }
 
 # Deliberately withheld, with the reason, so the request is answered honestly.
 EXCLUDED: dict[tuple[str, str], str] = {
     ("83", "9049"): (
-        "Withheld: the ground-truth curve does not line up with the markers "
-        "drawn in this figure. Mapping GT through the (owner-reviewed) axis "
-        "calibration puts points a median 6.4 px and up to 42 px from the "
-        "nearest ink, and 21 px from the nearest marker centroid, versus <=1.4 "
-        "px median for every figure in the bundle. The offset is systematic, "
-        "not random: it is consistent with GT y being ~0.85x the drawn y "
-        "(drawn peak 2210 vs GT 1940; drawn tail 660 vs GT 555) while both "
-        "minima still coincide. This figure WAS included in the 2026-09-04 "
-        "bundle; it should not be used as an E2E oracle until the discrepancy "
-        "is resolved."
+        "Withheld: the derived pixels do not sit on the drawn markers closely "
+        "enough for a pixel-level oracle -- a median 6.4 px from the nearest "
+        "ink, against <=1.4 px for every figure in this bundle. This figure "
+        "WAS included in the 2026-09-04 bundle. "
+        "CORRECTION (2026-09-11), replacing what the 2026-09-09 bundle said "
+        "here: that text called this a systematic ground-truth error of "
+        "'GT y ~0.85x the drawn y'. Both halves were wrong. The 0.85 came from "
+        "fitting a correction to minimise distance-to-ink, which is degenerate "
+        "on this kind of figure -- known-good figures fit the same coefficient "
+        "with zero improvement. And the figure was not un-investigated: the "
+        "owner adjudicated it on 2026-09-07 as excluded_reason=harness_limit, "
+        "finding the axis correct and the residual explained by an old scan "
+        "whose marker centres are inherently ambiguous, with NO evidence of a "
+        "ground-truth error. Only the practical conclusion stands: not usable "
+        "as a pixel-level oracle. See "
+        "docs/experiments/2026-09-09-gt-image-alignment-sweep.md."
     ),
 }
 

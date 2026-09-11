@@ -9,7 +9,7 @@
     {
       "paper_id": "83",
       "figure_id": "9049",
-      "reason": "Withheld: the ground-truth curve does not line up with the markers drawn in this figure. Mapping GT through the (owner-reviewed) axis calibration puts points a median 6.4 px and up to 42 px from the nearest ink, and 21 px from the nearest marker centroid, versus <=1.4 px median for every figure in the bundle. The offset is systematic, not random: it is consistent with GT y being ~0.85x the drawn y (drawn peak 2210 vs GT 1940; drawn tail 660 vs GT 555) while both minima still coincide. This figure WAS included in the 2026-09-04 bundle; it should not be used as an E2E oracle until the discrepancy is resolved."
+      "reason": "Withheld: the derived pixels do not sit on the drawn markers closely enough for a pixel-level oracle -- a median 6.4 px from the nearest ink, against <=1.4 px for every figure in this bundle. This figure WAS included in the 2026-09-04 bundle. CORRECTION (2026-09-11), replacing what the 2026-09-09 bundle said here: that text called this a systematic ground-truth error of 'GT y ~0.85x the drawn y'. Both halves were wrong. The 0.85 came from fitting a correction to minimise distance-to-ink, which is degenerate on this kind of figure -- known-good figures fit the same coefficient with zero improvement. And the figure was not un-investigated: the owner adjudicated it on 2026-09-07 as excluded_reason=harness_limit, finding the axis correct and the residual explained by an old scan whose marker centres are inherently ambiguous, with NO evidence of a ground-truth error. Only the practical conclusion stands: not usable as a pixel-level oracle. See docs/experiments/2026-09-09-gt-image-alignment-sweep.md."
     }
   ],
   "figures": [
@@ -11548,6 +11548,4208 @@
         "line": "Figure from https://doi.org/10.1038/srep19014, licensed CC BY (no version recorded -- see license_notice)."
       },
       "why_selected": "Sparsest case: 2 series, 6 points total, with error bars drawn on every point."
+    },
+    {
+      "paper_id": "28331",
+      "figure_id": "28492",
+      "figure_reference": "4(a)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/28331_28492.png",
+        "width_px": 818,
+        "height_px": 658,
+        "bytes": 189777,
+        "sha256": "fec313709af557fd46e20a5450a0b3842f6c336477772e2cd1bf358ce9ae63ed",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/28331/fig4a.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "Temperature (K)",
+          "p1": {
+            "value": 300,
+            "px": 98.8
+          },
+          "p2": {
+            "value": 500,
+            "px": 782.5
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "×10^4 S·m^-1",
+          "axis_label_raw": "σ×10⁴ (S·m⁻¹)",
+          "p1": {
+            "value": 3,
+            "px": 578.0
+          },
+          "p2": {
+            "value": 9,
+            "px": 14.0
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.292526
+          },
+          "y": {
+            "units_per_px": 0.010638
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 2.75 px.",
+        "notes": [
+          "この論文の各パネルは共通のx軸(Temperature 300-500K, 20K刻み)を持ち、目盛りは枠の外側に描かれる。",
+          "All panels in this paper share the same x axis (Temperature 300-500 K, 20 K step) with ticks drawn outside the frame; x=300 and x=500 coincide with the left/right frame. y labels 3..9 step 1 at rows 578..14.5 (step 94); both extremes lie on the bottom/top frame.",
+          "x軸は20刻みで300〜500まで全11ラベルが印字されている。",
+          "The x-axis has all 11 labels printed at 20-unit intervals from 300 to 500.",
+          "2026-09-08 訂正: y軸下端の画素位置を 575.5 → 578.0 (+2.50px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
+          "2026-09-08 訂正(x_min_px 96.0→98.8): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Coordinates are pixel indices with pixel i centred at i.0 (add 0.5 for edge-based coordinates). Scanned figure, 3-px lines, outward ticks. All four labelled ticks coincide with the frame lines (300/500 = left/right, 3/9 = bottom/top); centre of the frame line from per-column background-subtracted centroids; the outward tick strokes at the corners agree within 0.05 px.",
+          "2026-09-08 owner review: 本日の軸位置修正をオーナーが目視確認し承認。この図は2026-09-07のレビューで値(x_min_label等)が正しいと判定済み(verdict=pos、値の誤りではなく位置の誤りとの判定)であり、位置は Claude Fable 5 が記録値を伏せて4参照点すべてを独立測定し、その修正結果を本日承認した。値と位置の双方が人手を通ったため status を owner_reviewed へ昇格する。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          300.0,
+          500.0
+        ],
+        "y": [
+          3.0,
+          9.0
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "K",
+          "unit_y": "×10^4 S·m^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 319.8569,
+              "y": 8.138143,
+              "px": 166.681,
+              "py": 95.015
+            },
+            {
+              "x": 339.9775,
+              "y": 7.903254,
+              "px": 235.463,
+              "py": 117.094
+            },
+            {
+              "x": 359.9167,
+              "y": 7.557094,
+              "px": 303.625,
+              "py": 149.633
+            },
+            {
+              "x": 379.856,
+              "y": 7.302943,
+              "px": 371.788,
+              "py": 173.523
+            },
+            {
+              "x": 399.7952,
+              "y": 7.075375,
+              "px": 439.95,
+              "py": 194.915
+            },
+            {
+              "x": 419.9157,
+              "y": 6.836914,
+              "px": 508.732,
+              "py": 217.33
+            },
+            {
+              "x": 440.0363,
+              "y": 6.680636000000001,
+              "px": 577.514,
+              "py": 232.02
+            },
+            {
+              "x": 459.9755,
+              "y": 6.516606,
+              "px": 645.676,
+              "py": 247.439
+            },
+            {
+              "x": 479.9148,
+              "y": 6.306793000000001,
+              "px": 713.839,
+              "py": 267.161
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "K",
+          "unit_y": "×10^4 S·m^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 319.8569,
+              "y": 7.494971000000001,
+              "px": 166.681,
+              "py": 155.473
+            },
+            {
+              "x": 339.9775,
+              "y": 7.302189,
+              "px": 235.463,
+              "py": 173.594
+            },
+            {
+              "x": 359.9167,
+              "y": 7.006652000000001,
+              "px": 303.625,
+              "py": 201.375
+            },
+            {
+              "x": 380.2185,
+              "y": 6.789360000000001,
+              "px": 373.027,
+              "py": 221.8
+            },
+            {
+              "x": 399.9765,
+              "y": 6.548854,
+              "px": 440.57,
+              "py": 244.408
+            },
+            {
+              "x": 420.097,
+              "y": 6.2265690000000005,
+              "px": 509.352,
+              "py": 274.703
+            },
+            {
+              "x": 440.0363,
+              "y": 6.0163470000000006,
+              "px": 577.514,
+              "py": 294.463
+            },
+            {
+              "x": 460.1568,
+              "y": 5.823984,
+              "px": 646.296,
+              "py": 312.546
+            },
+            {
+              "x": 479.9148,
+              "y": 5.702051000000001,
+              "px": 713.839,
+              "py": 324.007
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "K",
+          "unit_y": "×10^4 S·m^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 319.4944,
+              "y": 6.896121000000001,
+              "px": 165.442,
+              "py": 211.765
+            },
+            {
+              "x": 339.7962,
+              "y": 6.626483,
+              "px": 234.843,
+              "py": 237.111
+            },
+            {
+              "x": 359.7959,
+              "y": 6.291406,
+              "px": 303.212,
+              "py": 268.608
+            },
+            {
+              "x": 380.2185,
+              "y": 6.043336,
+              "px": 373.027,
+              "py": 291.926
+            },
+            {
+              "x": 400.339,
+              "y": 5.799055000000001,
+              "px": 441.809,
+              "py": 314.889
+            },
+            {
+              "x": 420.0517,
+              "y": 5.6181350000000005,
+              "px": 509.197,
+              "py": 331.895
+            },
+            {
+              "x": 440.2779,
+              "y": 5.495506,
+              "px": 578.34,
+              "py": 343.422
+            },
+            {
+              "x": 460.1568,
+              "y": 5.284341,
+              "px": 646.296,
+              "py": 363.272
+            },
+            {
+              "x": 479.8422,
+              "y": 5.131203,
+              "px": 713.591,
+              "py": 377.667
+            }
+          ]
+        },
+        {
+          "series_index": 3,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "K",
+          "unit_y": "×10^4 S·m^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.0382,
+              "y": 4.75577,
+              "px": 167.301,
+              "py": 412.958
+            },
+            {
+              "x": 339.7962,
+              "y": 4.65378,
+              "px": 234.843,
+              "py": 422.545
+            },
+            {
+              "x": 360.098,
+              "y": 4.496873000000001,
+              "px": 304.245,
+              "py": 437.294
+            },
+            {
+              "x": 380.2185,
+              "y": 4.349278,
+              "px": 373.027,
+              "py": 451.168
+            },
+            {
+              "x": 399.9765,
+              "y": 4.228518,
+              "px": 440.57,
+              "py": 462.519
+            },
+            {
+              "x": 420.2783,
+              "y": 4.116887,
+              "px": 509.971,
+              "py": 473.013
+            },
+            {
+              "x": 440.0363,
+              "y": 4.004156,
+              "px": 577.514,
+              "py": 483.609
+            },
+            {
+              "x": 460.1568,
+              "y": 3.957963,
+              "px": 646.296,
+              "py": 487.951
+            },
+            {
+              "x": 479.7335,
+              "y": 3.9216690000000005,
+              "px": 713.219,
+              "py": 491.363
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1007/s40145-020-0382-9",
+        "doi_url": "https://doi.org/10.1007/s40145-020-0382-9",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1007/s40145-020-0382-9, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Paper 28331, panel 4(a). 5 figures from this paper are in the bundle."
+    },
+    {
+      "paper_id": "28331",
+      "figure_id": "28495",
+      "figure_reference": "4(c)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/28331_28495.png",
+        "width_px": 818,
+        "height_px": 658,
+        "bytes": 224970,
+        "sha256": "895e64fc39f2c2a310bf4a2ee4c7fd36e38410ef18441a5b9fd35cf5ffb7bff4",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/28331/fig4c.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "Temperature (K)",
+          "p1": {
+            "value": 300,
+            "px": 116.25
+          },
+          "p2": {
+            "value": 500,
+            "px": 791.75
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "mW·m^-1·K^-2",
+          "axis_label_raw": "Power factor (mW·m⁻¹·K⁻²)",
+          "p1": {
+            "value": 0.9,
+            "px": 567.0
+          },
+          "p2": {
+            "value": 1.7,
+            "px": 21.5
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.296077
+          },
+          "y": {
+            "units_per_px": 0.001467
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 1.88 px.",
+        "notes": [
+          "この論文の各パネルは共通のx軸(Temperature 300-500K, 20K刻み)を持ち、目盛りは枠の外側に描かれる。",
+          "All panels in this paper share the same x axis (Temperature 300-500 K, 20 K step) with ticks drawn outside the frame; x=300 and x=500 coincide with the left/right frame. y labels 0.9..1.7 step 0.1 at rows 567..22; both extremes on the bottom/top frame.",
+          "凡例ボックスがy軸下部に重なりx_min_labelの自動抽出にノイズが出たため、間隔の等差性から補間して確定(視覚確認済み)。",
+          "A legend box overlaps the lower y-axis causing automated x_min_label detection noise; resolved by interpolating from the consistent tick spacing (visually confirmed).",
+          "2026-09-08 訂正: y軸下端の画素位置を 564.25 → 567.0 (+2.75px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
+          "2026-09-08 owner review: 本日の軸位置修正をオーナーが目視確認し承認。この図は2026-09-07のレビューで値(x_min_label等)が正しいと判定済み(verdict=pos、値の誤りではなく位置の誤りとの判定)であり、位置は Claude Fable 5 が記録値を伏せて4参照点すべてを独立測定し、その修正結果を本日承認した。値と位置の双方が人手を通ったため status を owner_reviewed へ昇格する。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          300.0,
+          500.0
+        ],
+        "y": [
+          0.9,
+          1.7
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "mW·m^-1·K^-2",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 319.9091,
+              "y": 1.545385,
+              "px": 183.493,
+              "py": 126.928
+            },
+            {
+              "x": 340.1058,
+              "y": 1.562236,
+              "px": 251.707,
+              "py": 115.438
+            },
+            {
+              "x": 359.9455,
+              "y": 1.580401,
+              "px": 318.716,
+              "py": 103.052
+            },
+            {
+              "x": 399.9223,
+              "y": 1.609114,
+              "px": 453.738,
+              "py": 83.473
+            },
+            {
+              "x": 419.9223,
+              "y": 1.6297970000000002,
+              "px": 521.288,
+              "py": 69.37
+            },
+            {
+              "x": 439.9223,
+              "y": 1.589089,
+              "px": 588.838,
+              "py": 97.127
+            },
+            {
+              "x": 460.2893,
+              "y": 1.52663,
+              "px": 657.627,
+              "py": 139.717
+            },
+            {
+              "x": 479.8764,
+              "y": 1.474267,
+              "px": 723.783,
+              "py": 175.422
+            },
+            {
+              "x": 380.0,
+              "y": 1.581382,
+              "px": 386.45,
+              "py": 102.383
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "mW·m^-1·K^-2",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 319.7388,
+              "y": 1.535151,
+              "px": 182.918,
+              "py": 133.906
+            },
+            {
+              "x": 340.4728,
+              "y": 1.557143,
+              "px": 252.947,
+              "py": 118.911
+            },
+            {
+              "x": 360.2893,
+              "y": 1.57287,
+              "px": 319.877,
+              "py": 108.187
+            },
+            {
+              "x": 379.9223,
+              "y": 1.5703550000000002,
+              "px": 386.188,
+              "py": 109.902
+            },
+            {
+              "x": 400.1058,
+              "y": 1.5835029999999999,
+              "px": 454.357,
+              "py": 100.936
+            },
+            {
+              "x": 419.9747,
+              "y": 1.563998,
+              "px": 521.465,
+              "py": 114.236
+            },
+            {
+              "x": 439.7388,
+              "y": 1.525815,
+              "px": 588.218,
+              "py": 140.272
+            },
+            {
+              "x": 460.1058,
+              "y": 1.432867,
+              "px": 657.007,
+              "py": 203.651
+            },
+            {
+              "x": 479.7388,
+              "y": 1.393692,
+              "px": 723.318,
+              "py": 230.364
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "mW·m^-1·K^-2",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 319.9223,
+              "y": 1.45913,
+              "px": 183.538,
+              "py": 185.743
+            },
+            {
+              "x": 339.7388,
+              "y": 1.497336,
+              "px": 250.468,
+              "py": 159.692
+            },
+            {
+              "x": 360.2893,
+              "y": 1.489682,
+              "px": 319.877,
+              "py": 164.911
+            },
+            {
+              "x": 380.1058,
+              "y": 1.49829,
+              "px": 386.807,
+              "py": 159.041
+            },
+            {
+              "x": 399.7388,
+              "y": 1.4800080000000002,
+              "px": 453.118,
+              "py": 171.507
+            },
+            {
+              "x": 419.9223,
+              "y": 1.4887329999999999,
+              "px": 521.288,
+              "py": 165.558
+            },
+            {
+              "x": 439.7388,
+              "y": 1.4489940000000001,
+              "px": 588.218,
+              "py": 192.655
+            },
+            {
+              "x": 460.1517,
+              "y": 1.358127,
+              "px": 657.162,
+              "py": 254.615
+            },
+            {
+              "x": 479.9223,
+              "y": 1.279339,
+              "px": 723.938,
+              "py": 308.338
+            }
+          ]
+        },
+        {
+          "series_index": 3,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "mW·m^-1·K^-2",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 319.9223,
+              "y": 1.222291,
+              "px": 183.538,
+              "py": 347.238
+            },
+            {
+              "x": 340.1058,
+              "y": 1.251827,
+              "px": 251.707,
+              "py": 327.098
+            },
+            {
+              "x": 360.2893,
+              "y": 1.2208970000000001,
+              "px": 319.877,
+              "py": 348.188
+            },
+            {
+              "x": 378.4544,
+              "y": 1.193398,
+              "px": 381.23,
+              "py": 366.939
+            },
+            {
+              "x": 399.7388,
+              "y": 1.2010530000000001,
+              "px": 453.118,
+              "py": 361.719
+            },
+            {
+              "x": 419.5553,
+              "y": 1.186132,
+              "px": 520.048,
+              "py": 371.894
+            },
+            {
+              "x": 440.2893,
+              "y": 1.1198320000000002,
+              "px": 590.077,
+              "py": 417.102
+            },
+            {
+              "x": 459.7388,
+              "y": 1.059909,
+              "px": 655.768,
+              "py": 457.962
+            },
+            {
+              "x": 480.1058,
+              "y": 0.9879572000000001,
+              "px": 724.557,
+              "py": 507.024
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1007/s40145-020-0382-9",
+        "doi_url": "https://doi.org/10.1007/s40145-020-0382-9",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1007/s40145-020-0382-9, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Paper 28331, panel 4(c) -- sibling of 4(a)."
+    },
+    {
+      "paper_id": "28331",
+      "figure_id": "28498",
+      "figure_reference": "4(e)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/28331_28498.png",
+        "width_px": 818,
+        "height_px": 658,
+        "bytes": 202925,
+        "sha256": "2bb9c681a3514fd531006e972a43c40e03d8f8b0421b71e7e8e85629eb77785e",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/28331/fig4e.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "Temperature (K)",
+          "p1": {
+            "value": 300,
+            "px": 105.1
+          },
+          "p2": {
+            "value": 500,
+            "px": 794.25
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "W·m^-1·K^-1",
+          "axis_label_raw": "κ_L (W·m⁻¹·K⁻¹)",
+          "p1": {
+            "value": 0.2,
+            "px": 571.5
+          },
+          "p2": {
+            "value": 1.1,
+            "px": 17.0
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.290213
+          },
+          "y": {
+            "units_per_px": 0.001623
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 2.05 px.",
+        "notes": [
+          "この論文の各パネルは共通のx軸(Temperature 300-500K, 20K刻み)を持ち、目盛りは枠の外側に描かれる。",
+          "All panels in this paper share the same x axis (Temperature 300-500 K, 20 K step) with ticks drawn outside the frame; x=300 and x=500 coincide with the left/right frame. y labels 0.2..1.1 step 0.1 at rows 571.5..17.5; both extremes on the bottom/top frame.",
+          "2026-09-08 訂正: y軸下端の画素位置を 568.75 → 571.5 (+2.75px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
+          "2026-09-08 owner review: 本日の軸位置修正をオーナーが目視確認し承認。この図は2026-09-07のレビューで値(x_min_label等)が正しいと判定済み(verdict=pos、値の誤りではなく位置の誤りとの判定)であり、位置は Claude Fable 5 が記録値を伏せて4参照点すべてを独立測定し、その修正結果を本日承認した。値と位置の双方が人手を通ったため status を owner_reviewed へ昇格する。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          300.0,
+          500.0
+        ],
+        "y": [
+          0.2,
+          1.1
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Lattice thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W·m^-1·K^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.1171,
+              "y": 1.08241,
+              "px": 174.418,
+              "py": 27.837
+            },
+            {
+              "x": 340.0706,
+              "y": 1.042404,
+              "px": 243.173,
+              "py": 52.486
+            },
+            {
+              "x": 360.0241,
+              "y": 0.9871292,
+              "px": 311.928,
+              "py": 86.541
+            },
+            {
+              "x": 379.7979,
+              "y": 0.9479622,
+              "px": 380.064,
+              "py": 110.672
+            },
+            {
+              "x": 399.9312,
+              "y": 0.9332325,
+              "px": 449.438,
+              "py": 119.747
+            },
+            {
+              "x": 420.0645,
+              "y": 0.9261404,
+              "px": 518.812,
+              "py": 124.117
+            },
+            {
+              "x": 439.8382,
+              "y": 0.9307153,
+              "px": 586.947,
+              "py": 121.298
+            },
+            {
+              "x": 459.9715,
+              "y": 0.9464691,
+              "px": 656.322,
+              "py": 111.592
+            },
+            {
+              "x": 479.925,
+              "y": 0.971932,
+              "px": 725.077,
+              "py": 95.904
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Lattice thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W·m^-1·K^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.6564,
+              "y": 0.4701231,
+              "px": 176.277,
+              "py": 405.074
+            },
+            {
+              "x": 340.3103,
+              "y": 0.4429895,
+              "px": 243.999,
+              "py": 421.791
+            },
+            {
+              "x": 360.0241,
+              "y": 0.4350236,
+              "px": 311.928,
+              "py": 426.699
+            },
+            {
+              "x": 379.7979,
+              "y": 0.4198757,
+              "px": 380.064,
+              "py": 436.032
+            },
+            {
+              "x": 400.2907,
+              "y": 0.4357036,
+              "px": 450.677,
+              "py": 426.28
+            },
+            {
+              "x": 420.0645,
+              "y": 0.4543789,
+              "px": 518.812,
+              "py": 414.774
+            },
+            {
+              "x": 440.018,
+              "y": 0.4766553,
+              "px": 587.567,
+              "py": 401.05
+            },
+            {
+              "x": 460.0913,
+              "y": 0.5180257,
+              "px": 656.735,
+              "py": 375.561
+            },
+            {
+              "x": 480.1048,
+              "y": 0.5565488,
+              "px": 725.696,
+              "py": 351.826
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Lattice thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W·m^-1·K^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.1171,
+              "y": 0.3017383,
+              "px": 174.418,
+              "py": 508.818
+            },
+            {
+              "x": 339.8908,
+              "y": 0.261719,
+              "px": 242.554,
+              "py": 533.474
+            },
+            {
+              "x": 360.2039,
+              "y": 0.2537659,
+              "px": 312.548,
+              "py": 538.374
+            },
+            {
+              "x": 379.9777,
+              "y": 0.2481131,
+              "px": 380.683,
+              "py": 541.857
+            },
+            {
+              "x": 399.9312,
+              "y": 0.2504859,
+              "px": 449.438,
+              "py": 540.395
+            },
+            {
+              "x": 419.8847,
+              "y": 0.2608299,
+              "px": 518.193,
+              "py": 534.022
+            },
+            {
+              "x": 439.8382,
+              "y": 0.2680167,
+              "px": 586.947,
+              "py": 529.594
+            },
+            {
+              "x": 459.9715,
+              "y": 0.2918749,
+              "px": 656.322,
+              "py": 514.895
+            },
+            {
+              "x": 479.7453,
+              "y": 0.3274762,
+              "px": 724.457,
+              "py": 492.96
+            }
+          ]
+        },
+        {
+          "series_index": 3,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Lattice thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W·m^-1·K^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.1171,
+              "y": 0.611017,
+              "px": 174.418,
+              "py": 318.268
+            },
+            {
+              "x": 339.8908,
+              "y": 0.5906873,
+              "px": 242.554,
+              "py": 330.793
+            },
+            {
+              "x": 359.7844,
+              "y": 0.5891259,
+              "px": 311.102,
+              "py": 331.755
+            },
+            {
+              "x": 380.1574,
+              "y": 0.5893324,
+              "px": 381.302,
+              "py": 331.628
+            },
+            {
+              "x": 399.9312,
+              "y": 0.6044992,
+              "px": 449.438,
+              "py": 322.284
+            },
+            {
+              "x": 420.424,
+              "y": 0.6342648,
+              "px": 520.051,
+              "py": 303.945
+            },
+            {
+              "x": 439.8382,
+              "y": 0.6576371,
+              "px": 586.947,
+              "py": 289.545
+            },
+            {
+              "x": 459.9715,
+              "y": 0.6996823,
+              "px": 656.322,
+              "py": 263.64
+            },
+            {
+              "x": 479.7453,
+              "y": 0.7487812,
+              "px": 724.457,
+              "py": 233.39
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1007/s40145-020-0382-9",
+        "doi_url": "https://doi.org/10.1007/s40145-020-0382-9",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1007/s40145-020-0382-9, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Paper 28331, panel 4(e) -- sibling of 4(a)."
+    },
+    {
+      "paper_id": "28331",
+      "figure_id": "28500",
+      "figure_reference": "5(a)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/28331_28500.png",
+        "width_px": 811,
+        "height_px": 648,
+        "bytes": 144319,
+        "sha256": "271adcd8961fb4aed59a7695411ff003e79141ecdead1df353a0aea50caefe8d",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/28331/fig5a.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "Temperature (K)",
+          "p1": {
+            "value": 300,
+            "px": 120.6
+          },
+          "p2": {
+            "value": 500,
+            "px": 793.25
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "×10^4 S·m^-1",
+          "axis_label_raw": "σ×10⁴ (S·m⁻¹)",
+          "p1": {
+            "value": 50000,
+            "px": 569.5
+          },
+          "p2": {
+            "value": 70000,
+            "px": 38.5
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.297331
+          },
+          "y": {
+            "units_per_px": 37.664783
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 2.38 px.",
+        "notes": [
+          "パスB(50000/70000)を採用。registry.jsonのy_range=[50000.0,70000.0]と厳密に一致。パスAの5.0/7.0は軸の'x10^4'等の乗数表記を見落とし、係数を掛け忘れたものと判断。",
+          "Resolved to pass B (50000/70000): matches registry.json's y_range=[50000.0, 70000.0] exactly. Pass A's 5.0/7.0 appear to have missed an axis multiplier annotation (e.g. an implicit x10^4).",
+          "この論文の各パネルは共通のx軸(Temperature 300-500K, 20K刻み)を持ち、目盛りは枠の外側に描かれる。 y=7.0(row39)は上枠(13)より下。",
+          "All panels in this paper share the same x axis (Temperature 300-500 K, 20 K step) with ticks drawn outside the frame; x=300 and x=500 coincide with the left/right frame. y labels 5.0..7.0 step 0.2 at rows 570..39; y=5.0 sits on the bottom frame while 7.0 is below the top frame (13).",
+          "2026-09-08 訂正: y軸下端の画素位置を 565.5 → 569.5 (+4.00px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
+          "2026-09-08 訂正(x_min_px 119.0→120.6): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Coordinates are pixel indices with pixel i centred at i.0 (add 0.5 for edge-based coordinates). x 300/500 = left/right frame lines; y_min 5.0 = bottom frame. y_max 7.0 is NOT the top frame (frame at 12.9 is y=7.1): outward major stroke on the left spine at row 39.4.",
+          "2026-09-08 owner review: 本日の軸位置修正をオーナーが目視確認し承認。この図は2026-09-07のレビューで値(x_min_label等)が正しいと判定済み(verdict=pos、値の誤りではなく位置の誤りとの判定)であり、位置は Claude Fable 5 が記録値を伏せて4参照点すべてを独立測定し、その修正結果を本日承認した。値と位置の双方が人手を通ったため status を owner_reviewed へ昇格する。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          300.0,
+          500.0
+        ],
+        "y": [
+          50000.0,
+          70000.0
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "K",
+          "unit_y": "×10^4 S·m^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.2555,
+              "y": 68954.7,
+              "px": 188.724,
+              "py": 66.253
+            },
+            {
+              "x": 339.9635,
+              "y": 66562.14,
+              "px": 255.007,
+              "py": 129.775
+            },
+            {
+              "x": 360.0365,
+              "y": 62868.76,
+              "px": 322.518,
+              "py": 227.834
+            },
+            {
+              "x": 380.292,
+              "y": 60522.65,
+              "px": 390.642,
+              "py": 290.124
+            },
+            {
+              "x": 400.0,
+              "y": 58176.54,
+              "px": 456.925,
+              "py": 352.413
+            },
+            {
+              "x": 419.708,
+              "y": 56295.01,
+              "px": 523.208,
+              "py": 402.367
+            },
+            {
+              "x": 439.781,
+              "y": 54878.05,
+              "px": 590.718,
+              "py": 439.988
+            },
+            {
+              "x": 460.0365,
+              "y": 53066.2,
+              "px": 658.843,
+              "py": 488.092
+            },
+            {
+              "x": 479.927,
+              "y": 51347.27,
+              "px": 725.739,
+              "py": 533.73
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "K",
+          "unit_y": "×10^4 S·m^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.2555,
+              "y": 68559.81,
+              "px": 188.724,
+              "py": 76.737
+            },
+            {
+              "x": 340.146,
+              "y": 66469.22,
+              "px": 255.621,
+              "py": 132.242
+            },
+            {
+              "x": 359.6715,
+              "y": 62822.3,
+              "px": 321.29,
+              "py": 229.068
+            },
+            {
+              "x": 380.1095,
+              "y": 60034.84,
+              "px": 390.028,
+              "py": 303.075
+            },
+            {
+              "x": 400.1825,
+              "y": 57897.79,
+              "px": 457.539,
+              "py": 359.814
+            },
+            {
+              "x": 420.073,
+              "y": 56341.46,
+              "px": 524.436,
+              "py": 401.134
+            },
+            {
+              "x": 439.9635,
+              "y": 55226.48,
+              "px": 591.332,
+              "py": 430.737
+            },
+            {
+              "x": 460.219,
+              "y": 53182.35,
+              "px": 659.457,
+              "py": 485.009
+            },
+            {
+              "x": 479.927,
+              "y": 51509.87,
+              "px": 725.739,
+              "py": 529.413
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "K",
+          "unit_y": "×10^4 S·m^-1",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.5569,
+              "y": 68910.33,
+              "px": 189.738,
+              "py": 67.431
+            },
+            {
+              "x": 340.2361,
+              "y": 66227.48,
+              "px": 255.924,
+              "py": 138.66
+            },
+            {
+              "x": 360.0992,
+              "y": 62889.65,
+              "px": 322.729,
+              "py": 227.28
+            },
+            {
+              "x": 379.9624,
+              "y": 60555.18,
+              "px": 389.534,
+              "py": 289.26
+            },
+            {
+              "x": 400.0707,
+              "y": 58150.1,
+              "px": 457.163,
+              "py": 353.115
+            },
+            {
+              "x": 420.179,
+              "y": 56193.94,
+              "px": 524.792,
+              "py": 405.051
+            },
+            {
+              "x": 440.0422,
+              "y": 54894.59,
+              "px": 591.597,
+              "py": 439.549
+            },
+            {
+              "x": 459.9053,
+              "y": 52925.23,
+              "px": 658.402,
+              "py": 491.835
+            },
+            {
+              "x": 479.7684,
+              "y": 51320.85,
+              "px": 725.206,
+              "py": 534.431
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1007/s40145-020-0382-9",
+        "doi_url": "https://doi.org/10.1007/s40145-020-0382-9",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1007/s40145-020-0382-9, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Paper 28331, panel 5(a) -- a second figure of the same paper."
+    },
+    {
+      "paper_id": "28331",
+      "figure_id": "28502",
+      "figure_reference": "5(c)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/28331_28502.png",
+        "width_px": 811,
+        "height_px": 648,
+        "bytes": 169656,
+        "sha256": "450e50fcfbd241c696014d3580ee063cc68f63dbbbd0ba9848af1e1aa1a5a8d6",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/28331/fig5c.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "Temperature (K)",
+          "p1": {
+            "value": 300,
+            "px": 121.4
+          },
+          "p2": {
+            "value": 500,
+            "px": 792.75
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "mW·m^-1·K^-2",
+          "axis_label_raw": "Power factor (mW·m⁻¹·K⁻²)",
+          "p1": {
+            "value": 1.2,
+            "px": 575.5
+          },
+          "p2": {
+            "value": 1.6,
+            "px": 34.25
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.297907
+          },
+          "y": {
+            "units_per_px": 0.000739
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 2.12 px.",
+        "notes": [
+          "この論文の各パネルは共通のx軸(Temperature 300-500K, 20K刻み)を持ち、目盛りは枠の外側に描かれる。",
+          "All panels in this paper share the same x axis (Temperature 300-500 K, 20 K step) with ticks drawn outside the frame; x=300 and x=500 coincide with the left/right frame. y labels 1.20..1.60 step 0.05 at rows 575..34.5, coinciding with the bottom/top frame.",
+          "target y_rangeはSI単位(0.0012-0.0016 W/m K^2)、印字ラベルは1.20〜1.60 mW/m K^2。",
+          "The reference y_range is in SI units (0.0012-0.0016 W/m K^2); the printed labels are 1.20-1.60 mW/m K^2.",
+          "2026-09-08 訂正: y軸下端の画素位置を 572.75 → 575.5 (+2.75px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
+          "2026-09-08 訂正(x_min_px 119.5→121.4): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Coordinates are pixel indices with pixel i centred at i.0 (add 0.5 for edge-based coordinates). All four labelled ticks coincide with frame lines (1.20/1.60 bottom/top).",
+          "2026-09-08 owner review: 本日の軸位置修正をオーナーが目視確認し承認。この図は2026-09-07のレビューで値(x_min_label等)が正しいと判定済み(verdict=pos、値の誤りではなく位置の誤りとの判定)であり、位置は Claude Fable 5 が記録値を伏せて4参照点すべてを独立測定し、その修正結果を本日承認した。値と位置の双方が人手を通ったため status を owner_reviewed へ昇格する。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          300.0,
+          500.0
+        ],
+        "y": [
+          1.2,
+          1.6
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "mW·m^-1·K^-2",
+          "n_points": 8,
+          "points": [
+            {
+              "x": 320.0437,
+              "y": 1.466022,
+              "px": 188.682,
+              "py": 215.539
+            },
+            {
+              "x": 339.9457,
+              "y": 1.506232,
+              "px": 255.488,
+              "py": 161.13
+            },
+            {
+              "x": 359.8478,
+              "y": 1.500974,
+              "px": 322.294,
+              "py": 168.245
+            },
+            {
+              "x": 399.8975,
+              "y": 1.4936369999999999,
+              "px": 456.731,
+              "py": 178.172
+            },
+            {
+              "x": 420.0452,
+              "y": 1.485077,
+              "px": 524.362,
+              "py": 189.755
+            },
+            {
+              "x": 439.2102,
+              "y": 1.445133,
+              "px": 588.694,
+              "py": 243.804
+            },
+            {
+              "x": 459.6036,
+              "y": 1.355461,
+              "px": 657.149,
+              "py": 365.142
+            },
+            {
+              "x": 480.9799,
+              "y": 1.2845389999999999,
+              "px": 728.904,
+              "py": 461.108
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "mW·m^-1·K^-2",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 339.9457,
+              "y": 1.495979,
+              "px": 255.488,
+              "py": 175.003
+            },
+            {
+              "x": 379.9955,
+              "y": 1.491701,
+              "px": 389.925,
+              "py": 180.792
+            },
+            {
+              "x": 399.8975,
+              "y": 1.48789,
+              "px": 456.731,
+              "py": 185.949
+            },
+            {
+              "x": 419.7995,
+              "y": 1.499547,
+              "px": 523.537,
+              "py": 170.175
+            },
+            {
+              "x": 439.9473,
+              "y": 1.464901,
+              "px": 591.168,
+              "py": 217.056
+            },
+            {
+              "x": 460.095,
+              "y": 1.3729879999999999,
+              "px": 658.799,
+              "py": 341.426
+            },
+            {
+              "x": 479.7513,
+              "y": 1.308587,
+              "px": 724.78,
+              "py": 428.568
+            },
+            {
+              "x": 319.8037,
+              "y": 1.460599,
+              "px": 187.876,
+              "py": 222.877
+            },
+            {
+              "x": 359.9465,
+              "y": 1.4947840000000001,
+              "px": 322.625,
+              "py": 176.62
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "mW·m^-1·K^-2",
+          "n_points": 9,
+          "points": [
+            {
+              "x": 320.5351,
+              "y": 1.460927,
+              "px": 190.331,
+              "py": 222.433
+            },
+            {
+              "x": 339.7,
+              "y": 1.500532,
+              "px": 254.663,
+              "py": 168.843
+            },
+            {
+              "x": 359.8478,
+              "y": 1.489561,
+              "px": 322.294,
+              "py": 183.688
+            },
+            {
+              "x": 379.7498,
+              "y": 1.500423,
+              "px": 389.1,
+              "py": 168.99
+            },
+            {
+              "x": 399.8975,
+              "y": 1.4800639999999998,
+              "px": 456.731,
+              "py": 196.538
+            },
+            {
+              "x": 419.7995,
+              "y": 1.489663,
+              "px": 523.537,
+              "py": 183.55
+            },
+            {
+              "x": 439.7016,
+              "y": 1.45035,
+              "px": 590.343,
+              "py": 236.745
+            },
+            {
+              "x": 459.8493,
+              "y": 1.360108,
+              "px": 657.974,
+              "py": 358.854
+            },
+            {
+              "x": 479.997,
+              "y": 1.280504,
+              "px": 725.605,
+              "py": 466.568
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1007/s40145-020-0382-9",
+        "doi_url": "https://doi.org/10.1007/s40145-020-0382-9",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1007/s40145-020-0382-9, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Paper 28331, panel 5(c) -- sibling of 5(a)."
+    },
+    {
+      "paper_id": "446",
+      "figure_id": "8724",
+      "figure_reference": "4(a)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/446_8724.png",
+        "width_px": 1386,
+        "height_px": 970,
+        "bytes": 78421,
+        "sha256": "c0b3e4479caa80993996e9166c04990c3612e2ad14175f7c6dd6d4591fe95ec7",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/446/fig4a.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "°C",
+          "axis_label_raw": "Temperature(°C)",
+          "p1": {
+            "value": 0,
+            "px": 255.0
+          },
+          "p2": {
+            "value": 400,
+            "px": 1171.0
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "10^4 S/m",
+          "axis_label_raw": "Electrical Conductivity(10⁴S/m)",
+          "p1": {
+            "value": 0,
+            "px": 825.0
+          },
+          "p2": {
+            "value": 14,
+            "px": 72.0
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.436681
+          },
+          "y": {
+            "units_per_px": 0.018592
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 0.0 px.",
+        "notes": []
+      },
+      "drawn_frame_range": {
+        "x": [
+          0.0,
+          450.0
+        ],
+        "y": [
+          0.0,
+          14.0
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "°C",
+          "unit_y": "10^4 S/m",
+          "n_points": 18,
+          "points": [
+            {
+              "x": 29.6187,
+              "y": 9.982358000000001,
+              "px": 322.827,
+              "py": 288.092
+            },
+            {
+              "x": 48.7509,
+              "y": 9.850380000000001,
+              "px": 366.64,
+              "py": 295.19
+            },
+            {
+              "x": 74.2554,
+              "y": 9.753283000000001,
+              "px": 425.045,
+              "py": 300.413
+            },
+            {
+              "x": 98.1752,
+              "y": 9.520706,
+              "px": 479.821,
+              "py": 312.922
+            },
+            {
+              "x": 125.2755,
+              "y": 9.390075000000001,
+              "px": 541.881,
+              "py": 319.948
+            },
+            {
+              "x": 149.9921,
+              "y": 9.157632000000001,
+              "px": 598.482,
+              "py": 332.45
+            },
+            {
+              "x": 173.9052,
+              "y": 9.026463000000001,
+              "px": 653.243,
+              "py": 339.505
+            },
+            {
+              "x": 200.193,
+              "y": 9.132314000000001,
+              "px": 713.442,
+              "py": 333.812
+            },
+            {
+              "x": 222.5125,
+              "y": 9.000875,
+              "px": 764.554,
+              "py": 340.882
+            },
+            {
+              "x": 249.6016,
+              "y": 9.039257000000001,
+              "px": 826.588,
+              "py": 338.817
+            },
+            {
+              "x": 274.3003,
+              "y": 9.077234,
+              "px": 883.148,
+              "py": 336.774
+            },
+            {
+              "x": 298.9922,
+              "y": 9.216618,
+              "px": 939.692,
+              "py": 329.278
+            },
+            {
+              "x": 324.4765,
+              "y": 9.423743,
+              "px": 998.051,
+              "py": 318.137
+            },
+            {
+              "x": 349.1864,
+              "y": 9.292708000000001,
+              "px": 1054.637,
+              "py": 325.185
+            },
+            {
+              "x": 373.8963,
+              "y": 9.161673,
+              "px": 1111.223,
+              "py": 332.233
+            },
+            {
+              "x": 399.4568,
+              "y": 8.219514,
+              "px": 1169.756,
+              "py": 382.908
+            },
+            {
+              "x": 424.2363,
+              "y": 7.040603,
+              "px": 1226.501,
+              "py": 446.316
+            },
+            {
+              "x": 448.9597,
+              "y": 6.706754,
+              "px": 1283.118,
+              "py": 464.272
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "°C",
+          "unit_y": "10^4 S/m",
+          "n_points": 18,
+          "points": [
+            {
+              "x": 29.695,
+              "y": 8.833075000000001,
+              "px": 323.002,
+              "py": 349.907
+            },
+            {
+              "x": 48.8272,
+              "y": 8.701098,
+              "px": 366.814,
+              "py": 357.005
+            },
+            {
+              "x": 75.1307,
+              "y": 8.570332,
+              "px": 427.049,
+              "py": 364.039
+            },
+            {
+              "x": 99.0416,
+              "y": 8.472965,
+              "px": 481.805,
+              "py": 369.276
+            },
+            {
+              "x": 122.9569,
+              "y": 8.307993,
+              "px": 536.571,
+              "py": 378.149
+            },
+            {
+              "x": 148.4704,
+              "y": 8.075685000000002,
+              "px": 594.997,
+              "py": 390.644
+            },
+            {
+              "x": 173.9613,
+              "y": 8.181402,
+              "px": 653.371,
+              "py": 384.957
+            },
+            {
+              "x": 198.6892,
+              "y": 7.779947000000001,
+              "px": 709.998,
+              "py": 406.55
+            },
+            {
+              "x": 224.1779,
+              "y": 7.919467,
+              "px": 768.367,
+              "py": 399.046
+            },
+            {
+              "x": 248.091,
+              "y": 7.788297000000001,
+              "px": 823.128,
+              "py": 406.101
+            },
+            {
+              "x": 275.1801,
+              "y": 7.826678,
+              "px": 885.162,
+              "py": 404.037
+            },
+            {
+              "x": 299.8743,
+              "y": 7.932260000000001,
+              "px": 941.712,
+              "py": 398.358
+            },
+            {
+              "x": 322.9682,
+              "y": 8.138981,
+              "px": 994.597,
+              "py": 387.239
+            },
+            {
+              "x": 348.4816,
+              "y": 7.906673,
+              "px": 1053.023,
+              "py": 399.734
+            },
+            {
+              "x": 374.7986,
+              "y": 7.573093,
+              "px": 1113.289,
+              "py": 417.676
+            },
+            {
+              "x": 399.5668,
+              "y": 6.563194,
+              "px": 1170.008,
+              "py": 471.994
+            },
+            {
+              "x": 425.1027,
+              "y": 5.992862000000001,
+              "px": 1228.485,
+              "py": 502.67
+            },
+            {
+              "x": 447.4244,
+              "y": 5.827621000000001,
+              "px": 1279.602,
+              "py": 511.557
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Electrical conductivity",
+          "unit_x": "°C",
+          "unit_y": "10^4 S/m",
+          "n_points": 18,
+          "points": [
+            {
+              "x": 29.7713,
+              "y": 7.683792,
+              "px": 323.176,
+              "py": 411.722
+            },
+            {
+              "x": 49.6959,
+              "y": 7.619554,
+              "px": 368.804,
+              "py": 415.177
+            },
+            {
+              "x": 74.4103,
+              "y": 7.420914000000001,
+              "px": 425.4,
+              "py": 425.861
+            },
+            {
+              "x": 100.7138,
+              "y": 7.290149,
+              "px": 485.635,
+              "py": 432.894
+            },
+            {
+              "x": 125.4304,
+              "y": 7.057707000000001,
+              "px": 542.236,
+              "py": 445.396
+            },
+            {
+              "x": 149.3435,
+              "y": 6.926537,
+              "px": 596.997,
+              "py": 452.451
+            },
+            {
+              "x": 174.8479,
+              "y": 6.829439000000001,
+              "px": 655.402,
+              "py": 457.674
+            },
+            {
+              "x": 198.7565,
+              "y": 6.765874000000001,
+              "px": 710.152,
+              "py": 461.093
+            },
+            {
+              "x": 227.4437,
+              "y": 6.7369200000000005,
+              "px": 775.846,
+              "py": 462.65
+            },
+            {
+              "x": 250.5623,
+              "y": 6.571813000000001,
+              "px": 828.788,
+              "py": 471.53
+            },
+            {
+              "x": 274.4709,
+              "y": 6.508249,
+              "px": 883.538,
+              "py": 474.949
+            },
+            {
+              "x": 300.7609,
+              "y": 6.580298,
+              "px": 943.742,
+              "py": 471.074
+            },
+            {
+              "x": 326.2474,
+              "y": 6.7536190000000005,
+              "px": 1002.107,
+              "py": 461.752
+            },
+            {
+              "x": 349.4041,
+              "y": 6.013871,
+              "px": 1055.135,
+              "py": 501.54
+            },
+            {
+              "x": 374.9198,
+              "y": 5.747761000000001,
+              "px": 1113.566,
+              "py": 515.853
+            },
+            {
+              "x": 399.6274,
+              "y": 5.650529000000001,
+              "px": 1170.147,
+              "py": 521.082
+            },
+            {
+              "x": 424.3642,
+              "y": 5.113864,
+              "px": 1226.794,
+              "py": 549.947
+            },
+            {
+              "x": 448.2728,
+              "y": 5.0503,
+              "px": 1281.545,
+              "py": 553.366
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1515/amm-2015-0104",
+        "doi_url": "https://doi.org/10.1515/amm-2015-0104",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1515/amm-2015-0104, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Sibling of 446 4(b): same scanned yellow figure, panel 4(a)."
+    },
+    {
+      "paper_id": "446",
+      "figure_id": "8726",
+      "figure_reference": "4(c)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/446_8726.png",
+        "width_px": 1386,
+        "height_px": 964,
+        "bytes": 78941,
+        "sha256": "fda63f43c16ef96d8a796aa85193707678a14d0e77e23088f4e739b960a6bac1",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/446/fig4c.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "°C",
+          "axis_label_raw": "Temperature(°C)",
+          "p1": {
+            "value": 0,
+            "px": 255.0
+          },
+          "p2": {
+            "value": 500,
+            "px": 1353.0
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "10^-3 W/(m·K^2)",
+          "axis_label_raw": "Power factor(10⁻³W/mK²)",
+          "p1": {
+            "value": 0.2,
+            "px": 748.0
+          },
+          "p2": {
+            "value": 1.2,
+            "px": 12.0
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.455373
+          },
+          "y": {
+            "units_per_px": 0.001359
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 0.0 px.",
+        "notes": [
+          "y軸下枠(y=820)はラベル0.2(748)より下に延びている。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          0.0,
+          450.0
+        ],
+        "y": [
+          0.2,
+          1.2
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "°C",
+          "unit_y": "10^-3 W/(m·K^2)",
+          "n_points": 18,
+          "points": [
+            {
+              "x": 30.705,
+              "y": 0.264198,
+              "px": 322.428,
+              "py": 700.75
+            },
+            {
+              "x": 50.622,
+              "y": 0.31111099999999997,
+              "px": 366.166,
+              "py": 666.222
+            },
+            {
+              "x": 74.689,
+              "y": 0.37284,
+              "px": 419.017,
+              "py": 620.79
+            },
+            {
+              "x": 100.415,
+              "y": 0.412346,
+              "px": 475.511,
+              "py": 591.713
+            },
+            {
+              "x": 123.651,
+              "y": 0.461728,
+              "px": 526.538,
+              "py": 555.368
+            },
+            {
+              "x": 149.378,
+              "y": 0.508642,
+              "px": 583.034,
+              "py": 520.839
+            },
+            {
+              "x": 173.444,
+              "y": 0.560494,
+              "px": 635.883,
+              "py": 482.676
+            },
+            {
+              "x": 199.17,
+              "y": 0.565432,
+              "px": 692.377,
+              "py": 479.042
+            },
+            {
+              "x": 225.726,
+              "y": 0.619753,
+              "px": 750.694,
+              "py": 439.062
+            },
+            {
+              "x": 249.793,
+              "y": 0.632099,
+              "px": 803.545,
+              "py": 429.975
+            },
+            {
+              "x": 273.859,
+              "y": 0.639506,
+              "px": 856.394,
+              "py": 424.524
+            },
+            {
+              "x": 299.585,
+              "y": 0.6888890000000001,
+              "px": 912.889,
+              "py": 388.178
+            },
+            {
+              "x": 323.651,
+              "y": 0.720988,
+              "px": 965.738,
+              "py": 364.553
+            },
+            {
+              "x": 348.548,
+              "y": 0.745679,
+              "px": 1020.411,
+              "py": 346.38
+            },
+            {
+              "x": 373.444,
+              "y": 0.790123,
+              "px": 1075.083,
+              "py": 313.669
+            },
+            {
+              "x": 401.66,
+              "y": 0.8765430000000001,
+              "px": 1137.045,
+              "py": 250.064
+            },
+            {
+              "x": 424.896,
+              "y": 0.9234570000000001,
+              "px": 1188.072,
+              "py": 215.536
+            },
+            {
+              "x": 448.963,
+              "y": 1.03457,
+              "px": 1240.923,
+              "py": 133.756
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "°C",
+          "unit_y": "10^-3 W/(m·K^2)",
+          "n_points": 18,
+          "points": [
+            {
+              "x": 30.705,
+              "y": 0.31357999999999997,
+              "px": 322.428,
+              "py": 664.405
+            },
+            {
+              "x": 50.622,
+              "y": 0.355556,
+              "px": 366.166,
+              "py": 633.511
+            },
+            {
+              "x": 74.689,
+              "y": 0.40740699999999996,
+              "px": 419.017,
+              "py": 595.348
+            },
+            {
+              "x": 101.245,
+              "y": 0.444444,
+              "px": 477.334,
+              "py": 568.089
+            },
+            {
+              "x": 125.311,
+              "y": 0.496296,
+              "px": 530.183,
+              "py": 529.926
+            },
+            {
+              "x": 149.378,
+              "y": 0.5530860000000001,
+              "px": 583.034,
+              "py": 488.129
+            },
+            {
+              "x": 174.274,
+              "y": 0.575309,
+              "px": 637.706,
+              "py": 471.773
+            },
+            {
+              "x": 200.0,
+              "y": 0.5950620000000001,
+              "px": 694.2,
+              "py": 457.234
+            },
+            {
+              "x": 224.066,
+              "y": 0.65679,
+              "px": 747.049,
+              "py": 411.803
+            },
+            {
+              "x": 249.793,
+              "y": 0.68642,
+              "px": 803.545,
+              "py": 389.995
+            },
+            {
+              "x": 275.519,
+              "y": 0.6938270000000001,
+              "px": 860.04,
+              "py": 384.543
+            },
+            {
+              "x": 299.585,
+              "y": 0.74321,
+              "px": 912.889,
+              "py": 348.197
+            },
+            {
+              "x": 326.971,
+              "y": 0.777778,
+              "px": 973.028,
+              "py": 322.755
+            },
+            {
+              "x": 348.548,
+              "y": 0.792593,
+              "px": 1020.411,
+              "py": 311.852
+            },
+            {
+              "x": 375.104,
+              "y": 0.8345680000000001,
+              "px": 1078.728,
+              "py": 280.958
+            },
+            {
+              "x": 399.17,
+              "y": 0.901235,
+              "px": 1131.577,
+              "py": 231.891
+            },
+            {
+              "x": 424.896,
+              "y": 0.97284,
+              "px": 1188.072,
+              "py": 179.19
+            },
+            {
+              "x": 448.133,
+              "y": 1.08148,
+              "px": 1239.1,
+              "py": 99.231
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "°C",
+          "unit_y": "10^-3 W/(m·K^2)",
+          "n_points": 18,
+          "points": [
+            {
+              "x": 448.963,
+              "y": 1.11358,
+              "px": 1240.923,
+              "py": 75.605
+            },
+            {
+              "x": 426.556,
+              "y": 0.9950619999999999,
+              "px": 1191.717,
+              "py": 162.834
+            },
+            {
+              "x": 398.34,
+              "y": 0.918519,
+              "px": 1129.755,
+              "py": 219.17
+            },
+            {
+              "x": 375.934,
+              "y": 0.777778,
+              "px": 1080.551,
+              "py": 322.755
+            },
+            {
+              "x": 349.378,
+              "y": 0.758025,
+              "px": 1022.234,
+              "py": 337.294
+            },
+            {
+              "x": 325.311,
+              "y": 0.745679,
+              "px": 969.383,
+              "py": 346.38
+            },
+            {
+              "x": 300.415,
+              "y": 0.7111109999999999,
+              "px": 914.711,
+              "py": 371.822
+            },
+            {
+              "x": 275.519,
+              "y": 0.683951,
+              "px": 860.04,
+              "py": 391.812
+            },
+            {
+              "x": 250.622,
+              "y": 0.669136,
+              "px": 805.366,
+              "py": 402.716
+            },
+            {
+              "x": 222.407,
+              "y": 0.644444,
+              "px": 743.406,
+              "py": 420.889
+            },
+            {
+              "x": 200.83,
+              "y": 0.580247,
+              "px": 696.023,
+              "py": 468.138
+            },
+            {
+              "x": 175.934,
+              "y": 0.580247,
+              "px": 641.351,
+              "py": 468.138
+            },
+            {
+              "x": 149.378,
+              "y": 0.5481480000000001,
+              "px": 583.034,
+              "py": 491.763
+            },
+            {
+              "x": 126.141,
+              "y": 0.506173,
+              "px": 532.006,
+              "py": 522.657
+            },
+            {
+              "x": 100.415,
+              "y": 0.491358,
+              "px": 475.511,
+              "py": 533.561
+            },
+            {
+              "x": 75.519,
+              "y": 0.441975,
+              "px": 420.84,
+              "py": 569.906
+            },
+            {
+              "x": 49.793,
+              "y": 0.41728400000000004,
+              "px": 364.345,
+              "py": 588.079
+            },
+            {
+              "x": 30.705,
+              "y": 0.362963,
+              "px": 322.428,
+              "py": 628.059
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1515/amm-2015-0104",
+        "doi_url": "https://doi.org/10.1515/amm-2015-0104",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1515/amm-2015-0104, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Sibling of 446 4(b): same scanned yellow figure, panel 4(c)."
+    },
+    {
+      "paper_id": "10939",
+      "figure_id": "1536",
+      "figure_reference": "5(b)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/10939_1536.png",
+        "width_px": 886,
+        "height_px": 660,
+        "bytes": 80314,
+        "sha256": "5596364b2f24e069d897e32eebc77875a70706a687ec3d6d03dadb3e9e1d53d6",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/10939/fig5b.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "T, K",
+          "p1": {
+            "value": 300,
+            "px": 21
+          },
+          "p2": {
+            "value": 900,
+            "px": 713.5
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "μV/K",
+          "axis_label_raw": "S, μV/K",
+          "p1": {
+            "value": -110,
+            "px": 551.5
+          },
+          "p2": {
+            "value": -30,
+            "px": 11.0
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.866426
+          },
+          "y": {
+            "units_per_px": 0.148011
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 30.38 px.",
+        "notes": [
+          "パスA(300)を採用。registry.jsonのx_range=[300,900]と一致(fig3bと同一パターン)。",
+          "Resolved to pass A (300): matches registry.json's x_range=[300,900] (same pattern as fig3b/figure_id=1528).",
+          "パネル(b)。y軸ラベルは右側。主目盛りの間に副目盛りあり(間隔34pxの半分)。",
+          "Panel (b), y tick labels on the RIGHT axis (-30..-110). Minor ticks lie between majors (major step 67.5 px). x ticks 21,136.5,...,713.5 (300..900).",
+          "x軸最小ラベル'300'は左端で切れているため使用せず'400'を採用。右軸(S)使用。",
+          "Leftmost x label '300' is cut off at the left edge, so used '400' instead. Right-hand S axis used for y.",
+          "2026-09-08 訂正: y軸下端の画素位置を 548.75 → 551.5 (+2.75px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
+          "2026-09-08 owner review: 本日の軸位置修正をオーナーが目視確認し承認。この図は2026-09-07のレビューで値(x_min_label等)が正しいと判定済み(verdict=pos、値の誤りではなく位置の誤りとの判定)であり、位置は Claude Fable 5 が記録値を伏せて4参照点すべてを独立測定し、その修正結果を本日承認した。値と位置の双方が人手を通ったため status を owner_reviewed へ昇格する。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          300.0,
+          900.0
+        ],
+        "y": [
+          -110.0,
+          -30.0
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 13,
+          "points": [
+            {
+              "x": 293.2673,
+              "y": -38.65701,
+              "px": 13.229,
+              "py": 69.489
+            },
+            {
+              "x": 322.9581,
+              "y": -41.12852,
+              "px": 47.497,
+              "py": 86.187
+            },
+            {
+              "x": 369.1209,
+              "y": -46.62925,
+              "px": 100.777,
+              "py": 123.351
+            },
+            {
+              "x": 420.7909,
+              "y": -51.94476,
+              "px": 160.413,
+              "py": 159.264
+            },
+            {
+              "x": 471.3054,
+              "y": -61.22182000000001,
+              "px": 218.715,
+              "py": 221.942
+            },
+            {
+              "x": 520.7528,
+              "y": -68.04537,
+              "px": 275.786,
+              "py": 268.044
+            },
+            {
+              "x": 570.8182,
+              "y": -69.96365,
+              "px": 333.569,
+              "py": 281.004
+            },
+            {
+              "x": 620.8134,
+              "y": -76.97622,
+              "px": 391.272,
+              "py": 328.383
+            },
+            {
+              "x": 670.2452,
+              "y": -84.93184,
+              "px": 448.325,
+              "py": 382.133
+            },
+            {
+              "x": 718.615,
+              "y": -90.05659999999999,
+              "px": 504.151,
+              "py": 416.757
+            },
+            {
+              "x": 767.0758,
+              "y": -88.57764999999999,
+              "px": 560.083,
+              "py": 406.765
+            },
+            {
+              "x": 816.6296,
+              "y": -87.66542,
+              "px": 617.277,
+              "py": 400.602
+            },
+            {
+              "x": 867.2895,
+              "y": -86.37652,
+              "px": 675.747,
+              "py": 391.894
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 13,
+          "points": [
+            {
+              "x": 298.681,
+              "y": -45.26419,
+              "px": 19.478,
+              "py": 114.129
+            },
+            {
+              "x": 322.8672,
+              "y": -47.73223,
+              "px": 47.393,
+              "py": 130.803
+            },
+            {
+              "x": 375.5654,
+              "y": -58.331410000000005,
+              "px": 108.215,
+              "py": 202.414
+            },
+            {
+              "x": 427.2094,
+              "y": -65.53371000000001,
+              "px": 167.821,
+              "py": 251.075
+            },
+            {
+              "x": 478.8534,
+              "y": -72.736,
+              "px": 227.427,
+              "py": 299.735
+            },
+            {
+              "x": 528.2982,
+              "y": -79.74822999999999,
+              "px": 284.494,
+              "py": 347.111
+            },
+            {
+              "x": 582.2323,
+              "y": -80.53687,
+              "px": 346.743,
+              "py": 352.44
+            },
+            {
+              "x": 631.6719,
+              "y": -87.92645,
+              "px": 403.805,
+              "py": 402.366
+            },
+            {
+              "x": 684.4947,
+              "y": -89.46911,
+              "px": 464.771,
+              "py": 412.788
+            },
+            {
+              "x": 736.1958,
+              "y": -92.52049,
+              "px": 524.443,
+              "py": 433.404
+            },
+            {
+              "x": 783.5374,
+              "y": -92.36159,
+              "px": 579.083,
+              "py": 432.33
+            },
+            {
+              "x": 833.1147,
+              "y": -89.75126,
+              "px": 636.303,
+              "py": 414.694
+            },
+            {
+              "x": 865.1007,
+              "y": -85.43175,
+              "px": 673.22,
+              "py": 385.511
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 13,
+          "points": [
+            {
+              "x": 296.6505,
+              "y": -32.81008,
+              "px": 17.134,
+              "py": 29.986
+            },
+            {
+              "x": 321.9299,
+              "y": -35.84485,
+              "px": 46.311,
+              "py": 50.489
+            },
+            {
+              "x": 371.3747,
+              "y": -42.857079999999996,
+              "px": 103.378,
+              "py": 97.866
+            },
+            {
+              "x": 423.0472,
+              "y": -47.98392,
+              "px": 163.017,
+              "py": 132.504
+            },
+            {
+              "x": 472.5154,
+              "y": -53.29805,
+              "px": 220.112,
+              "py": 168.407
+            },
+            {
+              "x": 523.6323,
+              "y": -58.801899999999996,
+              "px": 279.109,
+              "py": 205.593
+            },
+            {
+              "x": 575.8423,
+              "y": -64.87247,
+              "px": 339.368,
+              "py": 246.607
+            },
+            {
+              "x": 624.1914,
+              "y": -71.50665,
+              "px": 395.171,
+              "py": 291.429
+            },
+            {
+              "x": 673.6492,
+              "y": -77.57549,
+              "px": 452.253,
+              "py": 332.432
+            },
+            {
+              "x": 723.1277,
+              "y": -82.13491,
+              "px": 509.36,
+              "py": 363.236
+            },
+            {
+              "x": 771.5183,
+              "y": -85.75025,
+              "px": 565.211,
+              "py": 387.663
+            },
+            {
+              "x": 822.1393,
+              "y": -87.29151999999999,
+              "px": 623.636,
+              "py": 398.076
+            },
+            {
+              "x": 872.7525,
+              "y": -89.39883,
+              "px": 682.052,
+              "py": 412.313
+            }
+          ]
+        },
+        {
+          "series_index": 3,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 13,
+          "points": [
+            {
+              "x": 302.033,
+              "y": -41.68139,
+              "px": 23.346,
+              "py": 89.922
+            },
+            {
+              "x": 322.8516,
+              "y": -48.8643,
+              "px": 47.375,
+              "py": 138.452
+            },
+            {
+              "x": 372.3406,
+              "y": -52.66901,
+              "px": 104.493,
+              "py": 164.157
+            },
+            {
+              "x": 426.1578,
+              "y": -61.948139999999995,
+              "px": 166.607,
+              "py": 226.85
+            },
+            {
+              "x": 476.7009,
+              "y": -69.14974,
+              "px": 224.942,
+              "py": 275.505
+            },
+            {
+              "x": 527.2492,
+              "y": -75.97398,
+              "px": 283.283,
+              "py": 321.612
+            },
+            {
+              "x": 576.7563,
+              "y": -78.45795,
+              "px": 340.423,
+              "py": 338.394
+            },
+            {
+              "x": 622.9451,
+              "y": -82.07191,
+              "px": 393.732,
+              "py": 362.811
+            },
+            {
+              "x": 676.752,
+              "y": -92.10575,
+              "px": 455.835,
+              "py": 430.602
+            },
+            {
+              "x": 722.9148,
+              "y": -97.60648,
+              "px": 509.114,
+              "py": 467.766
+            },
+            {
+              "x": 774.6393,
+              "y": -98.95976,
+              "px": 568.813,
+              "py": 476.909
+            },
+            {
+              "x": 823.0689,
+              "y": -99.74494,
+              "px": 624.709,
+              "py": 482.214
+            },
+            {
+              "x": 854.9952,
+              "y": -99.76502,
+              "px": 661.557,
+              "py": 482.35
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1007/s11664-015-4242-2",
+        "doi_url": "https://doi.org/10.1007/s11664-015-4242-2",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1007/s11664-015-4242-2, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Sibling of 10939 4(a): panel 5(b), same 4 samples."
+    },
+    {
+      "paper_id": "10939",
+      "figure_id": "1537",
+      "figure_reference": "5(c)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/10939_1537.png",
+        "width_px": 886,
+        "height_px": 649,
+        "bytes": 52039,
+        "sha256": "7b05a9cf15a492a7e358a6ff2f2911b6d76594fcdb68bb63ad95588ded585097",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/10939/fig5c.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "T, K",
+          "p1": {
+            "value": 400,
+            "px": 157.25
+          },
+          "p2": {
+            "value": 900,
+            "px": 851.75
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "W/(m·K)",
+          "axis_label_raw": "κ_ph, W/mK",
+          "p1": {
+            "value": 0.4,
+            "px": 543.5
+          },
+          "p2": {
+            "value": 1.4,
+            "px": 2.5
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.719942
+          },
+          "y": {
+            "units_per_px": 0.001848
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 2.5 px.",
+        "notes": [
+          "上端1.4の文字は上部が切れるが目盛り(row2.5=上枠)は画像内。枠 x=129.5-879.5。",
+          "The 1.4 glyph is clipped at the top edge but its tick (row 2.5, the top frame) is in-image. x ticks 157.5,296.5,...,852 (400..900).",
+          "全ラベル完全に見える('1.4'も上端で切れていない、fig3c/4cとは異なる)。",
+          "All labels fully visible, including '1.4' at the top (unlike the sibling fig3c/fig4c crops where it was cut).",
+          "2026-09-08 訂正: y軸下端の画素位置を 540.5 → 543.5 (+3.00px)。記録値は目盛ではなくラベル文字の上端に乗っていた(オーナーのレビューで24図中20図に同じずれ、y下端のみ中央値-2.75px、他3参照点は0.00px)。検出した目盛位置へスナップした。",
+          "2026-09-08 訂正(y_max_px 4.0→2.5): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Coordinates are pixel indices with pixel i centred at i.0 (add 0.5 for edge-based coordinates). x ticks = inward strokes on bottom spine. y 0.4/1.4 coincide with bottom/top frame lines (top frame at rows 2-3, fully inside image). Extra vertical line at col 884 is the neighbouring panel's frame, ignored.",
+          "2026-09-08 owner review: 本日の軸位置修正をオーナーが目視確認し承認。この図は2026-09-07のレビューで値(x_min_label等)が正しいと判定済み(verdict=pos、値の誤りではなく位置の誤りとの判定)であり、位置は Claude Fable 5 が記録値を伏せて4参照点すべてを独立測定し、その修正結果を本日承認した。値と位置の双方が人手を通ったため status を owner_reviewed へ昇格する。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          400.0,
+          900.0
+        ],
+        "y": [
+          0.4,
+          1.4
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W/(m·K)",
+          "n_points": 6,
+          "points": [
+            {
+              "x": 423.4292,
+              "y": 0.8430769,
+              "px": 189.793,
+              "py": 303.795
+            },
+            {
+              "x": 472.5235,
+              "y": 0.8036923,
+              "px": 257.985,
+              "py": 325.102
+            },
+            {
+              "x": 520.6635,
+              "y": 0.7643077,
+              "px": 324.852,
+              "py": 346.41
+            },
+            {
+              "x": 571.2331,
+              "y": 0.7618462,
+              "px": 395.093,
+              "py": 347.741
+            },
+            {
+              "x": 620.8573,
+              "y": 0.7667692,
+              "px": 464.021,
+              "py": 345.078
+            },
+            {
+              "x": 722.0288,
+              "y": 0.7889231,
+              "px": 604.548,
+              "py": 333.093
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W/(m·K)",
+          "n_points": 10,
+          "points": [
+            {
+              "x": 423.027,
+              "y": 0.5058462,
+              "px": 189.235,
+              "py": 486.237
+            },
+            {
+              "x": 470.7575,
+              "y": 0.5230769,
+              "px": 255.532,
+              "py": 476.915
+            },
+            {
+              "x": 522.2548,
+              "y": 0.4984615,
+              "px": 327.062,
+              "py": 490.232
+            },
+            {
+              "x": 572.8479,
+              "y": 0.5156923,
+              "px": 397.336,
+              "py": 480.91
+            },
+            {
+              "x": 622.5044,
+              "y": 0.5476923,
+              "px": 466.309,
+              "py": 463.598
+            },
+            {
+              "x": 672.1873,
+              "y": 0.6018462,
+              "px": 535.318,
+              "py": 434.301
+            },
+            {
+              "x": 720.8602,
+              "y": 0.6092308,
+              "px": 602.925,
+              "py": 430.306
+            },
+            {
+              "x": 772.3782,
+              "y": 0.6018462,
+              "px": 674.483,
+              "py": 434.301
+            },
+            {
+              "x": 822.0258,
+              "y": 0.6264615,
+              "px": 743.444,
+              "py": 420.984
+            },
+            {
+              "x": 871.6412,
+              "y": 0.624,
+              "px": 812.36,
+              "py": 422.316
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W/(m·K)",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 422.8802,
+              "y": 1.182769,
+              "px": 189.031,
+              "py": 120.022
+            },
+            {
+              "x": 472.4369,
+              "y": 1.131077,
+              "px": 257.865,
+              "py": 147.987
+            },
+            {
+              "x": 524.8268,
+              "y": 1.054769,
+              "px": 330.634,
+              "py": 189.27
+            },
+            {
+              "x": 570.5079,
+              "y": 0.9538462,
+              "px": 394.085,
+              "py": 243.869
+            },
+            {
+              "x": 623.9753,
+              "y": 0.9809231,
+              "px": 468.352,
+              "py": 229.221
+            },
+            {
+              "x": 673.4234,
+              "y": 0.8381538,
+              "px": 537.035,
+              "py": 306.459
+            },
+            {
+              "x": 722.9683,
+              "y": 0.7766154,
+              "px": 605.853,
+              "py": 339.751
+            }
+          ]
+        },
+        {
+          "series_index": 3,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Thermal conductivity",
+          "unit_x": "K",
+          "unit_y": "W/(m·K)",
+          "n_points": 10,
+          "points": [
+            {
+              "x": 420.4521,
+              "y": 0.7470769,
+              "px": 185.658,
+              "py": 355.731
+            },
+            {
+              "x": 471.0658,
+              "y": 0.7815385,
+              "px": 255.96,
+              "py": 337.088
+            },
+            {
+              "x": 520.7223,
+              "y": 0.8135385,
+              "px": 324.933,
+              "py": 319.776
+            },
+            {
+              "x": 571.2478,
+              "y": 0.7741538,
+              "px": 395.113,
+              "py": 341.083
+            },
+            {
+              "x": 622.6923,
+              "y": 0.7052308,
+              "px": 466.57,
+              "py": 378.37
+            },
+            {
+              "x": 670.4052,
+              "y": 0.7076923,
+              "px": 532.843,
+              "py": 377.038
+            },
+            {
+              "x": 723.7786,
+              "y": 0.656,
+              "px": 606.978,
+              "py": 405.004
+            },
+            {
+              "x": 773.3089,
+              "y": 0.5821538,
+              "px": 675.776,
+              "py": 444.955
+            },
+            {
+              "x": 820.9659,
+              "y": 0.5378462,
+              "px": 741.972,
+              "py": 468.925
+            },
+            {
+              "x": 874.3423,
+              "y": 0.4886154,
+              "px": 816.111,
+              "py": 495.559
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1007/s11664-015-4242-2",
+        "doi_url": "https://doi.org/10.1007/s11664-015-4242-2",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1007/s11664-015-4242-2, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Sibling of 10939 4(a): panel 5(c), 3 series."
+    },
+    {
+      "paper_id": "27759",
+      "figure_id": "25218",
+      "figure_reference": "8",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/27759_25218.jpg",
+        "width_px": 1000,
+        "height_px": 756,
+        "bytes": 190454,
+        "sha256": "962c6258348dea87b890b2b9ae41e8d34cc170af5404bb4c9540bd07a06cda49",
+        "source_path_in_real_chart_bench": "data/verified_pairs/images/27759/p07_embedded_8.jpg"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "Temperature (K)",
+          "p1": {
+            "value": 400,
+            "px": 217.5
+          },
+          "p2": {
+            "value": 1000,
+            "px": 962.5
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "μV/K",
+          "axis_label_raw": "Seebeck coefficient (μV/K)",
+          "p1": {
+            "value": -200,
+            "px": 653.0
+          },
+          "p2": {
+            "value": 600,
+            "px": 16.0
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.805369
+          },
+          "y": {
+            "units_per_px": 1.255887
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 1 px.",
+        "notes": [
+          "Main plot (frame x=124-995, y=16-653) plus an INSET with its own independent axes (inset frame x=311-668, y=180-488; inset x 400-1000 K, y -175..-50 uV/K). Selected the main plot.",
+          "main+inset構成。メインパネルを採用。insetはSeebeck係数 -175〜-50 vs Temperature 400-1000の拡大図。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          300.0,
+          1000.0
+        ],
+        "y": [
+          -200.0,
+          600.0
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 373.6283,
+              "y": 383.679,
+              "px": 184.755,
+              "py": 188.246
+            },
+            {
+              "x": 473.324,
+              "y": 530.8055999999999,
+              "px": 308.544,
+              "py": 71.096
+            },
+            {
+              "x": 573.0197,
+              "y": 517.3362000000001,
+              "px": 432.333,
+              "py": 81.821
+            },
+            {
+              "x": 672.7154,
+              "y": 481.0727,
+              "px": 556.122,
+              "py": 110.696
+            },
+            {
+              "x": 772.4111,
+              "y": 422.4293,
+              "px": 679.91,
+              "py": 157.391
+            },
+            {
+              "x": 873.436,
+              "y": 361.92089999999996,
+              "px": 805.35,
+              "py": 205.57
+            },
+            {
+              "x": 973.1317,
+              "y": 295.50669999999997,
+              "px": 929.139,
+              "py": 258.453
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 373.6283,
+              "y": -84.97988,
+              "px": 184.755,
+              "py": 561.415
+            },
+            {
+              "x": 473.324,
+              "y": -106.6372,
+              "px": 308.544,
+              "py": 578.66
+            },
+            {
+              "x": 573.0197,
+              "y": -117.3772,
+              "px": 432.333,
+              "py": 587.212
+            },
+            {
+              "x": 672.7154,
+              "y": -129.7241,
+              "px": 556.122,
+              "py": 597.043
+            },
+            {
+              "x": 772.4111,
+              "y": -140.8622,
+              "px": 679.91,
+              "py": 605.912
+            },
+            {
+              "x": 873.436,
+              "y": -151.0505,
+              "px": 805.35,
+              "py": 614.024
+            },
+            {
+              "x": 973.1317,
+              "y": -160.8072,
+              "px": 929.139,
+              "py": 621.793
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 372.9636,
+              "y": -79.19967,
+              "px": 183.93,
+              "py": 556.813
+            },
+            {
+              "x": 473.324,
+              "y": -95.25926,
+              "px": 308.544,
+              "py": 569.6
+            },
+            {
+              "x": 573.0197,
+              "y": -107.69250000000001,
+              "px": 432.333,
+              "py": 579.5
+            },
+            {
+              "x": 674.4434,
+              "y": -120.0739,
+              "px": 558.267,
+              "py": 589.359
+            },
+            {
+              "x": 773.0757,
+              "y": -130.7458,
+              "px": 680.736,
+              "py": 597.856
+            },
+            {
+              "x": 872.7714,
+              "y": -140.84779999999998,
+              "px": 804.524,
+              "py": 605.9
+            },
+            {
+              "x": 971.4037,
+              "y": -151.5714,
+              "px": 926.993,
+              "py": 614.439
+            }
+          ]
+        },
+        {
+          "series_index": 3,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Seebeck coefficient",
+          "unit_x": "K",
+          "unit_y": "μV/K",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 372.9636,
+              "y": -69.41647999999999,
+              "px": 183.93,
+              "py": 549.023
+            },
+            {
+              "x": 473.324,
+              "y": -83.84774,
+              "px": 308.544,
+              "py": 560.514
+            },
+            {
+              "x": 573.0197,
+              "y": -97.50415000000001,
+              "px": 432.333,
+              "py": 571.388
+            },
+            {
+              "x": 673.38,
+              "y": -107.6619,
+              "px": 556.947,
+              "py": 579.476
+            },
+            {
+              "x": 773.0757,
+              "y": -119.16000000000001,
+              "px": 680.736,
+              "py": 588.631
+            },
+            {
+              "x": 873.436,
+              "y": -130.86090000000002,
+              "px": 805.35,
+              "py": 597.948
+            },
+            {
+              "x": 972.4671,
+              "y": -140.2699,
+              "px": 928.313,
+              "py": 605.44
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1038/s41598-020-65818-z",
+        "doi_url": "https://doi.org/10.1038/s41598-020-65818-z",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "no",
+        "line": "Figure from https://doi.org/10.1038/s41598-020-65818-z, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Sibling of 27759 fig 7: figure 8, linear y, same 4 samples."
+    },
+    {
+      "paper_id": "27759",
+      "figure_id": "25222",
+      "figure_reference": "16(a)",
+      "figure_kind": "markers",
+      "image": {
+        "file": "images/27759_25222.png",
+        "width_px": 1000,
+        "height_px": 800,
+        "bytes": 293688,
+        "sha256": "dcee5c2d1d5ad6b9c5568c6203dfeee75983dd6d9c2a2f1fbe7715573ddc06b9",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/27759/fig16a.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "K",
+          "axis_label_raw": "Temperature (K)",
+          "p1": {
+            "value": 400,
+            "px": 245.0
+          },
+          "p2": {
+            "value": 1000,
+            "px": 948.0
+          }
+        },
+        "y": {
+          "scale": "log",
+          "unit": "W/(m·K^2)",
+          "axis_label_raw": "Power factor (W/mK²)",
+          "p1": {
+            "value": 1e-08,
+            "px": 684.0
+          },
+          "p2": {
+            "value": 0.001,
+            "px": 19.5
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 0.853485
+          },
+          "y": {
+            "decades_per_px": 0.007524
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 1 px.",
+        "notes": [
+          "Single panel, y-axis is LOGARITHMIC (decade ticks 10^-8 .. 10^-3 at y = 684, 551, 418, 285, 152, 19.5). Frame x=157-978, y=19-684.",
+          "y軸は対数軸(10^-8〜10^-3)。10^-3は上枠線、10^-8は下枠線に一致。"
+        ]
+      },
+      "drawn_frame_range": {
+        "x": [
+          350.0,
+          1000.0
+        ],
+        "y": [
+          1e-08,
+          0.001
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "W/(m·K^2)",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 373.4374,
+              "y": 3.455395e-08,
+              "px": 213.877,
+              "py": 612.434
+            },
+            {
+              "x": 472.7231,
+              "y": 4.99493e-07,
+              "px": 330.207,
+              "py": 458.265
+            },
+            {
+              "x": 573.065,
+              "y": 2.411988e-06,
+              "px": 447.774,
+              "py": 367.382
+            },
+            {
+              "x": 673.4069,
+              "y": 6.904112e-06,
+              "px": 565.342,
+              "py": 306.683
+            },
+            {
+              "x": 773.2207,
+              "y": 1.312611e-05,
+              "px": 682.29,
+              "py": 269.6
+            },
+            {
+              "x": 873.0345,
+              "y": 2.058841e-05,
+              "px": 799.239,
+              "py": 243.62
+            },
+            {
+              "x": 973.3764,
+              "y": 2.513432e-05,
+              "px": 916.806,
+              "py": 232.104
+            }
+          ]
+        },
+        {
+          "series_index": 1,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "W/(m·K^2)",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 372.9093,
+              "y": 2.376227e-05,
+              "px": 213.259,
+              "py": 235.344
+            },
+            {
+              "x": 472.7231,
+              "y": 4.319123e-05,
+              "px": 330.207,
+              "py": 200.856
+            },
+            {
+              "x": 573.065,
+              "y": 5.7686e-05,
+              "px": 447.774,
+              "py": 184.154
+            },
+            {
+              "x": 673.4069,
+              "y": 7.482087e-05,
+              "px": 565.342,
+              "py": 169.142
+            },
+            {
+              "x": 773.7488,
+              "y": 9.189119e-05,
+              "px": 682.909,
+              "py": 157.281
+            },
+            {
+              "x": 873.5626,
+              "y": 0.000106324,
+              "px": 799.858,
+              "py": 148.861
+            },
+            {
+              "x": 972.8483,
+              "y": 0.0001198588,
+              "px": 916.187,
+              "py": 141.945
+            }
+          ]
+        },
+        {
+          "series_index": 2,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "W/(m·K^2)",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 373.4374,
+              "y": 6.191414e-05,
+              "px": 213.877,
+              "py": 180.071
+            },
+            {
+              "x": 472.7231,
+              "y": 0.0001020933,
+              "px": 330.207,
+              "py": 151.204
+            },
+            {
+              "x": 573.065,
+              "y": 0.0001378231,
+              "px": 447.774,
+              "py": 133.884
+            },
+            {
+              "x": 673.4069,
+              "y": 0.0001717486,
+              "px": 565.342,
+              "py": 121.183
+            },
+            {
+              "x": 773.2207,
+              "y": 0.0002007673,
+              "px": 682.29,
+              "py": 112.172
+            },
+            {
+              "x": 873.0345,
+              "y": 0.000227531,
+              "px": 799.239,
+              "py": 104.949
+            },
+            {
+              "x": 972.8483,
+              "y": 0.0002539803,
+              "px": 916.187,
+              "py": 98.602
+            }
+          ]
+        },
+        {
+          "series_index": 3,
+          "series_label": null,
+          "prop_x": "Temperature",
+          "prop_y": "Power factor",
+          "unit_x": "K",
+          "unit_y": "W/(m·K^2)",
+          "n_points": 7,
+          "points": [
+            {
+              "x": 372.9093,
+              "y": 9.635259e-05,
+              "px": 213.259,
+              "py": 154.545
+            },
+            {
+              "x": 473.2512,
+              "y": 0.0001454684,
+              "px": 330.826,
+              "py": 130.768
+            },
+            {
+              "x": 573.5931,
+              "y": 0.0001919564,
+              "px": 448.393,
+              "py": 114.762
+            },
+            {
+              "x": 672.8788,
+              "y": 0.0002421843,
+              "px": 564.723,
+              "py": 101.347
+            },
+            {
+              "x": 773.2207,
+              "y": 0.0002876789,
+              "px": 682.29,
+              "py": 91.411
+            },
+            {
+              "x": 873.0345,
+              "y": 0.0003317169,
+              "px": 799.239,
+              "py": 83.19
+            },
+            {
+              "x": 972.8483,
+              "y": 0.0003740606,
+              "px": 916.187,
+              "py": 76.256
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1038/s41598-020-65818-z",
+        "doi_url": "https://doi.org/10.1038/s41598-020-65818-z",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1038/s41598-020-65818-z, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Sibling of 27759 fig 7: figure 16(a), a second log-y axis."
+    },
+    {
+      "paper_id": "22102",
+      "figure_id": "21246",
+      "figure_reference": "3c",
+      "figure_kind": "line_only",
+      "image": {
+        "file": "images/22102_21246.png",
+        "width_px": 650,
+        "height_px": 480,
+        "bytes": 84775,
+        "sha256": "ad150ec126738f0e2e3f7b0e52f556450fb8ff9e4fb67aa5698eb7b367db2b86",
+        "source_path_in_real_chart_bench": "data/verified_pairs/crops/22102/fig3c.png"
+      },
+      "axis_calibration": {
+        "x": {
+          "scale": "linear",
+          "unit": "sec",
+          "axis_label_raw": "Time (sec)",
+          "p1": {
+            "value": 0,
+            "px": 127.75
+          },
+          "p2": {
+            "value": 20000,
+            "px": 615.5
+          }
+        },
+        "y": {
+          "scale": "linear",
+          "unit": "°C",
+          "axis_label_raw": "Temperature (°C)",
+          "p1": {
+            "value": 0,
+            "px": 378.5
+          },
+          "p2": {
+            "value": 700,
+            "px": 20.5
+          }
+        },
+        "resolution": {
+          "x": {
+            "units_per_px": 41.004613
+          },
+          "y": {
+            "units_per_px": 1.955307
+          },
+          "note": "What one pixel is worth on each axis -- use it to size the tolerance of a pixel-level assertion. Linear axes give units_per_px; log axes give decades_per_px (1 px is a factor of 10**decades_per_px)."
+        },
+        "provenance": "Printed tick labels and their pixel positions, cross-read by two independent vision models and then owner-reviewed against the image (axis_pixel_candidates.json status=owner_reviewed). Model-to-model pixel disagreement for these entries: 0.5 px.",
+        "notes": []
+      },
+      "drawn_frame_range": {
+        "x": [
+          0.0,
+          20000.0
+        ],
+        "y": [
+          0.0,
+          700.0
+        ],
+        "note": "Outer edge of the drawn plot frame, NOT tick values. Do not calibrate from this -- use axis_calibration. Present only so you can tell framing margin from a data error."
+      },
+      "series": [
+        {
+          "series_index": 0,
+          "series_label": null,
+          "prop_x": "Time",
+          "prop_y": "Temperature",
+          "unit_x": "sec",
+          "unit_y": "°C",
+          "n_points": 55,
+          "points": [
+            {
+              "x": 109.2896,
+              "y": 26.11940000000004,
+              "px": 130.415,
+              "py": 365.142
+            },
+            {
+              "x": 218.5792,
+              "y": 52.238800000000026,
+              "px": 133.081,
+              "py": 351.784
+            },
+            {
+              "x": 327.8689,
+              "y": 78.35820000000001,
+              "px": 135.746,
+              "py": 338.425
+            },
+            {
+              "x": 437.1585,
+              "y": 114.92540000000002,
+              "px": 138.411,
+              "py": 319.724
+            },
+            {
+              "x": 437.1585,
+              "y": 156.71640000000002,
+              "px": 138.411,
+              "py": 298.351
+            },
+            {
+              "x": 437.1585,
+              "y": 193.28360000000004,
+              "px": 138.411,
+              "py": 279.649
+            },
+            {
+              "x": 437.1585,
+              "y": 224.62690000000003,
+              "px": 138.411,
+              "py": 263.619
+            },
+            {
+              "x": 546.4481,
+              "y": 276.86570000000006,
+              "px": 141.077,
+              "py": 236.903
+            },
+            {
+              "x": 765.0273,
+              "y": 313.43280000000004,
+              "px": 146.407,
+              "py": 218.202
+            },
+            {
+              "x": 874.3169,
+              "y": 350.0,
+              "px": 149.072,
+              "py": 199.5
+            },
+            {
+              "x": 874.3169,
+              "y": 397.0149,
+              "px": 149.072,
+              "py": 175.455
+            },
+            {
+              "x": 983.6066,
+              "y": 438.80600000000004,
+              "px": 151.738,
+              "py": 154.082
+            },
+            {
+              "x": 983.6066,
+              "y": 480.597,
+              "px": 151.738,
+              "py": 132.709
+            },
+            {
+              "x": 1092.896,
+              "y": 517.1642,
+              "px": 154.403,
+              "py": 114.007
+            },
+            {
+              "x": 1202.186,
+              "y": 553.7313,
+              "px": 157.068,
+              "py": 95.306
+            },
+            {
+              "x": 1420.765,
+              "y": 585.0746,
+              "px": 162.399,
+              "py": 79.276
+            },
+            {
+              "x": 1639.344,
+              "y": 611.1940000000001,
+              "px": 167.73,
+              "py": 65.918
+            },
+            {
+              "x": 1857.923,
+              "y": 621.6418,
+              "px": 173.06,
+              "py": 60.575
+            },
+            {
+              "x": 2185.792,
+              "y": 621.6418,
+              "px": 181.056,
+              "py": 60.575
+            },
+            {
+              "x": 2732.24,
+              "y": 616.4179,
+              "px": 194.383,
+              "py": 63.246
+            },
+            {
+              "x": 3387.978,
+              "y": 611.1940000000001,
+              "px": 210.374,
+              "py": 65.918
+            },
+            {
+              "x": 3825.137,
+              "y": 611.1940000000001,
+              "px": 221.036,
+              "py": 65.918
+            },
+            {
+              "x": 4371.585,
+              "y": 611.1940000000001,
+              "px": 234.362,
+              "py": 65.918
+            },
+            {
+              "x": 5464.481,
+              "y": 611.1940000000001,
+              "px": 261.015,
+              "py": 65.918
+            },
+            {
+              "x": 6338.798,
+              "y": 611.1940000000001,
+              "px": 282.337,
+              "py": 65.918
+            },
+            {
+              "x": 7213.115,
+              "y": 605.9701,
+              "px": 303.66,
+              "py": 68.59
+            },
+            {
+              "x": 7868.852,
+              "y": 605.9701,
+              "px": 319.652,
+              "py": 68.59
+            },
+            {
+              "x": 8415.301,
+              "y": 605.9701,
+              "px": 332.978,
+              "py": 68.59
+            },
+            {
+              "x": 9180.328,
+              "y": 605.9701,
+              "px": 351.635,
+              "py": 68.59
+            },
+            {
+              "x": 9180.328,
+              "y": 590.2985,
+              "px": 351.635,
+              "py": 76.604
+            },
+            {
+              "x": 9289.617,
+              "y": 564.1791000000001,
+              "px": 354.301,
+              "py": 89.963
+            },
+            {
+              "x": 9398.907,
+              "y": 543.2836,
+              "px": 356.966,
+              "py": 100.649
+            },
+            {
+              "x": 10054.64,
+              "y": 538.0597,
+              "px": 372.958,
+              "py": 103.321
+            },
+            {
+              "x": 11038.25,
+              "y": 538.0597,
+              "px": 396.945,
+              "py": 103.321
+            },
+            {
+              "x": 11584.7,
+              "y": 538.0597,
+              "px": 410.272,
+              "py": 103.321
+            },
+            {
+              "x": 12349.73,
+              "y": 538.0597,
+              "px": 428.929,
+              "py": 103.321
+            },
+            {
+              "x": 13333.33,
+              "y": 538.0597,
+              "px": 452.917,
+              "py": 103.321
+            },
+            {
+              "x": 14098.36,
+              "y": 538.0597,
+              "px": 471.574,
+              "py": 103.321
+            },
+            {
+              "x": 14754.1,
+              "y": 538.0597,
+              "px": 487.566,
+              "py": 103.321
+            },
+            {
+              "x": 15191.26,
+              "y": 538.0597,
+              "px": 498.227,
+              "py": 103.321
+            },
+            {
+              "x": 15300.55,
+              "y": 501.49250000000006,
+              "px": 500.892,
+              "py": 122.022
+            },
+            {
+              "x": 15409.84,
+              "y": 454.47760000000005,
+              "px": 503.557,
+              "py": 146.067
+            },
+            {
+              "x": 15519.13,
+              "y": 407.46270000000004,
+              "px": 506.223,
+              "py": 170.112
+            },
+            {
+              "x": 15737.7,
+              "y": 350.0,
+              "px": 511.553,
+              "py": 199.5
+            },
+            {
+              "x": 15737.7,
+              "y": 313.43280000000004,
+              "px": 511.553,
+              "py": 218.202
+            },
+            {
+              "x": 15956.28,
+              "y": 276.86570000000006,
+              "px": 516.884,
+              "py": 236.903
+            },
+            {
+              "x": 16393.44,
+              "y": 235.07460000000003,
+              "px": 527.545,
+              "py": 258.276
+            },
+            {
+              "x": 16721.31,
+              "y": 193.28360000000004,
+              "px": 535.541,
+              "py": 279.649
+            },
+            {
+              "x": 17158.47,
+              "y": 156.71640000000002,
+              "px": 546.202,
+              "py": 298.351
+            },
+            {
+              "x": 17704.92,
+              "y": 114.92540000000002,
+              "px": 559.529,
+              "py": 319.724
+            },
+            {
+              "x": 18251.37,
+              "y": 99.25370000000004,
+              "px": 572.855,
+              "py": 327.739
+            },
+            {
+              "x": 18907.1,
+              "y": 78.35820000000001,
+              "px": 588.847,
+              "py": 338.425
+            },
+            {
+              "x": 19453.55,
+              "y": 62.6866,
+              "px": 602.173,
+              "py": 346.44
+            },
+            {
+              "x": 19890.71,
+              "y": 62.6866,
+              "px": 612.835,
+              "py": 346.44
+            },
+            {
+              "x": 15628.42,
+              "y": 376.11940000000004,
+              "px": 508.888,
+              "py": 186.142
+            }
+          ]
+        }
+      ],
+      "attribution": {
+        "doi": "10.1038/s41598-019-39786-y",
+        "doi_url": "https://doi.org/10.1038/s41598-019-39786-y",
+        "license_id": "cc-by",
+        "license_display": "CC BY",
+        "modified_from_original": "yes",
+        "line": "Figure from https://doi.org/10.1038/s41598-019-39786-y, licensed CC BY (no version recorded -- see license_notice)."
+      },
+      "why_selected": "Sibling of 22102 3a: panel 3c, also \"line_only\"."
     }
   ]
 }
