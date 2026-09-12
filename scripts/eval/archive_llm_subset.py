@@ -53,6 +53,8 @@ MODELS = ["claude-opus-5", "claude-sonnet-5", "claude-fable-5", "claude-haiku-4-
 def main() -> None:
     ap = argparse.ArgumentParser(description="Archive an LLM-subset run into the repository.")
     ap.add_argument("run", nargs="?", default="n10", choices=sorted(RUNS))
+    ap.add_argument("--force", action="store_true",
+                    help="shorter runs may overwrite longer archived ones")
     args = ap.parse_args()
     run = RUNS[args.run]
     WORK, DEST = run["work"], run["dest"]
@@ -69,8 +71,24 @@ def main() -> None:
             print(f"  {m}: 予測なし（スキップ）")
             continue
         raw = json.loads(src.read_text())
-        (DEST / "predictions" / f"{m}.json").write_text(
-            json.dumps(raw, ensure_ascii=False, indent=2) + "\n")
+        dest_path = DEST / "predictions" / f"{m}.json"
+
+        # Never let a shorter run overwrite a longer archived one. This is not
+        # hypothetical: Haiku 4.5 reported 101/101 figures, was archived, and
+        # then its scratch predictions.json reappeared holding only the first
+        # 10 -- the agent had started over after its completion notification.
+        # Without this guard the re-archive silently destroyed the finished
+        # run, and only the git copy saved it.
+        if dest_path.exists() and not args.force:
+            have = json.loads(dest_path.read_text())
+            if len(have) > len(raw):
+                print(
+                    f"  {m}: 退避済み{len(have)}図 > 今回{len(raw)}図 → "
+                    f"上書きせずスキップ（--force で強制）"
+                )
+                continue
+
+        dest_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2) + "\n")
         n_series = sum(len(v) for v in raw.values())
         n_pts = sum(min(len(s.get("x") or []), len(s.get("y") or []))
                     for v in raw.values() for s in v)
