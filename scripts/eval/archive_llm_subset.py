@@ -22,25 +22,46 @@ _key.json names each one, so duplicating them would add megabytes for nothing.
 
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import shutil
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-WORK = pathlib.Path(
+SCRATCH = pathlib.Path(
     "/tmp/claude-1000/-home-mato-repos-real-chart-bench/"
-    "628beb76-383b-42e9-bf21-8d4188daf8dc/scratchpad/llm_eval"
+    "628beb76-383b-42e9-bf21-8d4188daf8dc/scratchpad"
 )
-DEST = REPO / "data/llm_subset_n10"
+
+# Named runs, so the same archiving discipline covers the n=10 subset and the
+# remaining-101 run. Run this while models are still working, not only at the
+# end: the first noaxis run was lost entirely to a /tmp wipe, and a partially
+# archived run is worth far more than a complete one that no longer exists.
+RUNS = {
+    "n10": {"work": SCRATCH / "llm_eval", "dest": REPO / "data/llm_subset_n10",
+            "copy_meta": True},
+    "rest": {"work": SCRATCH / "llm_eval_rest", "dest": REPO / "data/llm_subset_rest",
+             # tasks.json/_key.json for this run were written straight into the
+             # repository by prepare_llm_subset_rest.py, so there is nothing to
+             # copy back and copying would risk overwriting them with scratch.
+             "copy_meta": False},
+}
 
 MODELS = ["claude-opus-5", "claude-sonnet-5", "claude-fable-5", "claude-haiku-4-5"]
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description="Archive an LLM-subset run into the repository.")
+    ap.add_argument("run", nargs="?", default="n10", choices=sorted(RUNS))
+    args = ap.parse_args()
+    run = RUNS[args.run]
+    WORK, DEST = run["work"], run["dest"]
+
     (DEST / "predictions").mkdir(parents=True, exist_ok=True)
-    for name in ("tasks.json", "_key.json"):
-        shutil.copy(WORK / name, DEST / name)
-        print(f"  {name}")
+    if run["copy_meta"]:
+        for name in ("tasks.json", "_key.json"):
+            shutil.copy(WORK / name, DEST / name)
+            print(f"  {name}")
 
     for m in MODELS:
         src = WORK / m / "predictions.json"
