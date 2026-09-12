@@ -1,5 +1,5 @@
 {
-  "_comment": "レビューUIでオーナーが下した判定の追記型ログ。ブラウザのlocalStorageは端末ごとで項目IDが変わると失われるため、判定そのものはここに残す。判定は「エントリについての観察」であり、registry のフィールドを変えないもの(検出ルールが過敏だった等)もあるため registry.json とは分けている。",
+  "_comment": "レビューUIでオーナーが下した判定の追記型ログ。ブラウザのlocalStorageは端末ごとで項目IDが変わると失われるため、判定そのものはここに残す。判定は「エントリについての観察」であり、registry のフィールドを変えないもの(検出ルールが過敏だった等)もあるため registry.json とは分けている。 2026-09-12追記: 採点対象112図のうち軸未レビューだった14図のレビュー結果。単位に関する7件の指摘はすべて監査ページの二重変換が原因で、保存データは正しかった(registryのレンジとGT実測の比は全14件で0.38〜1.02、桁ズレなし)。メトリクスはGT自身のyレンジで正規化するため、表示単位の未移行は採点に影響しない。",
   "decisions": [
     {
       "reviewed_at": "2026-09-04T11:13:55Z",
@@ -1260,6 +1260,132 @@
       "verdict": "unsure",
       "note": "判定保留。オーナー注記「2つがグラフあるよ」——切り出しに2つのプロットが含まれており、軸読みがどちらのものか曖昧。位置をずらしても解決しない切り出しの問題。",
       "acted_on": "据え置き"
+    },
+    {
+      "id": "17040_21023_3",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "なんで0.001かけてるの？",
+      "disposition": "audit_bug_fixed",
+      "finding": "指摘が正しい。監査ページが二重変換していた。registry y_range=[0,7] に対しGT実測 0.259..5.459 で整合しており保存値は正しい。evidenceの '/1000' を再適用して4桁下にプロットしていた。スコアには影響なし。"
+    },
+    {
+      "id": "17044_20739_2a",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "gtあってるけど、単位を元図のマイクロに揃えて。",
+      "disposition": "display_unit_backlog",
+      "finding": "registry y_range=[0,0.00035]、GT 9.9e-6..2.95e-4 でともにSI(V/K)。印字ラベルは0..350 µV/K。design 7.47の表示単位移行が未適用のエントリ。メトリクスはGT自身のyレンジで正規化するため採点への影響なし。"
+    },
+    {
+      "id": "28020_40067_7a",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "そもそもグラフは二つに分けて。",
+      "disposition": "needs_panel_split",
+      "finding": "クロップにパネルa(抵抗率)とb(ゼーベック)が両方入っている。パネル単位に切り直す必要あり。軸・GTの数値自体は整合(x 304..663 ⊂ [280.15,700]、y 5e-4..38.2 ⊂ [1e-4,100])。"
+    },
+    {
+      "id": "29352_29156_5b",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "単位を基づいて合わせてマイクロになっているはず。違うマイクロにするべきはず。",
+      "disposition": "audit_bug_fixed",
+      "finding": "二重変換。registry [80,320]、GT 104.7..302.1 でともにµV/K。evidenceの '(x1e6)' は登録時に適用済みの係数。"
+    },
+    {
+      "id": "29352_29157_5c",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "スターリーデータ側の単位が10-4乗が10-6乗のようになっているのが元のグラフと違う",
+      "disposition": "audit_bug_fixed",
+      "finding": "二重変換。registry [2,16]、GT 3.70..15.76 で整合。evidenceの '(x1e4)' は適用済み係数。"
+    },
+    {
+      "id": "29352_29161_7c",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "",
+      "disposition": "accepted",
+      "finding": "指摘なし。"
+    },
+    {
+      "id": "32593_40587_1a",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "モトグラフが2つあるから、ちゃんと2つに分けて",
+      "disposition": "needs_panel_split",
+      "finding": "クロップに2プロットが入っている。切り直しが必要。なおこの図はnaive-cvが summary_score=0.0000(白地黒線でなく黒地白線のため色相ベース手法が検出不能)、achromatic-cvは0.7630。これは手法差であってGTの問題ではない。"
+    },
+    {
+      "id": "36342_34989_3b",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "ストーリーデータ化で10 26乗かけてるのに何これ確認して",
+      "disposition": "recommend_exclude_awaiting_owner",
+      "finding": "34990と全く同じ構造欠陥。GTのprop_xは温度で5曲線すべてx=300の1点のみ、図のx軸はLa組成。coverage_ratio=0.000、両ベースラインが同一の0.1333。除外を推奨するが、オーナーが除外を明言したのは34990のみなので判断待ち。"
+    },
+    {
+      "id": "36342_34990_3br",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "スタディデータ側にプロット出てません。なければもう除外でオッケー。",
+      "disposition": "excluded",
+      "finding": "オーナー承認により除外。理由はregistryのexcluded_reasonに記録。"
+    },
+    {
+      "id": "3733_26108_3a",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "null",
+      "owner_note": "10のオーダーの単位がグラフとスターリーデータでずれてると思うから確認して",
+      "disposition": "audit_bug_fixed",
+      "finding": "桁ズレはない。registry [0,400]、GT 121..291 でともにµV/K。監査ページの二重変換が原因。1点×9系列のPisarenkoプロットで、x(キャリア濃度)は 3.6e19..2.0e21 ⊂ [0,2.5e21] と整合。"
+    },
+    {
+      "id": "3733_26109_3b",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "Y軸の単位が10-3乗から4乗位の形でずれてるから確認し",
+      "disposition": "audit_bug_fixed",
+      "finding": "二重変換。registry [0,8]、GT 1.2..6.25 で整合。evidenceの '(x1e4)' は適用済み係数。"
+    },
+    {
+      "id": "4173_20122_7",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "",
+      "disposition": "accepted",
+      "finding": "指摘なし。"
+    },
+    {
+      "id": "5902_15113_2",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "モトグラフが3つが1つになってて、ベンチマークに入れるべきなのか悩ましい。提案してどうすべきか",
+      "disposition": "awaiting_owner_decision",
+      "finding": "元図が3パネルで、9本のGT曲線がそれをまたいでいる。軸・GTは整合(x 2.25..301.9 ≈ [0,300]、y -13.07..2.15 ≈ [-12,3])し、naive-cv 0.7683 / coverage 0.992 と採点自体は機能している。対応方針を別途提案。"
+    },
+    {
+      "id": "5904_13761_5",
+      "reviewed_at": "2026-09-12",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "モトグラフが90度横に傾いちゃってる気がするから直して",
+      "disposition": "needs_deskew",
+      "finding": "指摘どおり。元PDFから回転/鏡像状態で抽出された画像で、水平方向がS[µV/K]・左向きに増加。加えてregistry [0,2e-6]・GT 3.4e-8..1.9e-6 でともにSIなので、20739と同じ表示単位移行の対象。"
     }
   ]
 }

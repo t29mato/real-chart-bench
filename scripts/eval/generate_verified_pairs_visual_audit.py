@@ -544,10 +544,12 @@ def _write_review_html(
                 f"y: {y_verdict or 'n/a'} ({_fmt_k(k_y, off_y)}) "
                 "(domain/pairing_checks.py)"
             )
-        elif factor_source == "evidence-text":
+        elif factor_source == "evidence-text-not-applied":
             fy = factor_detail["y"]
-            factor_summary = f"y: ×{fy['factor']:.4g} (evidence-text, unverified)"
-            k_y = fy["factor"]
+            factor_summary = (
+                f"保存値をそのまま描画。evidenceには ×{fy['factor']:.4g} と書かれているが、"
+                "これは登録時に既に適用済みの係数なので再適用しない(design 7.47)"
+            )
         else:
             factor_summary = "raw SI (no conversion source)"
 
@@ -712,14 +714,21 @@ def main() -> None:
             _render_pixel_overlay(entry, axp_raw, overlay_path)
 
         if axp is None:
-            # x is unconverted either way (always Temperature/K in this
-            # corpus); only y benefits from the evidence-text fallback.
+            # The evidence-text factor is *reported* but no longer *applied*.
+            # Since commit 31bd7e9 (design 7.47) registry.json and
+            # ground_truth.json hold the paper's display units, so the factor
+            # named in the evidence text is the one that was already applied
+            # when the entry was written. Re-applying it here converted twice:
+            # figure 17040/21023 stores R in kOhm over a 0..7 axis and the
+            # re-plot multiplied by another 0.001, drawing the curves four
+            # decades below the axis. The owner's 2026-09-12 review flagged
+            # seven of these as unit errors when the stored data was correct
+            # and only the re-plot was wrong.
             fy = _evidence_text_factor(entry["evidence"])
             if fy is not None:
                 n_with_evidence_text_factor += 1
-                factor_source = "evidence-text"
+                factor_source = "evidence-text-not-applied"
                 factor_detail = {"x": None, "y": fy}
-                k_y = fy["factor"]
 
         plot_path = PLOTS_DIR / f"{slug}.png"
         printed_x_unit = _printed_unit_for_label(x_eval) if x_eval is not None else None
@@ -881,8 +890,8 @@ def main() -> None:
             flags += " ⚠️render"
         if factor_source == "none":
             flags += " 🚫noconversion"
-        elif factor_source == "evidence-text":
-            flags += " 📝text-derived"
+        elif factor_source == "evidence-text-not-applied":
+            flags += " 📝text-factor-ignored"
         elif axp is not None and axp.get("status") == "llm_candidate":
             flags += " 🟡unverified-axis"
         lines.append(
@@ -947,15 +956,18 @@ def main() -> None:
                 if axis_eval.verdict is not None:
                     lines.append(f"> - {axis_name}-axis: {axis_eval.verdict.reason}")
             lines.append("")
-        elif factor_source == "evidence-text":
+        elif factor_source == "evidence-text-not-applied":
             fy = factor_detail["y"]
             lines.append(
-                f"> 📝 No axis-pixel ground truth for this entry -- y converted from a factor "
-                f"**parsed out of the evidence text** instead (y: x{fy['factor']:.6g}, "
-                f"{fy['detail']}). This was validated once by whoever wrote the entry but is "
-                f"**not independently re-checked here** -- treat with a bit less confidence "
-                f"than the axis-pixel-derived entries above. x-axis is unconverted (raw SI == "
-                f"the paper's units for temperature in this domain)."
+                f"> 📝 No axis-pixel ground truth for this entry. The evidence text names a "
+                f"factor (y: x{fy['factor']:.6g}, {fy['detail']}) but it is **deliberately not "
+                f"applied**: since design 7.47 the stored values are already in the paper's "
+                f"display units, so that factor is the one that was applied when the entry was "
+                f"written, and re-applying it converts twice. The curves below are the stored "
+                f"values as-is. Compare them against the printed axis numbers directly -- if "
+                f"they disagree by a round factor, this entry has not been migrated to display "
+                f"units yet (design 7.47 backlog), which does not affect scoring because the "
+                f"metric normalises by the ground truth's own y range."
             )
             lines.append("")
         else:

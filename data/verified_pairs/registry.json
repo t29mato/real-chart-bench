@@ -4387,7 +4387,8 @@
     "license_id": "cc-by",
     "evidence": "Figure 3, panel (b), right-hand axis: Hall mobility (blue squares) vs. La content x, same panel/image as figure_id=34989 (which is the left-axis carrier-concentration curve group -- 'R' in the Starrydata figure_name denotes the right/secondary axis of the same physical panel). Same x-axis caveat as figure_id=34989: GT x is a constant 300 (measurement temperature), not the plotted La-content variable; x_range=[0,0.09] (pixel-verified, shared frame with 34989) is descriptive of the printed axis only, not checkable against this curve group's x array -- a re-plot must position points by La content (from `composition`). y-axis is 'mu (cm^2 V^-1 s^-1)' (frame pixel-verified flush at 100 and 300, ticks every 50). Converting GT y (m^2/V/s) to cm^2/V/s (x1e4): La=0 135.9 (matches the lowest blue square, bottom-left), La=0.01 208.0, La=0.03 220.9, La=0.05 177.7, La=0.07 170.6 -- exact match to all 5 visible blue-square points (La=0 lowest, La=0.03 highest, then declining), matching the body text: 'the carrier mobility increases at' [higher La before declining].",
     "figure_kind": "markers",
-    "figure_tags": []
+    "figure_tags": [],
+    "excluded_reason": "gt_mismatch: 2026-09-12 オーナーレビュー「スタディデータ側にグラフのプロット出てません。多分…グランドTruthのデータがないんじゃないかな。なければもう除外でオッケー」。確認の結果、GTは存在するが図とペアになっていない。ground_truth.json の prop_x は温度で、5曲線すべて x=300 の1点のみ。図のx軸はLa組成 x=0..0.09 なので、GTの点は描画範囲の外に落ちる。これはベースラインの実測値にそのまま現れている: naive-cv と achromatic-cv が mean_coverage_ratio=0.000、summary_score=0.1333 で完全に一致しており、この図はどの手法についても何も測っていない(両者が同一値になるのは手法の差が出ないという意味)。採点対象から除外する。GT自体が壊れているのではなく、この図とペアリングできないという判断。"
   },
   {
     "paper_id": "4173",
