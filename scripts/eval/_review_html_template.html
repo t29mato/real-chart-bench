@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Verified Pairs Review</title>
 <style>
   :root {
@@ -116,6 +117,56 @@
   .review-panel textarea::placeholder { color: #666; }
   .hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
   kbd { background: #333; border-radius: 3px; padding: 1px 5px; font-size: 11px; }
+  #listToggle { display: none; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12px; }
+
+  /* Tap an image to open it at natural size and pan/pinch around it. On a
+     phone the inline images are ~360px wide, which is far too small to see
+     which printed tick a calibration line lands on. */
+  .lightbox { position: fixed; inset: 0; background: #000; z-index: 100;
+    display: none; overflow: auto; -webkit-overflow-scrolling: touch; }
+  .lightbox.open { display: block; }
+  .lightbox img { max-width: none; width: auto; display: block; background: #fff; }
+  .lightbox .close { position: fixed; top: 10px; right: 12px; z-index: 101;
+    padding: 10px 16px; font-size: 16px; border-radius: 8px; color: #fff;
+    border: 1px solid var(--border); background: rgba(0,0,0,.75); }
+
+  /* Verdict + navigation pinned to the bottom on a phone, so you do not have
+     to scroll back up past a full-height figure to record a judgement. */
+  .stickybar { display: none; position: fixed; left: 0; right: 0; bottom: 0; gap: 6px;
+    padding: 8px; background: var(--panel); border-top: 1px solid var(--border); z-index: 40; }
+  .stickybar button { flex: 1; padding: 13px 6px; font-size: 15px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .stickybar button.ok.active { background: var(--ok); border-color: var(--ok); color: #08130c; }
+  .stickybar button.flag.active { background: var(--bad); border-color: var(--bad); color: #fff; }
+
+  @media (max-width: 720px) {
+    body { height: auto; overflow: visible; }
+    .app { flex-direction: column; height: auto; }
+    .main { overflow-y: visible; }
+    .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+    .sidebar-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .sidebar-header h1 { font-size: 13px; flex: 1; margin: 0; }
+    .sidebar-header .progress { width: 100%; }
+    #listToggle { display: inline-block; }
+    .list { max-height: 45vh; }
+    .app.list-collapsed .list, .app.list-collapsed .filters { display: none; }
+    .list-item { padding: 12px 14px; font-size: 14px; }
+    .topbar { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 14px; }
+    .topbar h2 { font-size: 15px; }
+    .topbar > div:last-child { display: block !important; }
+    .nav-buttons, .topbar-actions { display: flex; gap: 6px; }
+    .topbar-actions { margin-top: 6px; }
+    .topbar button { margin-left: 0; flex: 1; padding: 10px 8px; font-size: 14px; }
+    .content { padding: 12px 14px 90px; }
+    .images { grid-template-columns: 1fr; }
+    .meta, .evidence, .review-panel { font-size: 14px; }
+    .meta td.k { white-space: normal; width: 35%; }
+    .review-buttons button { padding: 14px; font-size: 15px; }
+    #noteInput { font-size: 15px; min-height: 90px; }
+    kbd { display: none; }
+    .stickybar { display: flex; }
+  }
 </style>
 </head>
 <body>
@@ -123,6 +174,7 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <h1>Verified Pairs Review</h1>
+      <button id="listToggle">☰ 一覧</button>
       <div class="progress" id="progressText"></div>
       <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
     </div>
@@ -148,6 +200,7 @@
         </div>
         <div class="topbar-actions">
           <button id="exportBtn">JSONエクスポート</button>
+          <button id="copyBtn">JSONコピー</button>
         </div>
       </div>
     </div>
@@ -169,6 +222,15 @@
       </div>
     </div>
   </div>
+<div class="stickybar">
+  <button id="sPrev">◀</button>
+  <button id="sOk" class="ok">✅ OK</button>
+  <button id="sFlag" class="flag">🚩 要修正</button>
+  <button id="sNext">▶</button>
+</div>
+<div class="lightbox" id="lightbox">
+  <button class="close" id="lightboxClose">✕ 閉じる</button>
+  <img id="lightboxImg" alt="">
 </div>
 <script>
 const ENTRIES = __ENTRIES_JSON__;
@@ -275,6 +337,8 @@ function render() {
     const fig = document.createElement("figure");
     const img = document.createElement("img");
     img.src = src; img.loading = "lazy";
+    img.style.cursor = "zoom-in";
+    img.onclick = () => openLightbox(src);
     const cap = document.createElement("figcaption");
     cap.textContent = label;
     fig.appendChild(img); fig.appendChild(cap);
@@ -316,6 +380,8 @@ function render() {
   const s = entryState(e.id);
   document.getElementById("okBtn").classList.toggle("active", s.status === "ok");
   document.getElementById("flagBtn").classList.toggle("active", s.status === "flagged");
+  document.getElementById("sOk").classList.toggle("active", s.status === "ok");
+  document.getElementById("sFlag").classList.toggle("active", s.status === "flagged");
   document.getElementById("noteInput").value = s.note || "";
 
   renderList();
@@ -355,17 +421,55 @@ document.querySelectorAll(".filters button").forEach(btn => {
     render();
   };
 });
-document.getElementById("exportBtn").onclick = () => {
-  const out = ENTRIES.map(e => ({
+function reviewPayload() {
+  return ENTRIES.map(e => ({
     id: e.id, paper_id: e.paper_id, figure_reference: e.figure_reference,
     status: entryState(e.id).status, note: entryState(e.id).note
   })).filter(r => r.status || r.note);
+}
+document.getElementById("exportBtn").onclick = () => {
+  const out = reviewPayload();
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "verified_pairs_review_" + new Date().toISOString().slice(0, 10) + ".json";
   a.click();
 };
+function openLightbox(src) {
+  document.getElementById("lightboxImg").src = src;
+  document.getElementById("lightbox").classList.add("open");
+}
+document.getElementById("lightboxClose").onclick = () =>
+  document.getElementById("lightbox").classList.remove("open");
+
+document.getElementById("listToggle").onclick = () =>
+  document.querySelector(".app").classList.toggle("list-collapsed");
+// The phone flow is prev/next through the batch, not picking from a list, and
+// an expanded list would push the figure itself below the fold.
+if (window.matchMedia("(max-width: 720px)").matches) {
+  document.querySelector(".app").classList.add("list-collapsed");
+}
+
+document.getElementById("sPrev").onclick = () => document.getElementById("prevBtn").click();
+document.getElementById("sNext").onclick = () => document.getElementById("nextBtn").click();
+document.getElementById("sOk").onclick = () => document.getElementById("okBtn").click();
+document.getElementById("sFlag").onclick = () => document.getElementById("flagBtn").click();
+
+// Blob downloads are unreliable in mobile Safari, so offer the clipboard as
+// the way to get verdicts off the phone. Falls back to a selectable prompt.
+document.getElementById("copyBtn").onclick = async () => {
+  const text = JSON.stringify(reviewPayload(), null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    const b = document.getElementById("copyBtn");
+    const old = b.textContent;
+    b.textContent = "コピーしました";
+    setTimeout(() => { b.textContent = old; }, 1500);
+  } catch (err) {
+    window.prompt("コピーしてください", text);
+  }
+};
+
 document.addEventListener("keydown", (ev) => {
   if (ev.target.tagName === "TEXTAREA") return;
   if (ev.key === "ArrowLeft") document.getElementById("prevBtn").click();
