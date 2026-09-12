@@ -54,10 +54,12 @@ regeneratable from committed registry.json + ground_truth.json +
 axis_pixel_candidates.json + images).
 
 Usage: python scripts/eval/generate_verified_pairs_visual_audit.py
+       python scripts/eval/generate_verified_pairs_visual_audit.py --figure-ids 40067,40587
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -411,14 +413,24 @@ def _render_pixel_overlay(entry: dict, axp: dict, out_path: Path) -> None:
             color="yellow", fontsize=9, ha="center", va="center",
             bbox={"facecolor": "black", "alpha": 0.6, "pad": 2},
         )
-    disagreement = axp.get("model_disagreement_px", 0)
+    # Missing *and* explicitly-null both mean "only one source measured this"
+    # (mechanical row/column profiling, or a single vision pass). `.get(k, 0)`
+    # was wrong twice over: it crashes on an explicit null, and for the
+    # single-source readings it printed "0px", which reads as two models
+    # agreeing perfectly when in fact nothing was cross-checked.
+    disagreement = axp.get("model_disagreement_px")
+    disagreement_text = (
+        f"model disagreement {disagreement:.2g}px"
+        if disagreement is not None
+        else "single-source reading (no cross-check)"
+    )
     legend_handles = [
         Patch(color="lime", label="x tick (min/max)"),
         Patch(color="magenta", label="y tick (min/max)"),
     ]
     ax.legend(handles=legend_handles, fontsize=6, loc="lower right")
     ax.set_title(
-        f"pixel calibration -- {axp['status']}, model disagreement {disagreement:.2g}px",
+        f"pixel calibration -- {axp['status']}, {disagreement_text}",
         fontsize=8,
     )
     ax.axis("off")
@@ -498,6 +510,7 @@ def _write_review_html(
         factor_detail,
         factor_source,
         warning,
+        axp_raw,
     ) in rows:
         slug = _slug(entry)
         anchor = slug.lower()
@@ -570,7 +583,18 @@ def _write_review_html(
                 "overlay": overlay_rel,
                 "plot": plot_rel,
                 "warning": warning,
-                "axp_status": axp["status"] if axp else None,
+                "axp_status": (axp_raw or {}).get("status"),
+                "tick_range_source": entry.get("tick_range_source"),
+                "x_tick_range": entry.get("x_tick_range"),
+                "y_tick_range": entry.get("y_tick_range"),
+                "printed_labels": (
+                    {
+                        "x": [axp_raw.get("x_min_label"), axp_raw.get("x_max_label")],
+                        "y": [axp_raw.get("y_min_label"), axp_raw.get("y_max_label")],
+                    }
+                    if axp_raw
+                    else None
+                ),
                 "factor_summary": factor_summary,
                 "printed_y_unit": printed_y_unit,
                 "unit_check": unit_check,
@@ -589,6 +613,16 @@ def _write_review_html(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate the verified-pairs visual audit.")
+    parser.add_argument(
+        "--figure-ids",
+        help="Comma-separated figure_ids to restrict the audit to. Default: every "
+        "verified entry. When given, the outputs are written to "
+        "visual-audit-subset.md / review-subset.html so a partial run cannot "
+        "overwrite the full audit's review.html.",
+    )
+    args = parser.parse_args()
+
     registry = json.loads(REGISTRY_PATH.read_text())
     ground_truth = json.loads(GROUND_TRUTH_PATH.read_text())
     papers_by_id = {p["paper_id"]: p for p in json.loads(PAPERS_PATH.read_text())}
@@ -598,6 +632,15 @@ def main() -> None:
     }
 
     verified = [e for e in registry if e["status"] == "verified"]
+    if args.figure_ids:
+        wanted = {s.strip() for s in args.figure_ids.split(",") if s.strip()}
+        verified = [e for e in verified if str(e["figure_id"]) in wanted]
+        missing = wanted - {str(e["figure_id"]) for e in verified}
+        if missing:
+            raise SystemExit(f"no verified registry entry for figure_id(s): {sorted(missing)}")
+        global MARKDOWN_PATH, REVIEW_HTML_PATH
+        MARKDOWN_PATH = AUDIT_DIR / "visual-audit-subset.md"
+        REVIEW_HTML_PATH = AUDIT_DIR / "review-subset.html"
     verified.sort(key=lambda e: (e["paper_id"], e["figure_reference"]))
 
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -622,9 +665,14 @@ def main() -> None:
     for entry in verified:
         curves = ground_truth.get(entry["figure_id"], [])
         slug = _slug(entry)
-        axp = axp_by_key.get((entry["paper_id"], entry["figure_id"]))
-        if axp is not None and axp.get("status") == "excluded":
-            axp = None
+        axp_raw = axp_by_key.get((entry["paper_id"], entry["figure_id"]))
+        # An `excluded` reading must not feed the display-unit conversion or the
+        # classify_range_disagreement verdicts -- that is what the status means.
+        # It is still worth *drawing*: two of the scoreable figures (17044/20739,
+        # 5904/13761) have measured tick pixels that were excluded from the axis
+        # review, and a human judging whether those figures are safe to score
+        # needs to see where the lines actually land.
+        axp = None if (axp_raw or {}).get("status") == "excluded" else axp_raw
 
         k_x, k_y, off_x, off_y = 1.0, 1.0, 0.0, 0.0
         factor_detail = None
@@ -659,9 +707,11 @@ def main() -> None:
                 else:
                     indeterminate.append((entry, axis_name, axis_eval.verdict))
 
+        if axp_raw is not None:
             overlay_path = OVERLAYS_DIR / f"{slug}.png"
-            _render_pixel_overlay(entry, axp, overlay_path)
-        else:
+            _render_pixel_overlay(entry, axp_raw, overlay_path)
+
+        if axp is None:
             # x is unconverted either way (always Temperature/K in this
             # corpus); only y benefits from the evidence-text fallback.
             fy = _evidence_text_factor(entry["evidence"])
@@ -698,6 +748,7 @@ def main() -> None:
                 factor_detail,
                 factor_source,
                 warning,
+                axp_raw,
             )
         )
 
@@ -811,9 +862,19 @@ def main() -> None:
 
     lines.append("## Index")
     lines.append("")
-    for entry, _curves, _plot_path, _overlay_path, axp, _xe, _ye, _fd, factor_source, warning in (
-        rows
-    ):
+    for (
+        entry,
+        _curves,
+        _plot_path,
+        _overlay_path,
+        axp,
+        _xe,
+        _ye,
+        _fd,
+        factor_source,
+        warning,
+        _axp_raw,
+    ) in rows:
         anchor = _slug(entry).lower()
         flags = ""
         if warning:
@@ -843,6 +904,7 @@ def main() -> None:
         factor_detail,
         factor_source,
         warning,
+        _axp_raw,
     ) in rows:
         slug = _slug(entry)
         anchor = slug.lower()

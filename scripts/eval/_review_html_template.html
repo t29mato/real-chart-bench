@@ -302,7 +302,14 @@ function render() {
         e.y_verdict ? `${e.y_verdict} -- ${e.y_verdict_reason}` : "(対象外)"
       }</td></tr>
       <tr><td class="k">次元解析クロスチェック</td><td>${e.unit_check || "(対象外)"}</td></tr>
+      <tr><td class="k">軸ラベル(印字値 x)</td><td>${
+        e.printed_labels ? JSON.stringify(e.printed_labels.x) : "(軸ピクセル読み取りなし — 元図の目盛りラベルと上のx_rangeを直接見比べてください)"
+      }</td></tr>
+      <tr><td class="k">軸ラベル(印字値 y)</td><td>${
+        e.printed_labels ? JSON.stringify(e.printed_labels.y) : "(軸ピクセル読み取りなし — 元図の目盛りラベルと上のy_rangeを直接見比べてください)"
+      }</td></tr>
       <tr><td class="k">axis-pixel status</td><td>${e.axp_status || "(none)"}</td></tr>
+      <tr><td class="k">tick_range_source</td><td>${e.tick_range_source || "(未設定 — promote_tick_range は owner_reviewed のみ通すため、この図の目盛り範囲は未公開)"}</td></tr>
     </table>`;
   document.getElementById("evidence").textContent = "evidence: " + e.evidence;
 
