@@ -221,15 +221,37 @@ def run(model_id: str, model_name: str, model) -> dict:
         }
         for r in results
     ]
-    mean_score = sum(p["summary_score"] for p in per_figure) / len(per_figure)
+    # The headline mean must cover the real figures only. The 3 synthetic
+    # fixtures exist to exercise the harness, and folding them into
+    # mean_summary_score both misreports the number and -- for a benchmark
+    # whose entire premise is "real published figures, not synthetic" --
+    # publishes a headline score that is 3/115 synthetic. dataset_version
+    # already said n112 while n_figures said 115; they now agree.
+    synthetic_ids = {i.figure_id for i in _synthetic_items()}
+    real_rows = [p for p in per_figure if p["figure_id"] not in synthetic_ids]
+    synthetic_rows = [p for p in per_figure if p["figure_id"] in synthetic_ids]
+    assert len(real_rows) == n_real, (len(real_rows), n_real)
+    mean_score = sum(p["summary_score"] for p in real_rows) / len(real_rows)
 
     payload = {
         "model_id": model_id,
         "model_name": model_name,
         "dataset_version": f"v0-eval-pilot-n{n_real}",
         "run_at": datetime.now(UTC).isoformat(),
-        "n_figures": len(per_figure),
+        "n_figures": len(real_rows),
         "mean_summary_score": mean_score,
+        "n_synthetic_fixtures": len(synthetic_rows),
+        "mean_synthetic_score": (
+            sum(p["summary_score"] for p in synthetic_rows) / len(synthetic_rows)
+            if synthetic_rows
+            else None
+        ),
+        "synthetic_note": (
+            "mean_summary_score and n_figures cover the real published figures "
+            "only. The synthetic fixtures are a harness self-test and are "
+            "reported separately; they stay in per_figure so the self-test is "
+            "auditable, but they are not part of the benchmark score."
+        ),
         "per_figure": per_figure,
     }
     return payload

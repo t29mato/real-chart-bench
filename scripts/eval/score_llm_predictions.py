@@ -35,6 +35,7 @@ from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     evaluate_model_on_dataset,
 )
 from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
+from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 RESULTS = REPO / "results"
@@ -47,18 +48,49 @@ SCRATCH = pathlib.Path(
 # metric. The only difference is whether the model was handed the axis extent
 # -- which is the part that decides whether these scores mean "chart reading is
 # solved" or "marker locating is solved given a perfect calibration".
+def _resolve_pred(archive: pathlib.Path, work: pathlib.Path, model: str) -> pathlib.Path | None:
+    """Archived copy in the repository first, live scratch run second.
+
+    The scratch directories live under /tmp and a session restart wiped the
+    first noaxis run outright. Predictions are therefore archived into the
+    repository as each model finishes, and scoring reads the archive by
+    preference so a published number can always be re-derived from a clone.
+    """
+    for candidate in (archive / f"{model}.json", work / model / "predictions.json"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
 CONDITIONS = {
     "calibrated": {
         "work": SCRATCH / "llm_eval",
-        "pred": lambda work, m: work / m / "predictions.json",
+        "meta": REPO / "data/llm_subset_n10",
+        "archive": REPO / "data/llm_subset_n10/predictions",
         "suffix": "",
         "label": "軸レンジを与えた条件",
     },
     "noaxis": {
         "work": SCRATCH / "llm_eval_noaxis",
-        "pred": lambda work, m: work / m / "predictions.json",
+        # The noaxis task list deliberately carries no ranges, so the ranges
+        # needed to build ExtractionTask come from the calibrated export. The
+        # model never saw them; they are used only to score.
+        "meta": REPO / "data/llm_subset_n10",
+        "archive": REPO / "data/llm_subset_n10_noaxis/predictions",
         "suffix": "-noaxis",
         "label": "軸レンジを与えない条件（モデルが目盛を自分で読む）",
+    },
+    # The remaining 101 of the 111 scoreable figures (owner request,
+    # 2026-09-12: "データ抽出してない残りのグラフ全部"). Axis ranges given,
+    # i.e. the same condition every CV baseline gets. tasks/_key live in the
+    # repository here, not in scratch, because the first noaxis run was lost
+    # to a /tmp wipe.
+    "rest": {
+        "work": SCRATCH / "llm_eval_rest",
+        "meta": REPO / "data/llm_subset_rest",
+        "archive": REPO / "data/llm_subset_rest/predictions",
+        "suffix": "-rest",
+        "label": "軸レンジを与えた条件（n=10サブセット以外の残り全図）",
     },
 }
 
@@ -135,13 +167,16 @@ def main() -> None:
     cond = CONDITIONS[name]
     work = cond["work"]
 
-    # The task list in the noaxis condition carries no ranges, so the ranges
-    # needed to build ExtractionTask always come from the calibrated export.
-    # The model never saw them there; they are only used to score.
-    tasks = json.loads((SCRATCH / "llm_eval" / "tasks.json").read_text())
-    key = json.loads((SCRATCH / "llm_eval" / "_key.json").read_text())
+    meta = cond["meta"]
+    tasks = json.loads((meta / "tasks.json").read_text())
+    key = json.loads((meta / "_key.json").read_text())
     gt_all = json.loads((REPO / "data/verified_pairs/ground_truth.json").read_text())
     reg = {p.figure_id: p for p in load_registry(REPO / "data/verified_pairs/registry.json")}
+    # Derived, never hardcoded: the version string went stale at n112 once
+    # 36342/34990 left the scoreable set (design 7.27's lesson).
+    reg_scoreable = select_verified_pairings(
+        load_registry(REPO / "data/verified_pairs/registry.json")
+    )
 
     items, order = [], []
     for t in tasks:
@@ -166,8 +201,8 @@ def main() -> None:
     matcher = HungarianCurveMatcher(metric=NormalizedYDistanceMetric())
     written = []
     for model_id, model_name in MODELS.items():
-        path = cond["pred"](work, model_id)
-        if not path.exists():
+        path = _resolve_pred(cond["archive"], work, model_id)
+        if path is None:
             print(f"  {model_id}: 予測ファイルがない → スキップ")
             continue
         raw = json.loads(path.read_text())
@@ -188,7 +223,8 @@ def main() -> None:
             "model_id": model_id + cond["suffix"],
             "model_name": model_name + ("（軸レンジなし）" if cond["suffix"] else ""),
             "dataset_version": (
-                f"v0-eval-pilot-n112-llm-subset-n{len(items)}{cond['suffix']}"),
+                f"v0-eval-pilot-n{len(reg_scoreable)}-llm-subset-"
+                f"n{len(items)}{cond['suffix']}"),
             "run_at": datetime.now(UTC).isoformat(),
             "n_figures": len(per_figure),
             "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
