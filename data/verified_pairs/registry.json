@@ -945,7 +945,7 @@
     "paper_id": "5904",
     "figure_id": "13761",
     "figure_reference": "5",
-    "image_path": "data/verified_pairs/crops/5904/corrected_fig5.png",
+    "image_path": "data/verified_pairs/crops/5904/deskewed_fig5.png",
     "panel_label": null,
     "x_range": [
       0.0,
@@ -953,12 +953,12 @@
     ],
     "y_range": [
       0.0,
-      2e-06
+      2.0
     ],
     "x_scale": "linear",
     "status": "verified",
     "verified_at": "2026-08-21",
-    "evidence": "Investigation resumed from the earlier incomplete search (checked the remaining 4 of 6 candidate images). p03_embedded_5.jpg is the match, but was extracted from the PDF pre-rotated/mirrored (a page-header-style transform, likely because figure_extraction.py extracts raw embedded-image pixel data without applying the PDF's image placement/transformation matrix -- text and axes were unreadable as-extracted). Corrected via numpy transpose(1,0,2) + flip both axes (equivalent to a -90deg rotation + horizontal mirror), which produced a normally-readable chart: 'S [uV/K]' (Seebeck coefficient) vs 'T [K]', 2 series labeled 'GdNi0.6Ga3.4' (red) and 'GdNiGa3' (purple), matching the 2 ground-truth curves exactly. GT curve 1 (x=4.90-298.98K, y=0.375-1.913 uV/K) matches the red GdNi0.6Ga3.4 curve (rises from a small bump near the origin to ~1.9 at T=300K); GT curve 2 (x=4.78-297.99K, y=0.034-1.063 uV/K) matches the purple GdNiGa3 curve (rises to just above the '1' tick at T=300K). Corrected image saved to data/verified_pairs/crops/5904/ (not data/raw/, since it's a manually-derived correction of a raw extraction defect, not re-derivable by the standard pipeline) -- same 'small non-regenerable asset' pattern as papers 4176/17040 (design 7.21/7.23), but for a different underlying cause (image orientation, not full-page panel splitting). Flagged to HQ as a new, generalizable extraction-pipeline gap: figure_extraction.py should apply the PDF's image transformation matrix rather than extracting raw pixel bytes.",
+    "evidence": "Investigation resumed from the earlier incomplete search (checked the remaining 4 of 6 candidate images). p03_embedded_5.jpg is the match, but was extracted from the PDF pre-rotated/mirrored (a page-header-style transform, likely because figure_extraction.py extracts raw embedded-image pixel data without applying the PDF's image placement/transformation matrix -- text and axes were unreadable as-extracted). Corrected via numpy transpose(1,0,2) + flip both axes (equivalent to a -90deg rotation + horizontal mirror), which produced a normally-readable chart: 'S [uV/K]' (Seebeck coefficient) vs 'T [K]', 2 series labeled 'GdNi0.6Ga3.4' (red) and 'GdNiGa3' (purple), matching the 2 ground-truth curves exactly. GT curve 1 (x=4.90-298.98K, y=0.375-1.913 uV/K) matches the red GdNi0.6Ga3.4 curve (rises from a small bump near the origin to ~1.9 at T=300K); GT curve 2 (x=4.78-297.99K, y=0.034-1.063 uV/K) matches the purple GdNiGa3 curve (rises to just above the '1' tick at T=300K). Corrected image saved to data/verified_pairs/crops/5904/ (not data/raw/, since it's a manually-derived correction of a raw extraction defect, not re-derivable by the standard pipeline) -- same 'small non-regenerable asset' pattern as papers 4176/17040 (design 7.21/7.23), but for a different underlying cause (image orientation, not full-page panel splitting). Flagged to HQ as a new, generalizable extraction-pipeline gap: figure_extraction.py should apply the PDF's image transformation matrix rather than extracting raw pixel bytes. || 2026-09-30: 画像を時計回りに90度回転して論文どおりの向きに修正(T [K]が横軸、S [µV/K]が縦軸)。corrected_fig5.png は名前に反して回転が残っていた — PDFの配置変換行列を適用せず埋め込み画像を生で取り出す問題の直し残し。あわせて y を表示単位(µV/K)へ移行: y_range [0,2e-6]→[0,2]、ground_truth.json の y値を ×1e6。",
     "license_id": "cc-by",
     "figure_kind": "markers",
     "figure_tags": []
@@ -3747,7 +3747,7 @@
     "paper_id": "36305",
     "figure_id": "45818",
     "figure_reference": "5a",
-    "image_path": "data/verified_pairs/images/36305/p09_embedded_12.jpg",
+    "image_path": "data/verified_pairs/crops/36305/fig5a.png",
     "panel_label": "a",
     "x_range": [
       0.000534,
@@ -3762,7 +3762,7 @@
     "status": "verified",
     "verified_at": "2026-09-04",
     "license_id": "cc-by",
-    "evidence": "5 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per rare-earth Ln (La/Pr/Nd/Sm/Gd) in Ln(Co,Cr,Fe,Mn,Ni)O3-d -- matches the chart's 5-entry legend exactly. Paper text (page 9) confirms 'Figure 5. (a) Value of the total electrical conductivity ... (b) ... presented in Arrhenius coordinates' -- wait, actually panel (a) here IS the Arrhenius-coordinate plot (log10(sigma[S/cm]) vs 1/T[1/K], dual-axis with a linear sigma[S/cm] scale on the right) and panel (b) plots ln(sigma*T); this GT set's units (K^-1, log(S*m^-1)) match panel (a). Unlike every other figure in this batch, this axis genuinely prints '1/T [1/K]' (not '1000/T') with un-scaled tick values 0.0010-0.0030 -- so the axis IS an identity match, no x1000 factor. Using this batch's raw/100=log10(S/cm) transform: GT y/100 range -3.020 to 0.5017 (log10 S/cm), within the chart's printed [-3.5, 1.0] y frame (which coincides with the plot's outer border on both ends). GT x range 0.000848-0.003093 K^-1; the printed x ticks only run 0.0010-0.0030, but the plot's own frame (measured directly: left border sits ~0.000534, right border ~0.003101, extrapolated from the tick pixel spacing) extends past both -- consistent with the chart's highest-T (900C) point needing 1/T=0.00085 to fit, which is exactly GT's minimum. classify_range_disagreement: x -> BENIGN_MARGIN (identity match, gap=0, using the measured frame endpoints as reg_lo/reg_hi); y -> BENIGN_MARGIN (log_printed_labels confirmed against [-3.5,1.0], gap=0).",
+    "evidence": "5 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per rare-earth Ln (La/Pr/Nd/Sm/Gd) in Ln(Co,Cr,Fe,Mn,Ni)O3-d -- matches the chart's 5-entry legend exactly. Paper text (page 9) confirms 'Figure 5. (a) Value of the total electrical conductivity ... (b) ... presented in Arrhenius coordinates' -- wait, actually panel (a) here IS the Arrhenius-coordinate plot (log10(sigma[S/cm]) vs 1/T[1/K], dual-axis with a linear sigma[S/cm] scale on the right) and panel (b) plots ln(sigma*T); this GT set's units (K^-1, log(S*m^-1)) match panel (a). Unlike every other figure in this batch, this axis genuinely prints '1/T [1/K]' (not '1000/T') with un-scaled tick values 0.0010-0.0030 -- so the axis IS an identity match, no x1000 factor. Using this batch's raw/100=log10(S/cm) transform: GT y/100 range -3.020 to 0.5017 (log10 S/cm), within the chart's printed [-3.5, 1.0] y frame (which coincides with the plot's outer border on both ends). GT x range 0.000848-0.003093 K^-1; the printed x ticks only run 0.0010-0.0030, but the plot's own frame (measured directly: left border sits ~0.000534, right border ~0.003101, extrapolated from the tick pixel spacing) extends past both -- consistent with the chart's highest-T (900C) point needing 1/T=0.00085 to fit, which is exactly GT's minimum. classify_range_disagreement: x -> BENIGN_MARGIN (identity match, gap=0, using the measured frame endpoints as reg_lo/reg_hi); y -> BENIGN_MARGIN (log_printed_labels confirmed against [-3.5,1.0], gap=0). || 2026-09-30: 2パネルのクロップからパネル(a)のみに切り直し(x<1605 で切断、パネル(b)左枠は1795px)。Opus 5とFable 5が2026-09-12の実行で独立に『パネルを選ぶ必要があった』と報告した4図の1つ。GTは不変。",
     "figure_kind": "markers",
     "figure_tags": [],
     "x_tick_range": [
@@ -3779,7 +3779,7 @@
     "paper_id": "28020",
     "figure_id": "40067",
     "figure_reference": "7a",
-    "image_path": "data/verified_pairs/images/28020/p06_embedded_11.jpg",
+    "image_path": "data/verified_pairs/crops/28020/fig7a.png",
     "panel_label": "a",
     "x_range": [
       280.15,
@@ -3794,7 +3794,7 @@
     "status": "verified",
     "verified_at": "2026-09-04",
     "license_id": "cc-by",
-    "evidence": "4 GT curves (prop_x=Temperature/K, prop_y=log(Electrical resistivity)/ohm*m), one per As-content x (0, 0.2, 0.4, 0.6). Unlike the log(Electrical conductivity) curves elsewhere in this batch, this property's raw values are ALREADY plausible log10(resistivity) directly (no /100 needed: range -3.3 to 1.582, i.e. resistivity 5e-4 to 38 ohm*m, physically ordinary) -- confirmed by exact match to the printed chart: panel (a) y-axis 'Log rho (Ohm*m)' -4 to 2, x-axis 'Temperature (K)' 300-700. Per-curve y ranges match the 4 visible series in both magnitude AND relative ordering: x=0 (black squares) -3.3..-2.51 (lowest, matches GT curve range -3.3/-2.512 exactly); x=0.2 (red circles) -2.41..0.49 (matches -2.413/0.4942); x=0.4 (blue triangles) -1.37..1.58 (highest, matches -1.368/1.582); x=0.6 (green diamonds) -1.63..0.34 (matches -1.63/0.3378). GT x range 304.5-663.3K, within the chart's frame (measured: left border ~280K, right border exactly 700K, matching the printed 300-700 ticks with the same small left-padding pattern seen elsewhere in this batch). classify_range_disagreement: x -> BENIGN_MARGIN (identity, gap=0); y -> BENIGN_MARGIN (log_printed_labels confirmed against printed [-4,2] with expected_k=1, i.e. no unit conversion at all needed since unit_y is already plain ohm*m matching the printed 'Ohm*m', gap=0).",
+    "evidence": "4 GT curves (prop_x=Temperature/K, prop_y=log(Electrical resistivity)/ohm*m), one per As-content x (0, 0.2, 0.4, 0.6). Unlike the log(Electrical conductivity) curves elsewhere in this batch, this property's raw values are ALREADY plausible log10(resistivity) directly (no /100 needed: range -3.3 to 1.582, i.e. resistivity 5e-4 to 38 ohm*m, physically ordinary) -- confirmed by exact match to the printed chart: panel (a) y-axis 'Log rho (Ohm*m)' -4 to 2, x-axis 'Temperature (K)' 300-700. Per-curve y ranges match the 4 visible series in both magnitude AND relative ordering: x=0 (black squares) -3.3..-2.51 (lowest, matches GT curve range -3.3/-2.512 exactly); x=0.2 (red circles) -2.41..0.49 (matches -2.413/0.4942); x=0.4 (blue triangles) -1.37..1.58 (highest, matches -1.368/1.582); x=0.6 (green diamonds) -1.63..0.34 (matches -1.63/0.3378). GT x range 304.5-663.3K, within the chart's frame (measured: left border ~280K, right border exactly 700K, matching the printed 300-700 ticks with the same small left-padding pattern seen elsewhere in this batch). classify_range_disagreement: x -> BENIGN_MARGIN (identity, gap=0); y -> BENIGN_MARGIN (log_printed_labels confirmed against printed [-4,2] with expected_k=1, i.e. no unit conversion at all needed since unit_y is already plain ohm*m matching the printed 'Ohm*m', gap=0). || 2026-09-30: 2パネルのクロップからパネル(a)のみに切り直し(元 p06_embedded_11.jpg を x<1672 で切断、パネル(b)左枠は1889px)。GT4曲線はすべてパネル(a)の抵抗率で、GTは不変。",
     "figure_kind": "markers",
     "figure_tags": []
   },
@@ -3802,7 +3802,7 @@
     "paper_id": "32593",
     "figure_id": "40587",
     "figure_reference": "1a",
-    "image_path": "data/verified_pairs/images/32593/p02_embedded_3.jpg",
+    "image_path": "data/verified_pairs/crops/32593/fig1a.png",
     "panel_label": "a",
     "x_range": [
       0.0008,
@@ -3817,7 +3817,7 @@
     "status": "verified",
     "verified_at": "2026-09-04",
     "license_id": "cc-by",
-    "evidence": "2 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per material (Fe2WO6, FeWO4) -- matches the chart's 2-entry legend exactly. Panel a) y-axis 'log(sigma [Ohm^-1 cm^-1])' -2.5 to 1.0, x-axis '10^3/T [K^-1]' 0.8 to 2.2 (dark-background figure). Here the printed unit is already S/cm (Ohm^-1 cm^-1) matching this batch's raw/100 result directly (log10(S/cm), no further cm<->m shift needed, unlike the S*m^-1-tagged entries elsewhere in this batch). GT y/100 range -2.008 to 0.6259 (log10 S/cm), within printed [-2.5, 1.0]. GT x*1000 range 0.812-2.087, within printed [0.8, 2.2] -- both frame edges measured directly and found to coincide EXACTLY with the outermost printed ticks (no padding either side). classify_range_disagreement: x -> AXIS_SCALE_FACTOR (fitted slope exactly 1000x); y -> BENIGN_MARGIN (log_printed_labels confirmed against [-2.5,1.0] with expected_k=1, gap=0).",
+    "evidence": "2 GT curves (prop_x=Inverse temperature/K^(-1), prop_y=log(Electrical conductivity)/S*m^(-1)), one per material (Fe2WO6, FeWO4) -- matches the chart's 2-entry legend exactly. Panel a) y-axis 'log(sigma [Ohm^-1 cm^-1])' -2.5 to 1.0, x-axis '10^3/T [K^-1]' 0.8 to 2.2 (dark-background figure). Here the printed unit is already S/cm (Ohm^-1 cm^-1) matching this batch's raw/100 result directly (log10(S/cm), no further cm<->m shift needed, unlike the S*m^-1-tagged entries elsewhere in this batch). GT y/100 range -2.008 to 0.6259 (log10 S/cm), within printed [-2.5, 1.0]. GT x*1000 range 0.812-2.087, within printed [0.8, 2.2] -- both frame edges measured directly and found to coincide EXACTLY with the outermost printed ticks (no padding either side). classify_range_disagreement: x -> AXIS_SCALE_FACTOR (fitted slope exactly 1000x); y -> BENIGN_MARGIN (log_printed_labels confirmed against [-2.5,1.0] with expected_k=1, gap=0). || 2026-09-30: 2パネルのクロップからパネル(a)のみに切り直し(x<2500 で切断。パネル(a)右枠2395px、列2475-2525は完全に空白、パネル(b)の内容は2550pxから)。GT2曲線はすべてパネル(a)の導電率で、GTは不変。",
     "figure_kind": "markers",
     "figure_tags": []
   },
@@ -4438,7 +4438,8 @@
     "figure_kind": "markers",
     "figure_tags": [
       "multi_panel_merged"
-    ]
+    ],
+    "excluded_reason": "harness_limit: 2026-09-30 オーナー方針「今回のベンチマークは、real-chartを使うことを重要として、複数パネルのものはまだ不要です。今後、今のデータセットがどのモデルでも100点取るようになったら次のステップとしてありだと思います」。3段パネル(a/b/c)がx軸を共有しy軸レンジだけ異なる図で、9本のGT曲線が2+5+2でパネルにまたがる。GT側に系列ラベルが無いため分割にはパネル割り当ての推定が必要で、推定するとGTを壊す。図もGTも誤っていない — 今回のデータセット版のスコープ外という判断。figure_tags の multi_panel_merged は、将来この種の図を再導入するときの目印として残す。"
   },
   {
     "paper_id": "17040",

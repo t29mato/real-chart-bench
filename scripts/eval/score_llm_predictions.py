@@ -94,6 +94,19 @@ CONDITIONS = {
     },
 }
 
+# A figure whose stored unit space changed *after* a model answered it. The
+# archived answer is in the space the task showed at the time, so it has to be
+# converted before it can be compared against ground truth that has since
+# moved. This is arithmetic applied at scoring time -- the raw file under
+# data/llm_subset_*/predictions/ is left exactly as the model wrote it, so the
+# record of what was actually answered stays intact.
+PREDICTION_RESCALE = {
+    # 5904/13761: y migrated from SI (V/K) to the paper's printed units (µV/K)
+    # on 2026-09-30, after the n=10 run. The models were shown y_range
+    # [0.0, 2e-06] and answered in that space.
+    "13761": {"y": 1e6},
+}
+
 MODELS = {
     "claude-opus-5": "Claude Opus 5",
     "claude-sonnet-5": "Claude Sonnet 5",
@@ -217,8 +230,19 @@ def main() -> None:
         raw = json.loads(path.read_text())
         preds = {}
         for t in tasks:
-            if t["id"] in raw:
-                preds[t["id"]] = parse_curves(raw[t["id"]], ScaleType(t["x_scale"]))
+            if t["id"] not in raw:
+                continue
+            answer = raw[t["id"]]
+            factors = PREDICTION_RESCALE.get(key[t["id"]]["figure_id"])
+            if factors:
+                answer = [
+                    {
+                        "x": [v * factors.get("x", 1.0) for v in c.get("x", [])],
+                        "y": [v * factors.get("y", 1.0) for v in c.get("y", [])],
+                    }
+                    for c in answer
+                ]
+            preds[t["id"]] = parse_curves(answer, ScaleType(t["x_scale"]))
         results = evaluate_model_on_dataset(ReplayRunner(preds, order), items, matcher=matcher)
         per_figure = [{
             "figure_id": r.figure_id,

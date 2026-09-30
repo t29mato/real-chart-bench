@@ -1687,13 +1687,15 @@
     "notes": [
       "Single panel, but the whole figure is ROTATED 90 degrees in the image. Values are reported in image-pixel orientation: the horizontal image direction carries the S [uV/K] scale (0 at right px=1030, 2 at left px=123 - i.e. a DECREASING horizontal axis), and the vertical image direction carries the T [K] scale (0 at bottom px=1442, 300 at top px=46). If the plot's own x-axis (T) is wanted, it corresponds to the vertical pixel direction. Frame: x=31-1076, y=44-1443.",
       "図全体が90度回転している。画像の水平(下辺)軸はS[μV/K]で左が2・右が0、画像の垂直軸はT[K]で下が0・上が300(ラベルは右側)。ここでは画像の水平軸をx、垂直軸をyとして記載。",
-      "2026-09-01: 画像が90度回転しているため、このエントリのx/y目盛りラベル・ピクセル位置は画像のピクセル方向(横=Seebeck係数、縦=温度)で記録されており、チャート上の意味(x=温度、y=Seebeck係数)とは軸が入れ替わっている。registry.jsonのx_range/y_rangeと単純に突き合わせると約150倍の不一致に見えるが、これはデータの誤りではなくこの記録方式の制約による偽陽性。registry.jsonの値自体はevidence記載の通り実データと整合済み。自動クロスチェック対象からexcludeする(値そのものは人間が見る分にはオーバーレイ表示で有用なため保持)。"
+      "2026-09-01: 画像が90度回転しているため、このエントリのx/y目盛りラベル・ピクセル位置は画像のピクセル方向(横=Seebeck係数、縦=温度)で記録されており、チャート上の意味(x=温度、y=Seebeck係数)とは軸が入れ替わっている。registry.jsonのx_range/y_rangeと単純に突き合わせると約150倍の不一致に見えるが、これはデータの誤りではなくこの記録方式の制約による偽陽性。registry.jsonの値自体はevidence記載の通り実データと整合済み。自動クロスチェック対象からexcludeする(値そのものは人間が見る分にはオーバーレイ表示で有用なため保持)。",
+      "2026-09-30: この図の image_path が差し替わったため、ここに記録されたピクセル座標は旧画像のものであり現在の画像には対応しない(40067/40587/45818 はパネル単位への切り直し、13761 は90度回転)。再測定するまで位置情報として使用しないこと。"
     ],
     "status": "excluded",
     "x_axis_label_raw": "T [K]",
     "x_axis_unit": "K",
     "y_axis_label_raw": "S [μV/K]",
-    "y_axis_unit": "μV/K"
+    "y_axis_unit": "μV/K",
+    "pixel_coords_stale_since": "2026-09-30"
   },
   {
     "paper_id": "83",
@@ -5024,13 +5026,15 @@
       "Frame/tick pixel positions measured mechanically (dark/bright-pixel row and column profiling of the extracted image, thresholded and clustered into tick groups) rather than via a dual vision-LLM pass -- single-source reading, recorded as llm_candidate per the existing convention with no model_disagreement_px (only one source).",
       "image 3030x1425px, left panel only (right panel 'b' is a different y-quantity, ln(sigma*T), not this figure_id). Frame: top264-267, bottom1235-1238, left210-212, right1414-1416. Minor ticks step 0.00025 from px312(0.00075) to px1368.5(0.0030); major (labelled) ticks at 0.0010/0.0015/0.0020/0.0025/0.0030 = px429/664/899/1133.5/1368.5. y minor ticks step 0.25 from px265.5(1.0) to px1236(-3.5), 19 positions; major (labelled) every 0.5. Registry x_range uses the measured PLOT FRAME (px210/1416, extrapolated via the tick spacing to values 0.000534/0.003101), which extends further than the printed tick labels on both ends -- see evidence.",
       "2026-09-08 訂正(x_min_px 429.0→312.2、x_max_px 1368.5→1250.6): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: Two-panel figure; labels refer to left panel (a). Outward ticks. x=0.0010 and 0.0030 interior ticks (312.2, 1250.6; spacing 234.6px). y=1.0 on top frame (rows 264-267, centre 265.4), y=-3.5 on bottom frame (rows 1235-1238, centre 1236.3). Spacing 107.9px.",
-      "2026-09-08 owner review: Claude Fable 5 に記録値を伏せて4参照点すべてを独立測定させ、その結果(記録値との差1px以内、または修正後)をオーナーが目視で承認。レビューでは『線が印刷された目盛に乗っているか』と『添えた数字が印刷された数字と一致するか』の双方を確認しているため、値と位置の両方が人手を通ったものとして owner_reviewed へ昇格。"
+      "2026-09-08 owner review: Claude Fable 5 に記録値を伏せて4参照点すべてを独立測定させ、その結果(記録値との差1px以内、または修正後)をオーナーが目視で承認。レビューでは『線が印刷された目盛に乗っているか』と『添えた数字が印刷された数字と一致するか』の双方を確認しているため、値と位置の両方が人手を通ったものとして owner_reviewed へ昇格。",
+      "2026-09-30: この図の image_path が差し替わったため、ここに記録されたピクセル座標は旧画像のものであり現在の画像には対応しない(40067/40587/45818 はパネル単位への切り直し、13761 は90度回転)。再測定するまで位置情報として使用しないこと。"
     ],
     "x_axis_label_raw": "1/T [1/K]",
     "x_axis_unit": "K^-1",
     "y_axis_label_raw": "log10(sigma [S*cm^-1])",
     "y_axis_unit": "S/cm",
-    "status": "owner_reviewed"
+    "status": "owner_reviewed",
+    "pixel_coords_stale_since": "2026-09-30"
   },
   {
     "paper_id": "28020",
@@ -5052,13 +5056,15 @@
     "notes": [
       "Frame/tick pixel positions measured mechanically (dark/bright-pixel row and column profiling of the extracted image, thresholded and clustered into tick groups) rather than via a dual vision-LLM pass -- single-source reading, recorded as llm_candidate per the existing convention with no model_disagreement_px (only one source).",
       "image 3340x1662px, left panel only (right panel 'b' is Seebeck coefficient, a different figure_id not in this batch). Frame: top124, bottom1267, left314, right1456 (right frame coincides exactly with the 700K tick -- no right padding). x ticks 300/400/500/600/700 (px 368/640/912/1184/1456, step 272px/100K); left frame (314) sits ~19.9K before the 300 tick. y ticks 2/1/0/-1/-2/-3(/-4 at frame bottom, px 124/314/505/695/886/1076/1267, step 190.4px/unit).",
-      "2026-09-08 owner review: 判定保留。オーナー注記「2つがグラフあるよ」——切り出しに2つのプロットが含まれており、軸読みがどちらのものか曖昧。位置をずらしても解決しない切り出しの問題。"
+      "2026-09-08 owner review: 判定保留。オーナー注記「2つがグラフあるよ」——切り出しに2つのプロットが含まれており、軸読みがどちらのものか曖昧。位置をずらしても解決しない切り出しの問題。",
+      "2026-09-30: この図の image_path が差し替わったため、ここに記録されたピクセル座標は旧画像のものであり現在の画像には対応しない(40067/40587/45818 はパネル単位への切り直し、13761 は90度回転)。再測定するまで位置情報として使用しないこと。"
     ],
     "x_axis_label_raw": "Temperature (K)",
     "x_axis_unit": "K",
     "y_axis_label_raw": "Log rho (Ohm*m)",
     "y_axis_unit": "ohm*m",
-    "status": "llm_candidate"
+    "status": "llm_candidate",
+    "pixel_coords_stale_since": "2026-09-30"
   },
   {
     "paper_id": "32593",
@@ -5081,13 +5087,15 @@
       "Frame/tick pixel positions measured mechanically (dark/bright-pixel row and column profiling of the extracted image, thresholded and clustered into tick groups) rather than via a dual vision-LLM pass -- single-source reading, recorded as llm_candidate per the existing convention with no model_disagreement_px (only one source).",
       "image 5017x2927px (white-on-black figure; thresholded on brightness, not darkness). Frame: top~298, bottom~2554, left~432, right~2395, coinciding exactly with the outermost printed ticks on both axes. x ticks 0.8/1.0/1.2 confirmed at px432.5/562/695 (step 130.5px/0.2), right frame at 2395=2.2 by the same spacing. y ticks 1.0..-2.5 step 0.5, major at px307.5/620/942.5/1264/1585.5/1908.5/2230/2551.5.",
       "2026-09-08 訂正(x_min_px 432.5→562.0、x_max_px 2394.5→2395.5、y_max_px 307.5→298.0): オーナーが軸位置の誤りを指摘した21図について、Claude Fable 5 に記録値を伏せて独立に再測定させた結果を採用。目盛は垂直ストロークの濃度重み付き重心として求め、目盛間隔の等間隔性と反対側スパインのミラー目盛で検証済み(確度: high)。 測定側の注記: White-on-black two-panel figure; labels refer to left panel (a). Lines are ~17px thick; measured on inverted brightness. x=0.8 first interior inward tick at 562.0 (spacing 262px), x=2.2 coincides with right frame (cols 2388-2403, centre 2395.5). y=1.0 on top frame (rows 290-306, centre 298.0), y=-2.5 on bottom frame (rows 2544-2560, centre 2552.0). Spacing 322px.",
-      "2026-09-08 owner review: 判定保留（理由の記載なし）"
+      "2026-09-08 owner review: 判定保留（理由の記載なし）",
+      "2026-09-30: この図の image_path が差し替わったため、ここに記録されたピクセル座標は旧画像のものであり現在の画像には対応しない(40067/40587/45818 はパネル単位への切り直し、13761 は90度回転)。再測定するまで位置情報として使用しないこと。"
     ],
     "x_axis_label_raw": "10^3/T [K^-1]",
     "x_axis_unit": "K^-1",
     "y_axis_label_raw": "log(sigma [Ohm^-1cm^-1])",
     "y_axis_unit": "ohm^(-1)*cm^(-1)",
-    "status": "llm_candidate"
+    "status": "llm_candidate",
+    "pixel_coords_stale_since": "2026-09-30"
   },
   {
     "paper_id": "47265",
