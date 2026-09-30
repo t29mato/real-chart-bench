@@ -105,6 +105,33 @@ PREDICTION_RESCALE = {
     # on 2026-09-30, after the n=10 run. The models were shown y_range
     # [0.0, 2e-06] and answered in that space.
     "13761": {"y": 1e6},
+    # The 2026-09-30 batch: 19 further axes whose stored range sat in a
+    # different unit space than the printed one (V/K vs µV/K, W/(m*K^2) vs the
+    # printed 1e-4 unit, 1/T vs 1000/T). Migrating the registry and ground
+    # truth moved them after the models had already answered in the old space.
+    "13164": {"y": 1e+06},
+    "15114": {"y": 1e+06},
+    "20121": {"y": 1e+06},
+    "20739": {"y": 1e+06},
+    "21283": {"y": 1e+06},
+    "29154": {"y": 10000},
+    "33296": {"y": 10000},
+    "40587": {"x": 1000},
+    "45323": {"x": 1000},
+    "45356": {"x": 1000, "y": 0.01},
+    "45360": {"x": 1000, "y": 0.01},
+    "48871": {"x": 1000, "y": 0.01},
+    "51437": {"x": 1000, "y": 0.01},
+    "51438": {"x": 1000, "y": 0.01},
+    "51439": {"x": 1000, "y": 0.01},
+    "51440": {"x": 1000, "y": 0.01},
+    "51441": {"x": 1000, "y": 0.01},
+    "51442": {"x": 1000, "y": 0.01},
+    "51688": {"x": 1000, "y": 0.01},
+    # Two log axes stored in S/m against a figure printing S/cm -- log10 of the
+    # stored range sat exactly +2.00 decades above the printed labels at both
+    # endpoints, so a unit factor rather than a framing margin.
+    "45818": {"y": 0.01},
 }
 
 MODELS = {

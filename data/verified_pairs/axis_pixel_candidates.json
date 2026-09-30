@@ -1658,9 +1658,9 @@
     "image_path": "data/verified_pairs/crops/5904/corrected_fig5.png",
     "panel_label": null,
     "x_min_label": 0,
-    "x_max_label": 2,
+    "x_max_label": 300,
     "y_min_label": 0,
-    "y_max_label": 300,
+    "y_max_label": 2,
     "x_scale": "linear",
     "y_scale": "linear",
     "pixel_bbox_mean": {
@@ -1688,7 +1688,8 @@
       "Single panel, but the whole figure is ROTATED 90 degrees in the image. Values are reported in image-pixel orientation: the horizontal image direction carries the S [uV/K] scale (0 at right px=1030, 2 at left px=123 - i.e. a DECREASING horizontal axis), and the vertical image direction carries the T [K] scale (0 at bottom px=1442, 300 at top px=46). If the plot's own x-axis (T) is wanted, it corresponds to the vertical pixel direction. Frame: x=31-1076, y=44-1443.",
       "図全体が90度回転している。画像の水平(下辺)軸はS[μV/K]で左が2・右が0、画像の垂直軸はT[K]で下が0・上が300(ラベルは右側)。ここでは画像の水平軸をx、垂直軸をyとして記載。",
       "2026-09-01: 画像が90度回転しているため、このエントリのx/y目盛りラベル・ピクセル位置は画像のピクセル方向(横=Seebeck係数、縦=温度)で記録されており、チャート上の意味(x=温度、y=Seebeck係数)とは軸が入れ替わっている。registry.jsonのx_range/y_rangeと単純に突き合わせると約150倍の不一致に見えるが、これはデータの誤りではなくこの記録方式の制約による偽陽性。registry.jsonの値自体はevidence記載の通り実データと整合済み。自動クロスチェック対象からexcludeする(値そのものは人間が見る分にはオーバーレイ表示で有用なため保持)。",
-      "2026-09-30: この図の image_path が差し替わったため、ここに記録されたピクセル座標は旧画像のものであり現在の画像には対応しない(40067/40587/45818 はパネル単位への切り直し、13761 は90度回転)。再測定するまで位置情報として使用しないこと。"
+      "2026-09-30: この図の image_path が差し替わったため、ここに記録されたピクセル座標は旧画像のものであり現在の画像には対応しない(40067/40587/45818 はパネル単位への切り直し、13761 は90度回転)。再測定するまで位置情報として使用しないこと。",
+      "2026-09-30: 90度回転を補正したため x/y のラベルを入れ替えた。回転前は水平方向が S [µV/K]、垂直方向が T [K] だった。ピクセル座標は旧フレームのままで無効(pixel_coords_stale_since 参照)。"
     ],
     "status": "excluded",
     "x_axis_label_raw": "T [K]",
