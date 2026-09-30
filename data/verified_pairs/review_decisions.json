@@ -1386,6 +1386,123 @@
       "owner_note": "モトグラフが90度横に傾いちゃってる気がするから直して",
       "disposition": "needs_deskew",
       "finding": "指摘どおり。元PDFから回転/鏡像状態で抽出された画像で、水平方向がS[µV/K]・左向きに増加。加えてregistry [0,2e-6]・GT 3.4e-8..1.9e-6 でともにSIなので、20739と同じ表示単位移行の対象。"
+    },
+    {
+      "id": "17040_21023_3",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "",
+      "disposition": "accepted",
+      "finding": "二重変換修正後に再確認、指摘なし。"
+    },
+    {
+      "id": "17044_20739_2a",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "ground truthの値は、raw siではなくて、元グラフに合わせてください。",
+      "disposition": "display_unit_migration",
+      "finding": "registry y_range=[0,0.00035]・GT 9.9e-6..2.95e-4 がともにSI(V/K)、印字軸は0..350 µV/K。design 7.47の表示単位移行を適用する。"
+    },
+    {
+      "id": "28020_40067_7a",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "グラフ２つのものはそれぞれ別のグラフとして分けてください。またGroundtruthがある方だけを使ってください。",
+      "disposition": "needs_panel_split",
+      "finding": "GT4曲線はすべて prop_y=Electrical resistivity で x 304..663 ⊂ [280.15,700]、y 5e-4..38.2 ⊂ [1e-4,100]。つまりGTはパネル(a)のみに対応し、パネル(b)(ゼーベック)は別figure_idで本セットに無い。画像を(a)だけにクロップし直す。"
+    },
+    {
+      "id": "29352_29156_5b",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "",
+      "disposition": "accepted",
+      "finding": "二重変換修正後に再確認、指摘なし。"
+    },
+    {
+      "id": "29352_29157_5c",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "",
+      "disposition": "accepted",
+      "finding": "二重変換修正後に再確認、指摘なし。"
+    },
+    {
+      "id": "29352_29161_7c",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "",
+      "disposition": "accepted",
+      "finding": "指摘なし。"
+    },
+    {
+      "id": "32593_40587_1a",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "グラフ２つのものはそれぞれ別のグラフとして分けてください。またGroundtruthがある方だけを使ってください。",
+      "disposition": "needs_panel_split",
+      "finding": "GT2曲線はともに prop_y=Electrical conductivity で、x(逆温度) 8.1e-4..2.1e-3 ⊂ [8e-4,2.2e-3]。GTはパネル(a)のみに対応。画像を(a)だけにクロップし直す。"
+    },
+    {
+      "id": "36342_34989_3b",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "ground truthがemptyなので正解データがNGとして除外。",
+      "disposition": "excluded",
+      "finding": "オーナー承認により除外。"
+    },
+    {
+      "id": "3733_26108_3a",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "このグラフ意味わからんので除外。",
+      "disposition": "excluded",
+      "finding": "オーナー判断により除外。"
+    },
+    {
+      "id": "3733_26109_3b",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "このグラフ意味わからんので除外。",
+      "disposition": "excluded",
+      "finding": "オーナー判断により除外。"
+    },
+    {
+      "id": "4173_20122_7",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "ok",
+      "owner_note": "",
+      "disposition": "accepted",
+      "finding": "指摘なし。"
+    },
+    {
+      "id": "5902_15113_2",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "グラフ３つのものはそれぞれ別のグラフとして分けてください。またGroundtruthがある方だけを使ってください。",
+      "disposition": "needs_panel_split_blocked",
+      "finding": "画像を確認: 3段パネル(a/b/c)、x軸(T 0-300K)は共通、y軸レンジはパネルごとに別。系列は a) x=0.1,0.2 / b) x=0.3-0.7 / c) x=0.8,0.9 の 2+5+2=9本で、GTの9曲線と一致する。つまり『Groundtruthがある方だけ』が効かない — 3パネルすべてにGTがある。分割には9曲線をパネルへ割り当てる必要があり、GT側に系列ラベルが無い(prop_yは全て Seebeck coefficient)ためy到達値からの推定になる。推定で割り当てるとGTを壊すので、方針確認待ち。"
+    },
+    {
+      "id": "5904_13761_5",
+      "reviewed_at": "2026-09-30",
+      "reviewer": "owner",
+      "owner_status": "flagged",
+      "owner_note": "マイクロの単位が抜けているのと、これって元グラフが、こんな 90度傾いてるの？",
+      "disposition": "needs_deskew_and_unit_migration",
+      "finding": "画像を直接確認。元論文の図は傾いていない。corrected_fig5.png が『corrected』の名前に反してまだ90°回転しており、T [K] が縦(上が300)、S [µV/K] が横(左が2・右が0)になっている。PDF抽出時に配置変換行列を適用していない問題の直し残し。単位も指摘どおりで、印字は S [µV/K] 0..2、registry は [0,2e-6](SI)。回転補正と表示単位移行の両方が必要。"
     }
   ]
 }

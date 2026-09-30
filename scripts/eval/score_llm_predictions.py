@@ -178,6 +178,15 @@ def main() -> None:
         load_registry(REPO / "data/verified_pairs/registry.json")
     )
 
+    # A figure the owner has since excluded must leave the score, even though
+    # the model answered it and the answer stays archived. Scoring an excluded
+    # figure would keep measuring something the registry says is unmeasurable.
+    scoreable_ids = {p.figure_id for p in reg_scoreable}
+    dropped = [t["id"] for t in tasks if key[t["id"]]["figure_id"] not in scoreable_ids]
+    if dropped:
+        print(f"  採点対象外になった図を除外: {len(dropped)}件 {dropped}")
+    tasks = [t for t in tasks if key[t["id"]]["figure_id"] in scoreable_ids]
+
     items, order = [], []
     for t in tasks:
         k = key[t["id"]]

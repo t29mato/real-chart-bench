@@ -1642,7 +1642,8 @@
       0.5,
       2.5
     ],
-    "tick_range_source": "owner_reviewed"
+    "tick_range_source": "owner_reviewed",
+    "excluded_reason": "harness_limit: 2026-09-30 オーナー判断「38965も除外で」。画像がx軸を含まない範囲でクロップされており、x軸の目盛りが一切写っていない。Opus 5 と Fable 5 が独立に「この図のx値は測定ではなく仮定」と報告した(2026-09-12実行)。GTの誤りではなく、クロップ範囲に起因する採点不能。"
   },
   {
     "paper_id": "44283",
@@ -4101,7 +4102,8 @@
     "figure_kind": "markers",
     "figure_tags": [
       "reference_curve"
-    ]
+    ],
+    "excluded_reason": "gt_mismatch: 2026-09-30 オーナー判断「このグラフ意味わからんので除外」。1点×9系列のPisarenko散布図で、軸・GTの数値自体は整合していたが、ベンチマーク図として成立しないとのオーナー判断により採点対象から除外する。"
   },
   {
     "paper_id": "3733",
@@ -4125,7 +4127,8 @@
     "figure_kind": "markers",
     "figure_tags": [
       "reference_curve"
-    ]
+    ],
+    "excluded_reason": "gt_mismatch: 2026-09-30 オーナー判断「このグラフ意味わからんので除外」。26108と同じ図の別軸。"
   },
   {
     "paper_id": "46278",
@@ -4365,7 +4368,8 @@
     "license_id": "cc-by",
     "evidence": "Figure 3, panel (b): a dual-y-axis room-temperature scatter of carrier concentration (left axis, black circles) and Hall mobility (right axis, blue squares) vs. La content x, for the same Sn0.94Ag0.09LayTe series as figure_id=34988/34991/34992 (x=0/0.01/0.03/0.05/0.07). This entry is the left-axis (carrier concentration) curve group. IMPORTANT x-axis caveat: Starrydata tags this curve group's prop_x as 'Temperature' with every point's x fixed at 300 (the measurement temperature, which is accurate but is NOT the chart's actual x-variable) -- the true independent variable plotted here (La content) is instead encoded per-curve in the `composition` field, one curve per composition, n=1 point each. x_range recorded here ([0,0.09], pixel-verified: frame flush at 0.00 on the left, one minor tick (0.01) past the last labeled '0.08' tick on the right) describes the printed axis for reference only -- it is NOT checkable against this curve group's own x array, and a re-plot must position points by La content (from `composition`), not by the raw x value. y-axis is 'n (10^20 cm^-3)' (frame pixel-verified flush at 1.2 and 2.8, ticks every 0.4). Converting GT y (m^-3) to 1e20 cm^-3 (/1e26): La=0 (Sn0.94Ag0.09Te) 2.679 (matches the leftmost point the image's own arrow points to), La=0.01 2.275, La=0.03 2.169, La=0.05 2.029, La=0.07 1.810 -- exact match to all 5 visible black-circle points and their monotonically-decreasing-with-La trend (matching the body text: 'the carrier concentration gradually decreases with the rise of La content').",
     "figure_kind": "markers",
-    "figure_tags": []
+    "figure_tags": [],
+    "excluded_reason": "gt_mismatch: 2026-09-30 オーナー判断「ground truthがemptyなので正解データがNGとして除外」。除外済みの34990と同一の欠陥。ground_truth.json の prop_x は温度で5曲線すべて x=300 の1点のみ、図のx軸はLa組成 0..0.09 なので点が描画範囲外に落ちる。naive-cv/achromatic-cv とも mean_coverage_ratio=0.000、summary_score=0.1333 で完全一致し、どの手法についても何も測っていない。"
   },
   {
     "paper_id": "36342",
