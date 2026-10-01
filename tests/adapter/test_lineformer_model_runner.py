@@ -106,3 +106,23 @@ def test_round_trips_through_the_worker_jsonl_record():
 
     assert prediction.series == (((1.0, 2.0), (3.0, 4.0)),)
     assert prediction.error is None
+
+
+def test_a_given_plot_area_replaces_the_full_image_frame():
+    # tick box x 50..150, y 10 (top) .. 90 (bottom) inside a 200x100 image
+    prediction = LineFormerPrediction(
+        figure_id="1-2",
+        image_key=image_key(_IMAGE),
+        width=200,
+        height=100,
+        series=(((50.0, 90.0), (150.0, 10.0)),),
+    )
+    runner = PrecomputedLineFormerModelRunner(
+        [prediction], plot_areas={image_key(_IMAGE): (50.0, 10.0, 150.0, 90.0)}
+    )
+    task = ExtractionTask(image_bytes=_IMAGE, x_range=(0, 10), y_range=(0, 1))
+
+    (curve,) = runner.extract(task)
+
+    assert curve.x_values == pytest.approx((0.0, 10.0))
+    assert curve.y_values == pytest.approx((0.0, 1.0))

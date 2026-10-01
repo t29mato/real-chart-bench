@@ -61,6 +61,10 @@ class HungarianCurveMatcher:
     def __init__(self, metric: MetricStrategy) -> None:
         self._metric = metric
 
+    @property
+    def metric(self) -> MetricStrategy:
+        return self._metric
+
     def match(
         self, predicted: Sequence[Curve], ground_truth: Sequence[Curve]
     ) -> list[SeriesMatchResult]:

@@ -32,11 +32,10 @@ from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
 )
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
-from real_chart_bench.domain.matching import HungarianCurveMatcher  # noqa: E402
-from real_chart_bench.domain.metrics import NormalizedYDistanceMetric  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     DatasetItem,
     evaluate_model_on_dataset,
+    matcher_for_task,
 )
 from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
@@ -181,6 +180,42 @@ EFFORT = {
 }
 
 
+# The 2026-10-01 run (scripts/eval/prepare_llm_run_v2.py): every scoreable
+# figure, both conditions, the models a subagent can be launched as today.
+V2_ARCHIVE = REPO / "data/llm_run_v2"
+MODELS_V2 = {
+    "claude-opus-5-5": "Claude Opus 5.5",
+    "claude-sonnet-5-5": "Claude Sonnet 5.5",
+    "claude-fable-5-1": "Claude Fable 5.1",
+    "claude-haiku-4-5": "Claude Haiku 4.5",
+}
+CONDITIONS["v2-calibrated"] = {
+    "v2": "calibrated",
+    "models": MODELS_V2,
+    # "-r2": Haiku 4.5 is in both runs, so ids must not collide with the
+    # 2026-09 run's files
+    "suffix": "-r2",
+    "name_suffix": "（2026-10-01）",
+    "label": "軸レンジを与えた条件（2026-10-01 実行、採点対象全図）",
+}
+CONDITIONS["v2-noaxis"] = {
+    "v2": "noaxis",
+    "models": MODELS_V2,
+    "suffix": "-r2-noaxis",
+    "name_suffix": "（軸レンジなし、2026-10-01）",
+    "label": "軸レンジを与えない条件（2026-10-01 実行、採点対象全図）",
+}
+V2_NOTES = (
+    "Claude Code のサブエージェントとして起動(2026-10-01、プロンプトは "
+    "scripts/eval/llm_run_v2_prompt.md に保存)。1モデル・1条件あたり2バッチ(51図/50図)に分け、"
+    "各バッチに独立したディレクトリ(リポジトリ外、fig_NNN.png の乱順の名前)を与えた。"
+    "calibrated は ExtractionTask と同じ軸レンジ・スケールを、noaxis は軸ごとの報告規則"
+    "(印字どおり / log10 目盛は 10^値 / °C 軸は K)だけを与えた。手法は各エージェントの自由で、"
+    "スコアは『モデルの視力』ではなく『ツールを使えるエージェントとしての抽出性能』である。"
+    "生の回答は data/llm_run_v2/ に保存。"
+)
+
+
 class ReplayRunner:
     """Serves one model's recorded answers as a ModelRunnerPort."""
 
@@ -228,7 +263,14 @@ def main() -> None:
     # ids repeat across runs (fig_001.png ...), so they are namespaced by run.
     parts = cond.get("parts", [name])
     tasks, key = [], {}
-    for part in parts:
+    if cond.get("v2"):
+        v2_key = json.loads((V2_ARCHIVE / "_key.json").read_text())
+        tasks = [
+            {**t, "id": f"{name}:{t['id']}"}
+            for t in json.loads((V2_ARCHIVE / cond["v2"] / "tasks.json").read_text())
+        ]
+        key = {f"{name}:{k}": v for k, v in v2_key.items()}
+    for part in [] if cond.get("v2") else parts:
         meta = CONDITIONS[part]["meta"]
         tasks += [
             {**t, "id": f"{part}:{t['id']}"}
@@ -263,8 +305,12 @@ def main() -> None:
             figure_id=f"{k['paper_id']}-{k['figure_id']}",
             task=ExtractionTask(
                 image_bytes=(REPO / p.image_path).read_bytes(),
-                x_range=tuple(t["x_range"]), y_range=tuple(t["y_range"]),
-                x_scale=ScaleType(t["x_scale"]), y_scale=ScaleType(t["y_scale"]),
+                # noaxis v2 tasks carry no ranges; the registry's are used to
+                # score only (the model never saw them)
+                x_range=tuple(t.get("x_range") or p.x_range),
+                y_range=tuple(t.get("y_range") or p.y_range),
+                x_scale=ScaleType(t.get("x_scale") or p.x_scale.value),
+                y_scale=ScaleType(t.get("y_scale") or p.y_scale.value),
             ),
             # Built exactly as run_baselines.py's _ground_truth_for does --
             # no scale arguments, series_label from prop_y -- so these figures
@@ -274,12 +320,18 @@ def main() -> None:
         ))
         order.append(t["id"])
 
-    matcher = HungarianCurveMatcher(metric=NormalizedYDistanceMetric())
     gt_rev = ground_truth_revision(GROUND_TRUTH_SUPPLEMENT_DIR)
     written = []
-    for model_id, model_name in MODELS.items():
+    for model_id, model_name in cond.get("models", MODELS).items():
         raw = {}
-        for part in parts:
+        if cond.get("v2"):
+            files = sorted((V2_ARCHIVE / cond["v2"] / model_id).glob("part*.predictions.json"))
+            for f in files:
+                raw |= {f"{name}:{k}": v for k, v in json.loads(f.read_text()).items()}
+            if not files:
+                print(f"  {model_id}: 予測ファイルがない → スキップ")
+                continue
+        for part in [] if cond.get("v2") else parts:
             c = CONDITIONS[part]
             path = _resolve_pred(c["archive"], c["work"], model_id)
             if path is None:
@@ -295,7 +347,9 @@ def main() -> None:
             if t["id"] not in raw:
                 continue
             answer = raw[t["id"]]
-            factors = PREDICTION_RESCALE.get(key[t["id"]]["figure_id"])
+            # v2 answers were given in today's unit space; only the 2026-09
+            # runs predate the display-unit migration
+            factors = None if cond.get("v2") else PREDICTION_RESCALE.get(key[t["id"]]["figure_id"])
             if factors:
                 answer = [
                     {
@@ -304,8 +358,10 @@ def main() -> None:
                     }
                     for c in answer
                 ]
-            preds[t["id"]] = parse_curves(answer, ScaleType(t["x_scale"]))
-        results = evaluate_model_on_dataset(ReplayRunner(preds, order), items, matcher=matcher)
+            preds[t["id"]] = parse_curves(answer, reg[key[t["id"]]["figure_id"]].x_scale)
+        results = evaluate_model_on_dataset(
+            ReplayRunner(preds, order), items, matcher_for=matcher_for_task
+        )
         per_figure = [{
             "figure_id": r.figure_id,
             "summary_score": r.evaluation.summary_score,
@@ -318,17 +374,22 @@ def main() -> None:
             "model_id": model_id + cond["suffix"],
             "model_name": model_name + cond["name_suffix"],
             "dataset_version": (
-                f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-llm-full"
-                if len(parts) > 1
+                f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-noaxis"
+                if cond.get("v2") == "noaxis"
+                # every scoreable figure, same as the CV/LineFormer rows, so all
+                # of them rank in one table (design 7.66)
+                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}"
+                if len(parts) > 1 or cond.get("v2")
                 else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-llm-subset-"
                 f"n{len(items)}{cond['suffix']}"),
             "run_at": datetime.now(UTC).isoformat(),
             "n_figures": len(per_figure),
+            "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
             "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
             "per_figure": per_figure,
             "agent_effort": EFFORT.get(model_id) if name == "calibrated" else None,
             "condition": cond["label"],
-            "notes": (
+            "notes": V2_NOTES if cond.get("v2") else (
                 "Claude Code のサブエージェントとして各モデルを起動し、"
                 "図の画像と軸レンジ(ExtractionTask と同じ情報)だけを与えて抽出させた結果。"
                 "採点は他のベースラインと同一(Hungarian マッチャ + 正規化Y距離)。"
@@ -356,7 +417,7 @@ def main() -> None:
     if written:
         print("\n順位:")
         for i, (m, s, n) in enumerate(sorted(written, key=lambda w: -w[1]), 1):
-            print(f"  {i}. {MODELS[m]:<20} {s:.4f}")
+            print(f"  {i}. {cond.get('models', MODELS)[m]:<20} {s:.4f}")
 
 
 if __name__ == "__main__":

@@ -49,12 +49,11 @@ from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # no
 from real_chart_bench.adapter.panel_layout import PyMuPdfPanelSplitter  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
-from real_chart_bench.domain.matching import HungarianCurveMatcher  # noqa: E402
-from real_chart_bench.domain.metrics import NormalizedYDistanceMetric  # noqa: E402
 from real_chart_bench.domain.verified_pairing import VerifiedPairing  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     DatasetItem,
     evaluate_model_on_dataset,
+    matcher_for_task,
 )
 from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
@@ -215,8 +214,7 @@ def build_dataset() -> tuple[list[DatasetItem], int]:
 
 def run(model_id: str, model_name: str, model) -> dict:
     items, n_real = build_dataset()
-    matcher = HungarianCurveMatcher(metric=NormalizedYDistanceMetric())
-    results = evaluate_model_on_dataset(model, items, matcher=matcher)
+    results = evaluate_model_on_dataset(model, items, matcher_for=matcher_for_task)
 
     per_figure = [
         {
@@ -249,6 +247,7 @@ def run(model_id: str, model_name: str, model) -> dict:
         ),
         "run_at": datetime.now(UTC).isoformat(),
         "n_figures": len(real_rows),
+        "metric": METRIC_LABEL,
         "mean_summary_score": mean_score,
         "n_synthetic_fixtures": len(synthetic_rows),
         "mean_synthetic_score": (
@@ -266,6 +265,8 @@ def run(model_id: str, model_name: str, model) -> dict:
     }
     return payload
 
+
+METRIC_LABEL = "normalized-y-distance, span floor 5% of linear y axis (design 7.66)"
 
 NAIVE_CV_RESULTS_PATH = RESULTS_DIR / "naive-cv-v0.json"
 # The n42 LineFormer run and the subsets built to compare against it are

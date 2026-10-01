@@ -159,3 +159,47 @@ def test_distance_never_returns_nan_or_inf(metric):
     d = metric.distance(predicted, ground_truth)
 
     assert math.isfinite(d)
+
+
+# --- span floor (design §7.66) ---------------------------------------------
+# Normalizing by the ground-truth series' own y-range turns a near-flat series
+# into a magnifier: on 18869-18874 the x=0 series spans 0.41 on a 0-40 axis,
+# so a reading 0.26 off scored as 0.64 of the worst case. The floor bounds the
+# normalizing span from below; a series whose range already exceeds it is
+# scored exactly as before.
+
+
+def test_span_floor_tames_a_near_flat_series():
+    ground_truth = Curve(x_values=(0.0, 1.0, 2.0), y_values=(0.0, 0.41, 0.2))
+    predicted = Curve(x_values=(0.0, 1.0, 2.0), y_values=(0.3, 0.71, 0.5))
+
+    without = NormalizedYDistanceMetric().compare(predicted, ground_truth)
+    with_floor = NormalizedYDistanceMetric(min_y_span=2.0).compare(predicted, ground_truth)
+
+    assert without.mean_normalized_error == pytest.approx(0.3 / 0.41)
+    assert with_floor.mean_normalized_error == pytest.approx(0.3 / 2.0)
+
+
+def test_span_floor_does_not_touch_a_series_wider_than_the_floor():
+    ground_truth = Curve(x_values=(0.0, 1.0), y_values=(0.0, 10.0))
+    predicted = Curve(x_values=(0.0, 1.0), y_values=(1.0, 11.0))
+
+    assert NormalizedYDistanceMetric(min_y_span=2.0).distance(
+        predicted, ground_truth
+    ) == pytest.approx(NormalizedYDistanceMetric().distance(predicted, ground_truth))
+
+
+def test_span_floor_gives_a_perfectly_flat_series_a_graded_error():
+    # Without a floor a flat series can only be an exact hit or the worst case.
+    ground_truth = Curve(x_values=(0.0, 1.0), y_values=(5.0, 5.0))
+    predicted = Curve(x_values=(0.0, 1.0), y_values=(5.1, 5.1))
+
+    assert NormalizedYDistanceMetric().distance(predicted, ground_truth) == 1.0
+    assert NormalizedYDistanceMetric(min_y_span=2.0).distance(
+        predicted, ground_truth
+    ) == pytest.approx(0.05)
+
+
+def test_negative_span_floor_is_rejected():
+    with pytest.raises(ValueError):
+        NormalizedYDistanceMetric(min_y_span=-1.0)

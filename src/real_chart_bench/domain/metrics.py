@@ -95,7 +95,20 @@ def _overlap_ratio(gt_lo: float, gt_hi: float, pred_lo: float, pred_hi: float) -
 
 
 class NormalizedYDistanceMetric:
-    """v0 primary metric. See module docstring."""
+    """v0 primary metric. See module docstring.
+
+    ``min_y_span`` floors the normalizing span (design §7.66): the y-error is
+    divided by ``max(ground-truth y-range, min_y_span)``. Without it a
+    near-flat series magnifies a tiny absolute miss into a near-worst-case
+    distance. 0.0 (the default) is the original behaviour. The usecase layer
+    sets it from the task's axis (usecase/evaluate_dataset.matcher_for_task);
+    the metric itself knows nothing about axes.
+    """
+
+    def __init__(self, min_y_span: float = 0.0):
+        if not min_y_span >= 0.0:
+            raise ValueError(f"min_y_span must be >= 0, got {min_y_span!r}")
+        self.min_y_span = float(min_y_span)
 
     def compare(self, predicted: Curve, ground_truth: Curve) -> CurveComparisonResult:
         x_scale = ground_truth.x_scale
@@ -119,7 +132,7 @@ class NormalizedYDistanceMetric:
             )
 
         pred_y_interp = np.interp(gt_x, pred_x, pred_y)
-        gt_y_range = float(gt_y.max() - gt_y.min())
+        gt_y_range = max(float(gt_y.max() - gt_y.min()), self.min_y_span)
 
         if _is_negligible(gt_y_range, *gt_y.tolist()):
             # Flat (or single-point) ground truth: normalized error is

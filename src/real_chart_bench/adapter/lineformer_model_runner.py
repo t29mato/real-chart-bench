@@ -60,8 +60,16 @@ class LineFormerPrediction:
 
 
 class PrecomputedLineFormerModelRunner:
-    def __init__(self, predictions: Iterable[LineFormerPrediction]):
+    """``plot_areas`` (image_key -> pixel bbox) replaces the full-frame
+    mapping for those images -- the tick-calibrated variant (design §7.66)."""
+
+    def __init__(
+        self,
+        predictions: Iterable[LineFormerPrediction],
+        plot_areas: Mapping[str, tuple[float, float, float, float]] | None = None,
+    ):
         self._by_key = {p.image_key: p for p in predictions}
+        self._plot_areas = dict(plot_areas or {})
 
     def extract(self, task: ExtractionTask) -> list[Curve]:
         prediction = self._by_key[image_key(task.image_bytes)]
@@ -69,7 +77,10 @@ class PrecomputedLineFormerModelRunner:
             raise RuntimeError(f"LineFormer worker failed: {prediction.error}")
 
         calibration = PixelCalibration(
-            pixel_bbox=(0.0, 0.0, float(prediction.width), float(prediction.height)),
+            pixel_bbox=self._plot_areas.get(
+                prediction.image_key,
+                (0.0, 0.0, float(prediction.width), float(prediction.height)),
+            ),
             x_range=task.x_range,
             y_range=task.y_range,
             x_scale=task.x_scale,

@@ -37,9 +37,8 @@ from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # no
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve  # noqa: E402
 from real_chart_bench.domain.evaluation import evaluate_figure  # noqa: E402
-from real_chart_bench.domain.matching import HungarianCurveMatcher  # noqa: E402
-from real_chart_bench.domain.metrics import NormalizedYDistanceMetric  # noqa: E402
 from real_chart_bench.domain.pixel_calibration import PixelCalibration  # noqa: E402
+from real_chart_bench.usecase.evaluate_dataset import matcher_for_task  # noqa: E402
 
 MAX_POINTS = 400  # per curve, for display only; scoring uses every point
 
@@ -143,7 +142,6 @@ def main() -> None:
     }
     llm = _llm_answers(task_by_fid)
     published = {mid: {p["figure_id"]: p for p in _per_figure(f)} for mid, _, _, f in MODELS}
-    matcher = HungarianCurveMatcher(metric=NormalizedYDistanceMetric())
 
     figures, mismatches = [], []
     for item in items:
@@ -189,7 +187,7 @@ def main() -> None:
             if pred is None:
                 fig["models"][mid] = {"curves": [], "error": err, **_scores(pub)}
                 continue
-            entry, ev = _package(pred, gt, matcher)
+            entry, ev = _package(pred, gt, matcher_for_task(task))
             if pub and abs(ev.summary_score - pub["summary_score"]) > 1e-6:
                 mismatches.append((mid, fid, ev.summary_score, pub["summary_score"]))
             fig["models"][mid] = {**entry, **_scores(pub)}
@@ -217,7 +215,7 @@ def main() -> None:
                             x_scale=task.x_scale,
                         )
                     )
-            entry, ev = _package(pred, gt, matcher)
+            entry, ev = _package(pred, gt, matcher_for_task(task))
             fig["models"]["lineformer-axis"] = {
                 **entry,
                 "score": ev.summary_score,
