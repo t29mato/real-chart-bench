@@ -26,6 +26,10 @@ from datetime import UTC, datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
+from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
+    ground_truth_revision,
+    load_ground_truth,
+)
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
 from real_chart_bench.domain.matching import HungarianCurveMatcher  # noqa: E402
@@ -39,6 +43,8 @@ from real_chart_bench.usecase.real_image_gate import select_verified_pairings  #
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 RESULTS = REPO / "results"
+GROUND_TRUTH_PATH = REPO / "data/verified_pairs/ground_truth.json"
+GROUND_TRUTH_SUPPLEMENT_DIR = REPO / "data/verified_pairs/ground_truth_supplement"
 SCRATCH = pathlib.Path(
     "/tmp/claude-1000/-home-mato-repos-real-chart-bench/"
     "628beb76-383b-42e9-bf21-8d4188daf8dc/scratchpad"
@@ -68,6 +74,7 @@ CONDITIONS = {
         "meta": REPO / "data/llm_subset_n10",
         "archive": REPO / "data/llm_subset_n10/predictions",
         "suffix": "",
+        "name_suffix": "",
         "label": "軸レンジを与えた条件",
     },
     "noaxis": {
@@ -78,6 +85,7 @@ CONDITIONS = {
         "meta": REPO / "data/llm_subset_n10",
         "archive": REPO / "data/llm_subset_n10_noaxis/predictions",
         "suffix": "-noaxis",
+        "name_suffix": "（軸レンジなし）",
         "label": "軸レンジを与えない条件（モデルが目盛を自分で読む）",
     },
     # The remaining 101 of the 111 scoreable figures (owner request,
@@ -90,7 +98,18 @@ CONDITIONS = {
         "meta": REPO / "data/llm_subset_rest",
         "archive": REPO / "data/llm_subset_rest/predictions",
         "suffix": "-rest",
+        "name_suffix": "（n=10以外の残り）",
         "label": "軸レンジを与えた条件（n=10サブセット以外の残り全図）",
+    },
+    # Every scoreable figure, axis ranges given: the n=10 run and the rest
+    # run scored together in one pass. This replaces the earlier
+    # -full files, which were assembled by hand from the two runs' published
+    # per-figure scores and so could not follow a ground-truth change.
+    "full": {
+        "parts": ["calibrated", "rest"],
+        "suffix": "-full",
+        "name_suffix": "（採点対象全図）",
+        "label": "軸レンジを与えた条件（採点対象全図: n=10 の実行と残りの実行を合わせて採点）",
     },
 }
 
@@ -205,12 +224,20 @@ def main() -> None:
     if name not in CONDITIONS:
         raise SystemExit(f"条件は {list(CONDITIONS)} のいずれか (指定: {name})")
     cond = CONDITIONS[name]
-    work = cond["work"]
-
-    meta = cond["meta"]
-    tasks = json.loads((meta / "tasks.json").read_text())
-    key = json.loads((meta / "_key.json").read_text())
-    gt_all = json.loads((REPO / "data/verified_pairs/ground_truth.json").read_text())
+    # A condition is one run, or (full) several runs scored together. Task
+    # ids repeat across runs (fig_001.png ...), so they are namespaced by run.
+    parts = cond.get("parts", [name])
+    tasks, key = [], {}
+    for part in parts:
+        meta = CONDITIONS[part]["meta"]
+        tasks += [
+            {**t, "id": f"{part}:{t['id']}"}
+            for t in json.loads((meta / "tasks.json").read_text())
+        ]
+        key |= {
+            f"{part}:{k}": v for k, v in json.loads((meta / "_key.json").read_text()).items()
+        }
+    gt_all = load_ground_truth(GROUND_TRUTH_PATH, GROUND_TRUTH_SUPPLEMENT_DIR)
     reg = {p.figure_id: p for p in load_registry(REPO / "data/verified_pairs/registry.json")}
     # Derived, never hardcoded: the version string went stale at n112 once
     # 36342/34990 left the scoreable set (design 7.27's lesson).
@@ -248,13 +275,21 @@ def main() -> None:
         order.append(t["id"])
 
     matcher = HungarianCurveMatcher(metric=NormalizedYDistanceMetric())
+    gt_rev = ground_truth_revision(GROUND_TRUTH_SUPPLEMENT_DIR)
     written = []
     for model_id, model_name in MODELS.items():
-        path = _resolve_pred(cond["archive"], work, model_id)
+        raw = {}
+        for part in parts:
+            c = CONDITIONS[part]
+            path = _resolve_pred(c["archive"], c["work"], model_id)
+            if path is None:
+                break
+            raw |= {f"{part}:{k}": v for k, v in json.loads(path.read_text()).items()}
+        else:
+            path = True
         if path is None:
             print(f"  {model_id}: 予測ファイルがない → スキップ")
             continue
-        raw = json.loads(path.read_text())
         preds = {}
         for t in tasks:
             if t["id"] not in raw:
@@ -281,15 +316,17 @@ def main() -> None:
         } for r in results]
         payload = {
             "model_id": model_id + cond["suffix"],
-            "model_name": model_name + ("（軸レンジなし）" if cond["suffix"] else ""),
+            "model_name": model_name + cond["name_suffix"],
             "dataset_version": (
-                f"v0-eval-pilot-n{len(reg_scoreable)}-llm-subset-"
+                f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-llm-full"
+                if len(parts) > 1
+                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-llm-subset-"
                 f"n{len(items)}{cond['suffix']}"),
             "run_at": datetime.now(UTC).isoformat(),
             "n_figures": len(per_figure),
             "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
             "per_figure": per_figure,
-            "agent_effort": EFFORT.get(model_id) if not cond["suffix"] else None,
+            "agent_effort": EFFORT.get(model_id) if name == "calibrated" else None,
             "condition": cond["label"],
             "notes": (
                 "Claude Code のサブエージェントとして各モデルを起動し、"

@@ -41,6 +41,10 @@ import pymupdf
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
 from real_chart_bench.adapter.achromatic_cv_extractor import AchromaticCvModelRunner  # noqa: E402
+from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
+    ground_truth_revision,
+    load_ground_truth,
+)
 from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.panel_layout import PyMuPdfPanelSplitter  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
@@ -67,10 +71,14 @@ REGISTRY_PATH = REPO_ROOT / "data/verified_pairs/registry.json"
 # references (~30 figures, 141KB), extracted once and committed, the same
 # "bundle only what evaluation needs" pattern as data/verified_pairs/images/.
 GROUND_TRUTH_PATH = REPO_ROOT / "data/verified_pairs/ground_truth.json"
+# Series the figure draws that Starrydata never digitized (reference curves
+# from other works, ...), digitized for this benchmark -- see
+# adapter/ground_truth_store.py and design §7.65.
+GROUND_TRUTH_SUPPLEMENT_DIR = REPO_ROOT / "data/verified_pairs/ground_truth_supplement"
 
 
 def _ground_truth_for(pairing: VerifiedPairing) -> list[Curve]:
-    ground_truth = json.loads(GROUND_TRUTH_PATH.read_text())
+    ground_truth = load_ground_truth(GROUND_TRUTH_PATH, GROUND_TRUTH_SUPPLEMENT_DIR)
     raw_curves = ground_truth.get(pairing.figure_id, [])
 
     # Some Starrydata rows are empty digitization artifacts (n_points=0, see
@@ -236,7 +244,9 @@ def run(model_id: str, model_name: str, model) -> dict:
     payload = {
         "model_id": model_id,
         "model_name": model_name,
-        "dataset_version": f"v0-eval-pilot-n{n_real}",
+        "dataset_version": (
+            f"v0-eval-pilot-n{n_real}{ground_truth_revision(GROUND_TRUTH_SUPPLEMENT_DIR)}"
+        ),
         "run_at": datetime.now(UTC).isoformat(),
         "n_figures": len(real_rows),
         "mean_summary_score": mean_score,
