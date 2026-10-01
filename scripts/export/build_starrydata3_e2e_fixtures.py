@@ -97,7 +97,6 @@ FIGURES: dict[tuple[str, str], str] = {
     ("10939", "1536"): "Sibling of 10939 4(a): panel 5(b), same 4 samples.",
     ("10939", "1537"): "Sibling of 10939 4(a): panel 5(c), 3 series.",
     ("27759", "25218"): "Sibling of 27759 fig 7: figure 8, linear y, same 4 samples.",
-    ("27759", "25222"): "Sibling of 27759 fig 7: figure 16(a), a second log-y axis.",
     ("22102", "21246"): 'Sibling of 22102 3a: panel 3c, also "line_only".',
 }
 
@@ -120,6 +119,17 @@ EXCLUDED: dict[tuple[str, str], str] = {
         "ground-truth error. Only the practical conclusion stands: not usable "
         "as a pixel-level oracle. See "
         "docs/experiments/2026-09-09-gt-image-alignment-sweep.md."
+    ),
+    ("27759", "25222"): (
+        "Removed 2026-10-01 (shipped 2026-09-11 as a sibling of 27759 fig 7). "
+        "The figure draws five series but the ground truth holds four: the "
+        "fifth, 'Ref. (Y0.56Al0.57B14)' (purple diamonds), is a comparison "
+        "sample from another work, which Starrydata does not digitize. The "
+        "four shipped series are correct; the oracle is incomplete, so a "
+        "digitizer that also picks up the fifth would be marked wrong. This "
+        "repo now excludes the figure from its own scoring "
+        "(excluded_reason=gt_incomplete, design 7.65), and by the rule above "
+        "it is no longer handed out as an oracle."
     ),
 }
 

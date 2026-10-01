@@ -20,6 +20,13 @@
 併せて、`excluded` の `83/9049` の説明文を訂正した(渡した JSON の中に
 「GT y が描画 y の約0.85倍」という撤回済みの主張が残っていたため)。
 
+**2026-10-01 改訂(21枚 → 20枚)**: `27759/25222` を外した。図に描かれた5系列のうち、
+他論文の比較試料「Ref. (Y0.56Al0.57B14)」が正解データにない(Starrydata は自論文のデータのみ収録)。
+本リポジトリの採点からも `gt_incomplete` で除外した(design §7.65)。残り20枚は 09-11 版と同一。
+先方への連絡文は `starrydata3-notice-2026-10-01.md`、差し替え版の出力先は
+`/var/tmp/real-chart-bench-e2e-fixtures-2026-10-01/`。**オーナー経由で先方に連絡する**
+(先方セッションが稼働していないため)。
+
 **生成**: `python scripts/export/build_starrydata3_e2e_fixtures.py <出力先>`(再現可能)。
 committed な束の陳腐化は `tests/adapter/test_starrydata3_e2e_fixture_bundle.py` が検知する
 (軸座標が再修正されたらCIで落ちる)。

@@ -52,7 +52,13 @@ LLM_MODELS = {
 MODELS = [
     # (id, name, kind, published results file)
     *[(m, n, "llm", f"{m}-v0-full.json") for m, n in LLM_MODELS.items()],
-    ("lineformer", "LineFormer (pretrained)", "dedicated", "lineformer-pretrained-n106.json"),
+    # the current LineFormer run's file is named after its figure count
+    (
+        "lineformer",
+        "LineFormer (pretrained)",
+        "dedicated",
+        max(p.name for p in (REPO / "results").glob("lineformer-pretrained-n*.json")),
+    ),
     ("naive-cv", "naive-cv (hue)", "cv", "naive-cv-v0.json"),
     ("achromatic-cv", "achromatic-cv (luminance)", "cv", "achromatic-cv-v0.json"),
 ]
@@ -126,7 +132,7 @@ def main() -> None:
 
     lf_preds = [
         LineFormerPrediction.from_record(json.loads(line))
-        for line in (REPO / "data/lineformer_predictions/pretrained-n106.jsonl").open()
+        for line in (REPO / _lineformer_raw_predictions()).open()
         if line.strip()
     ]
     lf_raw = {p.image_key: p for p in lf_preds}
@@ -262,7 +268,8 @@ def main() -> None:
             },
         }
     )
-    payload = {"dataset_version": "v0-eval-pilot-n106", "models": summary, "figures": figures}
+    dataset_version = json.loads((REPO / "results/naive-cv-v0.json").read_text())["dataset_version"]
+    payload = {"dataset_version": dataset_version, "models": summary, "figures": figures}
     (args.out / "data.json").write_text(json.dumps(payload, separators=(",", ":")))
     size = (args.out / "data.json").stat().st_size / 1e6
     n_axis = sum(f["axis_px"] is not None for f in figures)
@@ -270,6 +277,11 @@ def main() -> None:
         f"wrote {args.out}/data.json ({size:.1f} MB): {len(figures)} figures, "
         f"{n_axis} with usable axis pixel positions; all scores match results/*.json"
     )
+
+
+def _lineformer_raw_predictions() -> str:
+    lf_file = next(f for mid, _, _, f in MODELS if mid == "lineformer")
+    return json.loads((REPO / "results" / lf_file).read_text())["raw_predictions"]
 
 
 def _per_figure(results_file: str) -> list[dict]:

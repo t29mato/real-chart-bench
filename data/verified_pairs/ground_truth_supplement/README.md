@@ -62,7 +62,12 @@ Don't write these by hand: digitize in Starry Digitizer and convert with
    python scripts/leaderboard/generate.py
    ```
 
-## Work list (2026-10-01)
+## Work list (2026-10-01) — on hold
+
+The owner chose (2026-10-01) to exclude these figures as `gt_incomplete`
+instead of digitizing the missing series now. The list stays here so they
+can be brought back: add the supplement, then remove the figure's
+`excluded_reason` in `registry.json`, then rescore.
 
 Found from the registry's pairing evidence ("un-digitized … curves") and from
 figures where the top LLMs agreed on series the ground truth lacks; each one

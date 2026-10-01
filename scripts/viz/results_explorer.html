@@ -108,9 +108,9 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">real-chart-bench · v0-eval-pilot-n106 · 軸レンジあり条件</div>
+    <div class="eyebrow" id="eyebrow">real-chart-bench · 軸レンジあり条件</div>
     <h1>抽出結果ビューア</h1>
-    <p class="sub">実論文の図106枚について、各モデルが抽出した曲線を正解(Starrydata の人手デジタイズ)と重ねて確認します。下のスコア分布の点か、左の一覧から図を選んでください。</p>
+    <p class="sub" id="lede">実論文の図について、各モデルが抽出した曲線を正解(Starrydata の人手デジタイズ)と重ねて確認します。下のスコア分布の点か、左の一覧から図を選んでください。</p>
   </header>
 
   <section class="finding" id="finding" aria-live="polite"><span class="loading">データを読み込んでいます…</span></section>
@@ -410,6 +410,8 @@ async function boot() {
     return;
   }
   MODELS = DATA.models; FIGS = DATA.figures;
+  document.getElementById("eyebrow").textContent = `real-chart-bench · ${DATA.dataset_version} · 軸レンジあり条件`;
+  document.getElementById("lede").textContent = document.getElementById("lede").textContent.replace("実論文の図", `実論文の図${FIGS.length}枚`);
   const gap = f => bestLlm(f) - (f.models.lineformer?.score ?? 0);
   cur = FIGS.indexOf([...FIGS].filter(f => f.axis_px).sort((a, b) => gap(b) - gap(a))[0]);
   renderFinding(); renderSummary(); renderList(); renderDetail();

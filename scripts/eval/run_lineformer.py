@@ -18,6 +18,10 @@ finishes -- `tail -f data/cache/lineformer/run.log`.
 Usage:
     python scripts/eval/run_lineformer.py                 # inference + scoring
     python scripts/eval/run_lineformer.py --score-only    # rescore saved output
+    python scripts/eval/run_lineformer.py --score-only \
+        --predictions data/lineformer_predictions/pretrained-n106.jsonl
+        # rescore after the figure set shrank: any saved output that covers
+        # every current figure will do (extra figures are ignored)
 """
 
 from __future__ import annotations
@@ -104,13 +108,16 @@ def _load_predictions(path: pathlib.Path) -> list[LineFormerPrediction]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--score-only", action="store_true")
+    parser.add_argument("--predictions", type=pathlib.Path, default=None)
     parser.add_argument("--lineformer-home", type=pathlib.Path, default=DEFAULT_LF_HOME)
     args = parser.parse_args()
 
     items, n_real = build_dataset()
     PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    predictions_path = PREDICTIONS_DIR / f"pretrained-n{n_real}.jsonl"
+    predictions_path = args.predictions or PREDICTIONS_DIR / f"pretrained-n{n_real}.jsonl"
+    if args.predictions and not args.score_only:
+        raise SystemExit("--predictions only makes sense with --score-only")
 
     if not args.score_only:
         _run_inference(items, predictions_path, args.lineformer_home)
@@ -119,6 +126,8 @@ def main() -> None:
     missing = {i.figure_id for i in items} - {p.figure_id for p in predictions}
     if missing:
         raise SystemExit(f"{len(missing)} figure(s) have no prediction: {sorted(missing)[:5]}")
+    wanted = {i.figure_id for i in items}
+    predictions = [p for p in predictions if p.figure_id in wanted]
     n_errors = sum(p.error is not None for p in predictions)
     if n_errors == len(predictions):
         raise SystemExit("every figure errored -- refusing to write a 0.0 result")
@@ -135,7 +144,7 @@ def main() -> None:
         "built from source (nvcc 12.0, gcc 12.4), LineFormer's vendored mmdet 2.28.2, "
         "checkpoint iter_3000.pth -- design §7.64"
     )
-    payload["raw_predictions"] = str(predictions_path.relative_to(REPO_ROOT))
+    payload["raw_predictions"] = str(predictions_path.resolve().relative_to(REPO_ROOT))
     payload["n_worker_errors"] = n_errors
     payload["calibration_note"] = (
         "Pixel->data mapping takes the full image frame as the plot area, the "
