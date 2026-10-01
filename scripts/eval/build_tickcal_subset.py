@@ -57,7 +57,7 @@ def main() -> None:
     base = json.loads((RESULTS / "naive-cv-v0.json").read_text())["dataset_version"]
     version = f"{base}-tickcal-subset-n{len(subset)}"
 
-    lf_file = max(RESULTS.glob("lineformer-pretrained-n*.json"))
+    (lf_file,) = [p for p in RESULTS.glob("lineformer-pretrained-n*.json") if p.stem[23:].isdigit()]
     raw = REPO / json.loads(lf_file.read_text())["raw_predictions"]
     predictions = [
         LineFormerPrediction.from_record(json.loads(line)) for line in raw.open() if line.strip()

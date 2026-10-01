@@ -27,6 +27,11 @@
 `/var/tmp/real-chart-bench-e2e-fixtures-2026-10-01/`。**オーナー経由で先方に連絡する**
 (先方セッションが稼働していないため)。
 
+**2026-10-02 改訂**: `28331/28500` の y を印字どおり(÷10⁴)に修正。目盛は 5.0〜7.0 と印字されているが、
+正解データは 50000〜70000 で保存されていた(9/30 の表示単位移行の漏れ)。ピクセル座標は不変で、
+y の期待値だけが変わる。差し替え版は `/var/tmp/real-chart-bench-e2e-fixtures-2026-10-02/`。
+連絡文 `starrydata3-notice-2026-10-01.md` に追記済み(10-01 の件と合わせて1通で伝える)。
+
 **生成**: `python scripts/export/build_starrydata3_e2e_fixtures.py <出力先>`(再現可能)。
 committed な束の陳腐化は `tests/adapter/test_starrydata3_e2e_fixture_bundle.py` が検知する
 (軸座標が再修正されたらCIで落ちる)。

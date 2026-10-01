@@ -150,7 +150,15 @@ PREDICTION_RESCALE = {
     # stored range sat exactly +2.00 decades above the printed labels at both
     # endpoints, so a unit factor rather than a framing margin.
     "45818": {"y": 0.01},
+    # 2026-10-02: 28331/28500 still stored sigma as 50000-70000 S/m against an
+    # axis printed 5.0-7.0 under "sigma x10^4 (S/m)" -- missed by the 09-30
+    # migration (its sibling 28492 is stored as printed). Moved to printed
+    # units; answers given against the old range are scaled to match.
+    "28500": {"y": 1e-4},
 }
+# The v2 calibrated condition was handed 28500's old 50000-70000 range too.
+# Its noaxis condition was not (the model read the printed 5-7 itself).
+PREDICTION_RESCALE_V2_CALIBRATED = {"28500": {"y": 1e-4}}
 
 MODELS = {
     "claude-opus-5": "Claude Opus 5",
@@ -305,12 +313,14 @@ def main() -> None:
             figure_id=f"{k['paper_id']}-{k['figure_id']}",
             task=ExtractionTask(
                 image_bytes=(REPO / p.image_path).read_bytes(),
-                # noaxis v2 tasks carry no ranges; the registry's are used to
-                # score only (the model never saw them)
-                x_range=tuple(t.get("x_range") or p.x_range),
-                y_range=tuple(t.get("y_range") or p.y_range),
-                x_scale=ScaleType(t.get("x_scale") or p.x_scale.value),
-                y_scale=ScaleType(t.get("y_scale") or p.y_scale.value),
+                # Always the registry's current ranges, never the ones the
+                # model was shown: replay ignores them, but the scorer's span
+                # floor (design 7.66) is set from them, and a task file from
+                # before a unit migration holds the old space (28500).
+                x_range=tuple(p.x_range),
+                y_range=tuple(p.y_range),
+                x_scale=p.x_scale,
+                y_scale=p.y_scale,
             ),
             # Built exactly as run_baselines.py's _ground_truth_for does --
             # no scale arguments, series_label from prop_y -- so these figures
@@ -349,7 +359,14 @@ def main() -> None:
             answer = raw[t["id"]]
             # v2 answers were given in today's unit space; only the 2026-09
             # runs predate the display-unit migration
-            factors = None if cond.get("v2") else PREDICTION_RESCALE.get(key[t["id"]]["figure_id"])
+            rescale = (
+                PREDICTION_RESCALE_V2_CALIBRATED
+                if cond.get("v2") == "calibrated"
+                else {}
+                if cond.get("v2")
+                else PREDICTION_RESCALE
+            )
+            factors = rescale.get(key[t["id"]]["figure_id"])
             if factors:
                 answer = [
                     {

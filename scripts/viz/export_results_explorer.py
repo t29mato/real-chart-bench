@@ -3,7 +3,7 @@ page: ground truth, each model's curves in data space, which ground-truth
 series each predicted curve was matched to, and the per-figure scores.
 
 Curves are rebuilt from what each model actually produced -- LLM answers from
-data/llm_subset_*/predictions/ (with the same unit rescale the scorer
+data/llm_run_v2/calibrated/ (with the same unit rescale the scorer
 applies), LineFormer from its raw pixel output, the CV baselines by re-running
 them -- and re-scored here. Each recomputed score is checked against the
 published results/*.json, so the page cannot show curves that are not the
@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts/eval"))
 
 from run_baselines import build_dataset  # noqa: E402
-from score_llm_predictions import PREDICTION_RESCALE, parse_curves  # noqa: E402
+from score_llm_predictions import PREDICTION_RESCALE_V2_CALIBRATED, parse_curves  # noqa: E402
 
 from real_chart_bench.adapter.achromatic_cv_extractor import AchromaticCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.lineformer_model_runner import (  # noqa: E402
@@ -42,21 +42,26 @@ from real_chart_bench.usecase.evaluate_dataset import matcher_for_task  # noqa: 
 
 MAX_POINTS = 400  # per curve, for display only; scoring uses every point
 
+# the 2026-10-01 run (axis ranges given) -- design 7.66
 LLM_MODELS = {
-    "claude-fable-5": "Claude Fable 5",
-    "claude-opus-5": "Claude Opus 5",
-    "claude-sonnet-5": "Claude Sonnet 5",
+    "claude-fable-5-1": "Claude Fable 5.1",
+    "claude-opus-5-5": "Claude Opus 5.5",
+    "claude-sonnet-5-5": "Claude Sonnet 5.5",
     "claude-haiku-4-5": "Claude Haiku 4.5",
 }
 MODELS = [
     # (id, name, kind, published results file)
-    *[(m, n, "llm", f"{m}-v0-full.json") for m, n in LLM_MODELS.items()],
+    *[(m, n, "llm", f"{m}-v0-r2.json") for m, n in LLM_MODELS.items()],
     # the current LineFormer run's file is named after its figure count
     (
         "lineformer",
         "LineFormer (pretrained)",
         "dedicated",
-        max(p.name for p in (REPO / "results").glob("lineformer-pretrained-n*.json")),
+        next(
+            p.name
+            for p in (REPO / "results").glob("lineformer-pretrained-n*.json")
+            if p.stem[23:].isdigit()
+        ),
     ),
     ("naive-cv", "naive-cv (hue)", "cv", "naive-cv-v0.json"),
     ("achromatic-cv", "achromatic-cv (luminance)", "cv", "achromatic-cv-v0.json"),
@@ -70,27 +75,28 @@ def _thin(xs, ys):
 
 def _llm_answers(task_by_fid: dict) -> dict[str, dict[str, list]]:
     """model -> figure_id ("paper-fig") -> list[Curve], scorer-identical."""
+    run = REPO / "data/llm_run_v2"
+    key = json.loads((run / "_key.json").read_text())
     out = {m: {} for m in LLM_MODELS}
-    for subset in ("llm_subset_n10", "llm_subset_rest"):
-        meta = REPO / "data" / subset
-        key = json.loads((meta / "_key.json").read_text())
-        for m in LLM_MODELS:
-            raw = json.loads((meta / "predictions" / f"{m}.json").read_text())
-            for task_id, answer in raw.items():
-                k = key[task_id]
-                fid = f"{k['paper_id']}-{k['figure_id']}"
-                if fid not in task_by_fid:
-                    continue  # excluded from scoring since the run
-                factors = PREDICTION_RESCALE.get(k["figure_id"])
-                if factors:
-                    answer = [
-                        {
-                            "x": [v * factors.get("x", 1.0) for v in c.get("x", [])],
-                            "y": [v * factors.get("y", 1.0) for v in c.get("y", [])],
-                        }
-                        for c in answer
-                    ]
-                out[m][fid] = parse_curves(answer, task_by_fid[fid].x_scale)
+    for m in LLM_MODELS:
+        raw = {}
+        for f in sorted((run / "calibrated" / m).glob("part*.predictions.json")):
+            raw |= json.loads(f.read_text())
+        for task_id, answer in raw.items():
+            k = key[task_id]
+            fid = f"{k['paper_id']}-{k['figure_id']}"
+            if fid not in task_by_fid:
+                continue  # excluded from scoring since the run
+            factors = PREDICTION_RESCALE_V2_CALIBRATED.get(k["figure_id"])
+            if factors:
+                answer = [
+                    {
+                        "x": [v * factors.get("x", 1.0) for v in c.get("x", [])],
+                        "y": [v * factors.get("y", 1.0) for v in c.get("y", [])],
+                    }
+                    for c in answer
+                ]
+            out[m][fid] = parse_curves(answer, task_by_fid[fid].x_scale)
     return out
 
 

@@ -145,13 +145,13 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2)
 <div class="tip" id="tip" hidden></div>
 
 <script>
-const ORDER = ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5", "lineformer", "lineformer-axis", "naive-cv", "achromatic-cv"];
-const COLOR = { "claude-fable-5": "--s1", "lineformer": "--s2", "claude-opus-5": "--s3", "claude-haiku-4-5": "--s4", "lineformer-axis": "--s5", "naive-cv": "--s6", "claude-sonnet-5": "--s7", "achromatic-cv": "--s8" };
+const ORDER = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5", "lineformer", "lineformer-axis", "naive-cv", "achromatic-cv"];
+const COLOR = { "claude-fable-5-1": "--s1", "lineformer": "--s2", "claude-opus-5-5": "--s3", "claude-haiku-4-5": "--s4", "lineformer-axis": "--s5", "naive-cv": "--s6", "claude-sonnet-5-5": "--s7", "achromatic-cv": "--s8" };
 const KIND = { llm: "LLM", dedicated: "専用モデル", cv: "古典CV", exploratory: "参考・未掲載" };
 const NAME_JA = { "lineformer-axis": "LineFormer (目盛で校正)" };
-const LLM_IDS = ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"];
+const LLM_IDS = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"];
 const NS = "http://www.w3.org/2000/svg";
-let DATA, MODELS, FIGS, cur = 0, shown = new Set(["claude-fable-5", "lineformer", "lineformer-axis"]), showRaw = true;
+let DATA, MODELS, FIGS, cur = 0, shown = new Set(["claude-fable-5-1", "lineformer", "lineformer-axis"]), showRaw = true;
 
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const col = id => `var(${COLOR[id]})`;
@@ -180,7 +180,7 @@ function renderFinding() {
   document.getElementById("finding").innerHTML = `
     <strong>LineFormer の低さは、主に軸合わせから来ています</strong>
     <ul>
-      <li>採点では LineFormer の出力を「画像全体 = プロット領域」として数値に直しています(旧 Colab 実行と同じ扱い)。軸目盛のピクセル位置がわかる ${ax.length} 図で、同じ検出結果を目盛位置で直すと <span class="num">${fmt(mean(ax, "lineformer"))} → ${fmt(mean(ax, "lineformer-axis"))}</span> に上がります(Fable 5 は同じ図で <span class="num">${fmt(mean(ax, "claude-fable-5"))}</span>)。</li>
+      <li>採点では LineFormer の出力を「画像全体 = プロット領域」として数値に直しています(旧 Colab 実行と同じ扱い)。軸目盛のピクセル位置がわかる ${ax.length} 図で、同じ検出結果を目盛位置で直すと <span class="num">${fmt(mean(ax, "lineformer"))} → ${fmt(mean(ax, "lineformer-axis"))}</span> に上がります(Fable 5 は同じ図で <span class="num">${fmt(mean(ax, "claude-fable-5-1"))}</span>)。</li>
       <li>${FIGS.length} 図中 ${markers} 図はマーカー(散布点)の図です。LineFormer は折れ線の検出用に学習されたモデルで、点の列は想定外の入力です。目盛で直しても残る差はここから来ていると見ています。</li>
       <li>LLM は画像の中の目盛を自分で探して軸を合わせています。全図での LineFormer は <span class="num">${fmt(lf.mean)}</span>。「目盛で校正」は探索用の参考値で、リーダーボードには載せていません。</li>
     </ul>`;
