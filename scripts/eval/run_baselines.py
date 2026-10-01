@@ -258,8 +258,15 @@ def run(model_id: str, model_name: str, model) -> dict:
 
 
 NAIVE_CV_RESULTS_PATH = RESULTS_DIR / "naive-cv-v0.json"
-LINEFORMER_RESULTS_PATH = RESULTS_DIR / "lineformer-pretrained.json"
-LINEFORMER_COMPARABLE_SUBSET_PATH = RESULTS_DIR / "lineformer-pretrained-comparable-subset.json"
+# The n42 LineFormer run and the subsets built to compare against it are
+# history now that LineFormer has its own n106 run (scripts/eval/
+# run_lineformer.py). They live outside results/*.json so the leaderboard,
+# which globs only the top level, no longer shows them as current.
+LINEFORMER_ARCHIVE_DIR = RESULTS_DIR / "archive/lineformer-n42"
+LINEFORMER_RESULTS_PATH = LINEFORMER_ARCHIVE_DIR / "lineformer-pretrained.json"
+LINEFORMER_COMPARABLE_SUBSET_PATH = (
+    LINEFORMER_ARCHIVE_DIR / "lineformer-pretrained-comparable-subset.json"
+)
 
 
 def _achromatic_vs_hue_zero_subset(achromatic_payload: dict) -> dict | None:
@@ -480,13 +487,13 @@ def main() -> None:
 
     subset_payload = _lineformer_comparable_subset(payload)
     if subset_payload is not None:
-        subset_path = RESULTS_DIR / f"{subset_payload['model_id']}.json"
+        subset_path = LINEFORMER_ARCHIVE_DIR / f"{subset_payload['model_id']}.json"
         subset_path.write_text(json.dumps(subset_payload, indent=2))
         print(f"wrote {subset_path}", file=sys.stderr)
 
         recomputed_payload = _lineformer_recomputed_subset(subset_payload)
         if recomputed_payload is not None:
-            recomputed_path = RESULTS_DIR / f"{recomputed_payload['model_id']}.json"
+            recomputed_path = LINEFORMER_ARCHIVE_DIR / f"{recomputed_payload['model_id']}.json"
             recomputed_path.write_text(json.dumps(recomputed_payload, indent=2))
             print(f"wrote {recomputed_path}", file=sys.stderr)
         elif LINEFORMER_COMPARABLE_SUBSET_PATH.exists():

@@ -40,10 +40,10 @@
 
 ## 完了条件
 
-- [ ] `results/lineformer-pretrained-n106.json` が `dataset_version: v0-eval-pilot-n106` で存在する
-- [ ] リーダーボードの全行が同一 dataset_version になる
-- [ ] 古い n42 の行は履歴として残すが、リーダーボードの現行表からは外す
-- [ ] design doc に実行環境(GPU、ドライバ、mmcv/mmdet のバージョン)を記録する — 再現性のため
+- [x] `results/lineformer-pretrained-n106.json` が `dataset_version: v0-eval-pilot-n106` で存在する
+- [ ] リーダーボードの全行が同一 dataset_version になる — LineFormer は naive-cv/achromatic-cv と同じ `v0-eval-pilot-n106`。LLM 行は `v0-eval-pilot-n106-llm-full` のままで、統一は司令塔判断待ち
+- [x] 古い n42 の行は履歴として残すが、リーダーボードの現行表からは外す
+- [x] design doc に実行環境(GPU、ドライバ、mmcv/mmdet のバージョン)を記録する — 再現性のため
 
 ## 参考: 現行リーダーボード(n=106、軸レンジあり条件)
 
@@ -56,3 +56,7 @@
 | achromatic-cv (輝度) | 0.6604 | 0.5329 | 0.5250 | 0.9732 |
 | Claude Haiku 4.5 | 0.5591 | 0.4818 | 0.4445 | 0.6400 |
 | **LineFormer** | **未測定 (n=38 の 0.6329 は別母集団)** | | | |
+
+## 結果(2026-10-01)
+
+n=106 で **0.7402**(naive-cv 0.7390 と同点)。実行環境と分析は design §7.64。旧 n42 の結果は `results/archive/lineformer-n42/`。

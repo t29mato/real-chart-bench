@@ -3769,3 +3769,62 @@ LLMは既に0.97〜0.99で、naive-CVでも0.82ある。残っている難所は
   プロンプトで明示した(倍率を含めた素の数値で報告せよ)。
 - モデルはサブエージェントとして動くためファイルツールを持つ。今回は
   **モデルごとに独立したディレクトリ**を与えた(§7.62で共有させたのは設計ミスだった)。
+
+### 7.64 LineFormer を現行データセット(n=106)でローカル再実行 —— naive-cv と同点(2026-10-01、オーナー依頼)
+
+**背景.** リーダーボードの LineFormer は 2026-08-29 の Colab 実行(n42)のままで、
+他の行と母集団が違っていた(docs/handoff/2026-10-01-lineformer-rerun-issue.md)。
+配備制約(6章)の論拠にするため、Colab ではなくローカル GPU で測り直した。
+
+**実行環境(再現用).**
+
+| 項目 | 値 |
+|---|---|
+| GPU | NVIDIA GeForce RTX 4090(ドライバ 595.84) |
+| Python | 3.10.19(LineFormer 専用 venv、uv) |
+| torch | 2.1.2+cu121 |
+| mmcv-full | 1.7.2、PyPI の sdist からソースビルド(nvcc 12.0、gcc 12.4、`TORCH_CUDA_ARCH_LIST=8.9`) |
+| mmdet | 2.28.2(LineFormer 同梱の vendored 版) |
+| 重み | `iter_3000.pth`(LineFormer 公式、ICDAR 2023) |
+| 構築 | `scripts/eval/lineformer/setup_local.sh` |
+
+Colab 版の pin(torch 1.13.1+cu117 + OpenMMLab 配布の mmcv-full wheel)から外れた理由:
+`download.openmmlab.com` が NIMS プロキシ経由で TLS ハンドシェイクのタイムアウトになり、
+wheel を取得できない。ローカルの nvcc 12.0 でビルドするには CUDA 12 系の torch が要る。
+推論のみなので影響は小さいと見ており、合成フィクスチャ3図のスコアが旧実行と一致する
+(0.9166 vs 0.917)ことを確認した。
+
+**構成.** 推論と採点を分けた。`scripts/eval/lineformer/worker.py` が py3.10 環境でモデルを
+1回だけロードし、図ごとの**生のピクセル座標**を
+`data/lineformer_predictions/pretrained-n106.jsonl` に追記する(再開可能、1図ごとに進捗行を
+`data/cache/lineformer/run.log` に出す)。`scripts/eval/run_lineformer.py` は
+`run_baselines.build_dataset()/run()` をそのまま使い、`adapter/lineformer_model_runner.py` が
+画像の SHA-256 で生出力を引いて再生する。ピクセル→データ変換を変えても GPU 不要で再採点できる
+(`--score-only`)。推論は109図で8秒。
+
+**ピクセル→データ変換.** 画像全体をプロット領域とみなす。n42 の Colab 実行と同じ選択で、
+手法を揃えるためにそのまま踏襲した。LineFormer は線を検出するが軸は検出しないため、
+余白の分だけ系統的にずれる。プロット領域を推定する変換は別手法として扱うべきで、
+採用するかは未決(司令塔判断)。
+
+**結果(n=106、軸レンジあり).**
+
+| 手法 | score | match_rate | curve_dist | coverage |
+|---|---|---|---|---|
+| LineFormer (pretrained) | **0.7402** | 0.8153 | 0.2986 | 0.7039 |
+| naive-cv (色相) | 0.7390 | 0.7205 | 0.3808 | 0.8772 |
+| achromatic-cv (輝度) | 0.6604 | 0.5329 | 0.5250 | 0.9732 |
+
+- 平均は naive-cv と同点(+0.0012)。図ごとでは LineFormer 勝ち35、負け51、引き分け20(±0.02)。
+  中央値は LineFormer 0.784 < naive-cv 0.806。
+- LineFormer は系列の検出(match_rate)と形(curve_dist)で上回り、被覆率で下回る。
+  後者は全画像フレーム変換で端がずれることと整合する。
+- naive-cv が 0 点の7図(黒・灰の線)で LineFormer は 0.615。両者の弱点は相補的。
+- 0点は3図(47534-49581、4176-20123、4176-20124)。
+- 旧 n42 との共通35図では 0.609 → 0.668 だが、間に単位移行・軸修正・クロップ差し替えが
+  入っているため、環境差の効果とは分離できない。
+
+**リーダーボード.** 新しい行は `model_id: lineformer-pretrained-n106`(breakdown が model_id
+で引かれるため、旧行と衝突させない)。n42 の LineFormer 行と、それと比較するために作った
+naive-cv サブセット・再計算サブセットは `results/archive/lineformer-n42/` に移し、
+現行表から外した(履歴としては残る)。

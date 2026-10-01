@@ -69,7 +69,7 @@ def _run_inference(items, predictions_path: pathlib.Path, lf_home: pathlib.Path)
     manifest_path = _write_manifest(items)
     src = lf_home / "LineFormer"
     cmd = [
-        str(lf_home / "venv/bin/python"),
+        str(lf_home / "venv-cu121/bin/python"),
         str(WORKER),
         "--lineformer-src",
         str(src),
@@ -124,11 +124,17 @@ def main() -> None:
         raise SystemExit("every figure errored -- refusing to write a 0.0 result")
 
     payload = run(
-        "lineformer-pretrained",
+        # distinct from the archived n42 run's "lineformer-pretrained": the
+        # leaderboard keys per-model breakdowns by model_id
+        f"lineformer-pretrained-n{n_real}",
         "LineFormer (pretrained, ICDAR2023)",
         PrecomputedLineFormerModelRunner(predictions),
     )
-    payload["run_environment"] = "local GPU (no Colab) -- see design doc for versions"
+    payload["run_environment"] = (
+        "local NVIDIA GeForce RTX 4090, no Colab; torch 2.1.2+cu121, mmcv-full 1.7.2 "
+        "built from source (nvcc 12.0, gcc 12.4), LineFormer's vendored mmdet 2.28.2, "
+        "checkpoint iter_3000.pth -- design §7.64"
+    )
     payload["raw_predictions"] = str(predictions_path.relative_to(REPO_ROOT))
     payload["n_worker_errors"] = n_errors
     payload["calibration_note"] = (
@@ -137,7 +143,7 @@ def main() -> None:
         "raw pixel output is kept so other mappings can be rescored without "
         "re-running inference."
     )
-    out_path = RESULTS_DIR / f"lineformer-pretrained-n{n_real}.json"
+    out_path = RESULTS_DIR / f"{payload['model_id']}.json"
     out_path.write_text(json.dumps(payload, indent=2) + "\n")
     print(
         f"wrote {out_path}: mean_summary_score={payload['mean_summary_score']:.4f} "
