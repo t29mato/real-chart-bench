@@ -75,10 +75,6 @@ FIGURES: dict[tuple[str, str], str] = {
         "Dual y-axis figure (left G_CNP, right V_c) -- calibration below is "
         "the LEFT axis. 4 series, 220 points, x spans negative to positive."
     ),
-    ("22102", "21245"): (
-        'figure_kind "line_only" (continuous trace, no markers); single series, '
-        "52 points, x in seconds up to 20000."
-    ),
     ("17038", "20816"): (
         "Sparsest case: 2 series, 6 points total, with error bars drawn on "
         "every point."
@@ -97,7 +93,6 @@ FIGURES: dict[tuple[str, str], str] = {
     ("10939", "1536"): "Sibling of 10939 4(a): panel 5(b), same 4 samples.",
     ("10939", "1537"): "Sibling of 10939 4(a): panel 5(c), 3 series.",
     ("27759", "25218"): "Sibling of 27759 fig 7: figure 8, linear y, same 4 samples.",
-    ("22102", "21246"): 'Sibling of 22102 3a: panel 3c, also "line_only".',
 }
 
 # Deliberately withheld, with the reason, so the request is answered honestly.
@@ -130,6 +125,20 @@ EXCLUDED: dict[tuple[str, str], str] = {
         "repo now excludes the figure from its own scoring "
         "(excluded_reason=gt_incomplete, design 7.65), and by the rule above "
         "it is no longer handed out as an oracle."
+    ),
+    ("22102", "21245"): (
+        "Removed 2026-10-03 (shipped 2026-09-09). The figure has no markers: "
+        'it is a continuous trace (figure_kind "line_only"). This repo now '
+        "scores the points a human digitizer clicks -- marker positions -- and "
+        "the owner decided the dataset holds only figures with markers, so the "
+        "figure left this repo's scoring (excluded_reason=no_markers). The "
+        "ground truth itself was not found wrong; by the rule above an excluded "
+        "figure is no longer handed out as an oracle."
+    ),
+    ("22102", "21246"): (
+        "Removed 2026-10-03 (shipped 2026-09-11 as a sibling of 22102 3a). "
+        'Same reason as 22102/21245: "line_only", no markers, '
+        "excluded_reason=no_markers."
     ),
 }
 

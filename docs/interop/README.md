@@ -32,6 +32,12 @@
 y の期待値だけが変わる。差し替え版は `/var/tmp/real-chart-bench-e2e-fixtures-2026-10-02/`。
 連絡文 `starrydata3-notice-2026-10-01.md` に追記済み(10-01 の件と合わせて1通で伝える)。
 
+**2026-10-03 改訂(20枚 → 18枚)**: `22102/21245` と `22102/21246` を外した。どちらも `line_only`
+(マーカーのない線だけの図)。本リポジトリは評価を点単位(マーカー位置)に切り替え、オーナー判断で
+マーカーのある図だけを採点対象にした(`excluded_reason: no_markers`)ため、上の規則でオラクルからも外れる。
+正解データの誤りではない。残り18枚は 10-02 版と同一。連絡文は `starrydata3-notice-2026-10-03.md`、
+差し替え版は `/var/tmp/real-chart-bench-e2e-fixtures-2026-10-03/`。**オーナー経由で先方に連絡する**。
+
 **生成**: `python scripts/export/build_starrydata3_e2e_fixtures.py <出力先>`(再現可能)。
 committed な束の陳腐化は `tests/adapter/test_starrydata3_e2e_fixture_bundle.py` が検知する
 (軸座標が再修正されたらCIで落ちる)。

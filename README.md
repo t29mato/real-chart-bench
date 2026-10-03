@@ -39,13 +39,13 @@ end-to-end chart-understanding score.
 | Layer | State |
 |---|---|
 | **Ground-truth manifest (v0)** | Live. 603 CC BY 4.0 papers, 2,555 figures, 10,057 digitized curves — [`data/manifest/v0/`](data/manifest/v0/) |
-| **Verified real-image pairs** | Live. **100 figures**, all CC BY. `dataset_version v0-eval-pilot-n100`. Registry holds 139 VERIFIED entries total; entries with `excluded_reason` are not scored. See [`data/verified_pairs/registry.json`](data/verified_pairs/registry.json). |
-| **Evaluation harness** | Live. Pure-domain metrics (`src/real_chart_bench/domain/metrics.py`, `matching.py`, `evaluation.py`) with normalized y-distance, span floor 5% (design §7.66) — see [How the score is computed](#how-the-score-is-computed) + a naive-CV baseline. |
+| **Verified real-image pairs** | Live. **97 figures**, all CC BY, every one drawn with markers (the 3 line-only figures were excluded on 2026-10-03, `excluded_reason: no_markers`). `dataset_version v0-eval-pilot-n97`. Registry holds 139 VERIFIED entries total; entries with `excluded_reason` are not scored. See [`data/verified_pairs/registry.json`](data/verified_pairs/registry.json). |
+| **Evaluation harness** | Live. Pure-domain metrics (`src/real_chart_bench/domain/metrics.py`, `matching.py`, `evaluation.py`) ranked by the point-level F1 (`domain/point_metrics.py`, design §7.67); the curve-distance `summary_score` (normalized y-distance, span floor 5%, design §7.66) is kept as a reference column — see [How the score is computed](#how-the-score-is-computed) + a naive-CV baseline. |
 | **Leaderboard** | Live, auto-deployed from `results/*.json` on every push — <https://t29mato.github.io/real-chart-bench/>. Ranks are scoped to a `dataset_version`: a score is only comparable to another score on the *same* figure set. |
-| **LineFormer** | **n=100, v0 task:** 0.7462 — [`results/lineformer-pretrained-n100.json`](results/lineformer-pretrained-n100.json). Ties naive-CV on the mean. Tick-calibrated mapping scores 0.8739 on 47 figures ([`results/lineformer-pretrained-tickcal.json`](results/lineformer-pretrained-tickcal.json)) vs. 0.7302 standard. Local RTX 4090. |
-| **Classic-CV baselines** | **n=100, v0 task:** naive-CV (hue) 0.7366 — [`results/naive-cv-v0.json`](results/naive-cv-v0.json); achromatic-CV (luminance) 0.6650 — [`results/achromatic-cv-v0.json`](results/achromatic-cv-v0.json). |
+| **LineFormer** | **n=97, v0 task:** point F1 0.011 (recall 0.169, precision 0.006), summary_score 0.7462 — [`results/lineformer-pretrained-n97.json`](results/lineformer-pretrained-n97.json). It outputs each line as a dense run of pixels, so it never singles out the markers: precision, and with it F1, is near zero. Tick-calibrated mapping on 45 figures ([`results/lineformer-pretrained-tickcal.json`](results/lineformer-pretrained-tickcal.json)): point recall 0.860 (vs. 0.162 standard) but F1 still 0.039; summary_score 0.8725 vs. 0.7289. Local RTX 4090. |
+| **Classic-CV baselines** | **n=97, v0 task:** naive-CV (hue) point F1 0.024 (summary_score 0.7430) — [`results/naive-cv-v0.json`](results/naive-cv-v0.json); achromatic-CV (luminance) point F1 0.019 (summary_score 0.6634) — [`results/achromatic-cv-v0.json`](results/achromatic-cv-v0.json). Like LineFormer, both trace lines as dense pixels rather than locating markers. |
 | **Human ceiling** | Harness live, awaiting data. Independent re-digitizations of a stratified 25-figure subset get scored with the *same* metric as models, so the ground truth's own error bar sits on the leaderboard next to every model score. Registered as a pending row until real annotations exist — see `data/human_ceiling/FORMAT.md`. |
-| **LLM baselines (Claude)** | **n=100, v0 task (axis calibration given, 2026-10-01):** Claude Sonnet 5.5 0.9833 — [`results/claude-sonnet-5-5-v0-r2.json`](results/claude-sonnet-5-5-v0-r2.json); Claude Fable 5.1 0.9788 — [`results/claude-fable-5-1-v0-r2.json`](results/claude-fable-5-1-v0-r2.json); Claude Opus 5.5 0.9698 — [`results/claude-opus-5-5-v0-r2.json`](results/claude-opus-5-5-v0-r2.json); Claude Haiku 4.5 0.5988 — [`results/claude-haiku-4-5-v0-r2.json`](results/claude-haiku-4-5-v0-r2.json). Previous versions (September, same figures): Opus 5 0.9848, Fable 5 0.9845, Sonnet 5 0.9644, Haiku 0.5534 — [`results/claude-*-v0-full.json`](results/claude-sonnet-5-v0-full.json). **No-axis condition** (calibration withheld, n=100): Opus 5.5 0.9849, Sonnet 5.5 0.9837, Fable 5.1 0.9820, Haiku 4.5 0.2788 — [`results/claude-*-v0-r2-noaxis.json`](results/claude-sonnet-5-5-v0-r2-noaxis.json). |
+| **LLM baselines (Claude)** | **n=97, v0 task (axis calibration given, 2026-10-01 run), point F1 at τ=0.02 (macro) / summary_score:** Claude Opus 5.5 0.894 / 0.9691 — [`results/claude-opus-5-5-v0-r2.json`](results/claude-opus-5-5-v0-r2.json); Claude Fable 5.1 0.862 / 0.9786 — [`results/claude-fable-5-1-v0-r2.json`](results/claude-fable-5-1-v0-r2.json); Claude Sonnet 5.5 0.849 / 0.9831 — [`results/claude-sonnet-5-5-v0-r2.json`](results/claude-sonnet-5-5-v0-r2.json); Claude Haiku 4.5 0.039 / 0.6031 — [`results/claude-haiku-4-5-v0-r2.json`](results/claude-haiku-4-5-v0-r2.json). Previous versions (September, same figures): Fable 5 0.856 / 0.9843, Opus 5 0.827 / 0.9847, Sonnet 5 0.586 / 0.9638, Haiku 4.5 0.038 / 0.5597 — [`results/claude-*-v0-full.json`](results/claude-sonnet-5-v0-full.json). **No-axis condition** (calibration withheld, n=97): Opus 5.5 0.923 / 0.9848, Fable 5.1 0.873 / 0.9818, Sonnet 5.5 0.860 / 0.9838, Haiku 4.5 0.029 / 0.2767 — [`results/claude-*-v0-r2-noaxis.json`](results/claude-sonnet-5-5-v0-r2-noaxis.json). The point metric reorders the top three: on summary_score Sonnet 5.5 led and Opus 5.5 was third. |
 | **Results explorer** | [`scripts/viz/`](scripts/viz/) (export_results_explorer.py + results_explorer.html): render every model's predicted curves overlaid on source images. |
 
 ## Evaluate your own model
@@ -98,23 +98,36 @@ a `ModelRunnerPort` into `evaluate_model_on_dataset()` against the verified
 real-image pairs + synthetic fixtures, and write a `results/<model_id>.json`
 in the schema the leaderboard reads (see any existing `results/*.json` for
 the exact shape — `model_id`, `model_name`, `dataset_version`, `run_at`,
-`n_figures`, `mean_summary_score`, `per_figure`).
+`n_figures`, `mean_summary_score`, `point_metrics`, `per_figure`).
 
 ### How the score is computed
 
-The primary v0 metric (`NormalizedYDistanceMetric`,
-`src/real_chart_bench/domain/metrics.py`) linearly interpolates your
+**Primary: point-level F1** (`evaluate_points`,
+`src/real_chart_bench/domain/point_metrics.py`, design §7.67). Human
+digitizers record markers, so ground-truth points are marker positions, and
+the question is whether a method found those points — not whether it traced
+a line near them. Both predicted and ground-truth points are normalized by the
+axis range (log axes in log10 space). Within each (predicted series,
+ground-truth series) pair, points are matched one to one (Hungarian) and a
+pair counts when its Euclidean distance is ≤ τ; series are assigned one to one
+on `1 − F1_τ`. Unassigned ground-truth series are missed points, unassigned
+predicted series are extra points. Per figure this gives `point_recall`,
+`point_precision`, `point_f1` and `point_loc_error` (mean distance of matched
+points). The leaderboard ranks by **macro `point_f1` at τ = 0.02** (mean over
+figures); τ = 0.01 / 0.05 and micro (pooled-point) values are in each results
+file's `point_metrics` block, and every figure's counts are in
+`per_figure[].point`. See `tests/domain/test_point_metrics.py` for the exact
+boundary-case behavior.
+
+**Reference: `summary_score`** (`NormalizedYDistanceMetric`,
+`src/real_chart_bench/domain/metrics.py`). It linearly interpolates the
 predicted curve at each ground-truth x-coordinate and normalizes the y-error
-by the ground-truth y-range (a ChartOCR/LineFormer-style approach — see
-design §3.1's comparison table). Predicted vs. ground-truth curves within a
-figure are matched via the Hungarian algorithm
-(`HungarianCurveMatcher`, `domain/matching.py`); an unmatched ground-truth
-curve counts as a miss, an unmatched predicted curve as a false positive. A
-figure's `summary_score` combines match rate, mean curve distance, and mean
-coverage ratio with equal weights (design §7.4). See
-`tests/domain/test_normalized_y_distance_metric.py` and
-`tests/domain/test_hungarian_curve_matcher.py` for the exact boundary-case
-behavior (zero overlap, degenerate ranges, etc.).
+by the ground-truth y-range (floored at 5% of a linear y axis, design §7.66);
+curves are matched via the Hungarian algorithm (`HungarianCurveMatcher`,
+`domain/matching.py`), and a figure's `summary_score` combines match rate,
+mean curve distance and mean coverage ratio with equal weights (design §7.4).
+It is kept so every earlier row stays comparable, but it rewards a line that
+merely passes near the markers, so it no longer decides the ranking.
 
 ### Add your results to the leaderboard
 
