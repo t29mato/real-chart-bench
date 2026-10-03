@@ -116,3 +116,66 @@ def test_evaluate_uses_a_per_task_matcher_when_given_one():
     (result,) = evaluate_model_on_dataset(model, items, matcher_for=matcher_for_task)
 
     assert result.evaluation.mean_curve_distance == pytest.approx(0.15)
+
+
+# --- point metrics (design §7.67) -------------------------------------------
+
+
+def test_every_figure_gets_point_metrics_at_the_three_taus():
+    curve = _curve([1, 2, 3])
+    task = ExtractionTask(image_bytes=b"img1", x_range=(0, 2), y_range=(1, 3))
+    items = [DatasetItem(figure_id="f1", task=task, ground_truth=[curve])]
+
+    (result,) = evaluate_model_on_dataset(_PerfectModel({b"img1": [curve]}), items,
+                                          matcher=_matcher())
+
+    assert [p.tau for p in result.points] == [0.01, 0.02, 0.05]
+    assert all(p.point_f1 == 1.0 for p in result.points)
+    assert all(p.norm == "euclidean" for p in result.points)
+
+
+def test_point_metrics_normalize_by_the_task_axis_range():
+    from real_chart_bench.domain.curve import ScaleType
+
+    gt = Curve(x_values=(10.0,), y_values=(100.0,))
+    pred = Curve(x_values=(10.0,), y_values=(10 ** 2.06,))  # 0.015 of a 4-decade axis
+    task = ExtractionTask(
+        image_bytes=b"img1", x_range=(0, 20), y_range=(1, 1e4), y_scale=ScaleType.LOG
+    )
+    items = [DatasetItem(figure_id="f1", task=task, ground_truth=[gt])]
+
+    (result,) = evaluate_model_on_dataset(_PerfectModel({b"img1": [pred]}), items,
+                                          matcher=_matcher())
+
+    by_tau = {p.tau: p for p in result.points}
+    assert by_tau[0.01].n_matched == 0
+    assert by_tau[0.02].n_matched == 1
+
+
+def test_failed_extraction_misses_every_point():
+    class _BrokenModel:
+        def extract(self, task):
+            raise RuntimeError("boom")
+
+    curve = _curve([1, 2, 3])
+    task = ExtractionTask(image_bytes=b"img1", x_range=(0, 2), y_range=(1, 3))
+    items = [DatasetItem(figure_id="f1", task=task, ground_truth=[curve])]
+
+    (result,) = evaluate_model_on_dataset(_BrokenModel(), items, matcher=_matcher())
+
+    assert result.error is not None
+    assert all(p.point_recall == 0.0 and p.point_f1 == 0.0 for p in result.points)
+    assert all(p.n_ground_truth == 3 for p in result.points)
+
+
+def test_point_taus_and_norm_are_configurable():
+    curve = _curve([1, 2, 3])
+    task = ExtractionTask(image_bytes=b"img1", x_range=(0, 2), y_range=(1, 3))
+    items = [DatasetItem(figure_id="f1", task=task, ground_truth=[curve])]
+
+    (result,) = evaluate_model_on_dataset(
+        _PerfectModel({b"img1": [curve]}), items, matcher=_matcher(),
+        point_taus=(0.03,), point_norm="chebyshev",
+    )
+
+    assert [(p.tau, p.norm) for p in result.points] == [(0.03, "chebyshev")]

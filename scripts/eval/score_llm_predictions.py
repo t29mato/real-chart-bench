@@ -33,12 +33,18 @@ from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
+    PRIMARY_POINT_TAU,
     DatasetItem,
     evaluate_model_on_dataset,
     matcher_for_task,
 )
 from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
+from real_chart_bench.usecase.result_payload import (  # noqa: E402
+    POINT_METRIC_LABEL,
+    aggregate_point_metrics,
+    figure_result_row,
+)
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 RESULTS = REPO / "results"
@@ -379,14 +385,7 @@ def main() -> None:
         results = evaluate_model_on_dataset(
             ReplayRunner(preds, order), items, matcher_for=matcher_for_task
         )
-        per_figure = [{
-            "figure_id": r.figure_id,
-            "summary_score": r.evaluation.summary_score,
-            "match_rate": r.evaluation.match_rate,
-            "mean_curve_distance": r.evaluation.mean_curve_distance,
-            "mean_coverage_ratio": r.evaluation.mean_coverage_ratio,
-            "error": r.error,
-        } for r in results]
+        per_figure = [figure_result_row(r) for r in results]
         payload = {
             "model_id": model_id + cond["suffix"],
             "model_name": model_name + cond["name_suffix"],
@@ -402,7 +401,10 @@ def main() -> None:
             "run_at": datetime.now(UTC).isoformat(),
             "n_figures": len(per_figure),
             "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
+            "point_metric": POINT_METRIC_LABEL,
             "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
+            # design 7.67: the primary metric; summary_score is the reference
+            "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
             "per_figure": per_figure,
             "agent_effort": EFFORT.get(model_id) if name == "calibrated" else None,
             "condition": cond["label"],

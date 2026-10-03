@@ -193,3 +193,60 @@ class TestGroupingByDatasetVersion:
         assert [r.model_id for r in rows] == ["labeled", "unlabeled", "pending-model"]
         assert rows[1].rank == 1
         assert rows[1].dataset_version is None
+
+
+# --- design §7.67: point_f1 is the ranking metric ---------------------------
+
+
+def _with_points(result, f1, recall=0.5, precision=0.5, loc=0.01):
+    cell = {
+        "point_recall": recall,
+        "point_precision": precision,
+        "point_f1": f1,
+        "point_loc_error": loc,
+        "n_figures_with_matches": 1,
+    }
+    result["point_metrics"] = {
+        "primary_tau": 0.02,
+        "norm": "euclidean",
+        "n_figures": result["n_figures"],
+        "by_tau": {"0.02": {"macro": cell, "micro": dict(cell)}},
+    }
+    return result
+
+
+def test_rows_with_point_metrics_rank_by_point_f1_not_summary_score():
+    results = [
+        _with_points(_result("high-summary", 0.99), f1=0.40),
+        _with_points(_result("low-summary", 0.70), f1=0.80),
+    ]
+
+    rows = build_leaderboard_rows(results)
+
+    assert [r.model_id for r in rows] == ["low-summary", "high-summary"]
+    assert rows[0].point_f1 == 0.80
+    assert rows[0].mean_summary_score == 0.70
+
+
+def test_row_carries_the_primary_point_columns():
+    rows = build_leaderboard_rows(
+        [_with_points(_result("a", 0.9), f1=0.6, recall=0.7, precision=0.55, loc=0.008)]
+    )
+
+    r = rows[0]
+    assert (r.point_f1, r.point_recall, r.point_precision, r.point_loc_error) == (
+        0.6,
+        0.7,
+        0.55,
+        0.008,
+    )
+    assert r.point_tau == 0.02
+
+
+def test_rows_without_point_metrics_rank_after_point_scored_rows_in_their_group():
+    results = [_result("legacy", 0.99), _with_points(_result("new", 0.5), f1=0.1)]
+
+    rows = build_leaderboard_rows(results)
+
+    assert [r.model_id for r in rows] == ["new", "legacy"]
+    assert rows[1].point_f1 is None

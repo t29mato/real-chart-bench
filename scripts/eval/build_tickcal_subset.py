@@ -37,10 +37,16 @@ from real_chart_bench.adapter.lineformer_model_runner import (  # noqa: E402
 from real_chart_bench.adapter.tick_plot_areas import load_tick_plot_areas  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
+    PRIMARY_POINT_TAU,
     evaluate_model_on_dataset,
     matcher_for_task,
 )
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
+from real_chart_bench.usecase.result_payload import (  # noqa: E402
+    POINT_METRIC_LABEL,
+    aggregate_point_metrics,
+    figure_result_row,
+)
 
 RESULTS = REPO / "results"
 SUFFIX = "-tickcal-subset"
@@ -67,17 +73,7 @@ def main() -> None:
     }
     runner = PrecomputedLineFormerModelRunner(predictions, plot_areas=plot_areas)
     results = evaluate_model_on_dataset(runner, subset, matcher_for=matcher_for_task)
-    per_figure = [
-        {
-            "figure_id": r.figure_id,
-            "summary_score": r.evaluation.summary_score,
-            "match_rate": r.evaluation.match_rate,
-            "mean_curve_distance": r.evaluation.mean_curve_distance,
-            "mean_coverage_ratio": r.evaluation.mean_coverage_ratio,
-            "error": r.error,
-        }
-        for r in results
-    ]
+    per_figure = [figure_result_row(r) for r in results]
     tickcal = {
         "model_id": "lineformer-pretrained-tickcal",
         "model_name": "LineFormer (pretrained) + 目盛位置(参考: 軸情報を外部から付与)",
@@ -85,7 +81,9 @@ def main() -> None:
         "run_at": datetime.now(UTC).isoformat(),
         "n_figures": len(per_figure),
         "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
+        "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
         "metric": METRIC_LABEL,
+        "point_metric": POINT_METRIC_LABEL,
         "raw_predictions": str(raw.relative_to(REPO)),
         "note": (
             "Same saved LineFormer pixels as the main row, mapped through the owner-reviewed "
@@ -99,7 +97,9 @@ def main() -> None:
     (RESULTS / "lineformer-pretrained-tickcal.json").write_text(
         json.dumps(tickcal, indent=2) + "\n"
     )
-    print(f"tickcal: {tickcal['mean_summary_score']:.4f} on {len(per_figure)} figures ({version})")
+    print(
+        f"tickcal: {tickcal['mean_summary_score']:.4f} on {len(per_figure)} figures ({version})"
+    )
 
     for path in sorted(RESULTS.glob("*.json")):
         if path.stem.endswith(SUFFIX):
@@ -118,7 +118,9 @@ def main() -> None:
             "run_at": row["run_at"],
             "n_figures": len(kept),
             "mean_summary_score": sum(p["summary_score"] for p in kept) / len(kept),
+            "point_metrics": aggregate_point_metrics(kept, PRIMARY_POINT_TAU),
             "metric": row.get("metric"),
+            "point_metric": row.get("point_metric"),
             "derived_from": path.name,
             "per_figure": kept,
         }

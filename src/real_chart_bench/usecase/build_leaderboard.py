@@ -43,6 +43,13 @@ gets grouped under the key None, ranked internally like any other group,
 and that group is always ordered after every labeled group (an unlabeled,
 untraceable figure set must never visually outrank a labeled one) but
 still before any pending row.
+
+Within a group, rows are ranked by the point-level F1 (design §7.67:
+macro point_f1 at the payload's primary tau), the benchmark's primary
+metric since 2026-10-03; mean_summary_score (the curve distance) is carried
+as a reference column. A row whose file has no point_metrics (scored before
+§7.67, or derived from such a file) ranks after every point-scored row of
+its group, by mean_summary_score -- it cannot be placed on the point scale.
 """
 
 from __future__ import annotations
@@ -64,14 +71,30 @@ class LeaderboardRow:
     dataset_version: str | None
     run_at: str | None
     note: str | None = None
+    # design §7.67: macro values at the primary tau; None without point_metrics
+    point_f1: float | None = None
+    point_recall: float | None = None
+    point_precision: float | None = None
+    point_loc_error: float | None = None
+    point_tau: float | None = None
 
 
 def _is_pending(result: dict) -> bool:
     return result.get("status") == _PENDING_STATUS
 
 
-def _within_group_sort_key(result: dict) -> tuple[float, str]:
-    return (-result["mean_summary_score"], result["model_id"])
+def _primary_point_cell(result: dict) -> dict | None:
+    block = result.get("point_metrics")
+    if not block:
+        return None
+    return block["by_tau"][f"{block['primary_tau']:g}"]["macro"]
+
+
+def _within_group_sort_key(result: dict) -> tuple:
+    cell = _primary_point_cell(result)
+    if cell is None:
+        return (1, 0.0, -result["mean_summary_score"], result["model_id"])
+    return (0, -cell["point_f1"], -result["mean_summary_score"], result["model_id"])
 
 
 def _group_sort_key(group_key: str | None, groups: dict[str | None, list[dict]]):
@@ -82,6 +105,7 @@ def _group_sort_key(group_key: str | None, groups: dict[str | None, list[dict]])
 
 
 def _scored_row(result: dict, rank: int) -> LeaderboardRow:
+    cell = _primary_point_cell(result) or {}
     return LeaderboardRow(
         rank=rank,
         model_id=result["model_id"],
@@ -91,6 +115,11 @@ def _scored_row(result: dict, rank: int) -> LeaderboardRow:
         n_figures=result["n_figures"],
         dataset_version=result.get("dataset_version"),
         run_at=result["run_at"],
+        point_f1=cell.get("point_f1"),
+        point_recall=cell.get("point_recall"),
+        point_precision=cell.get("point_precision"),
+        point_loc_error=cell.get("point_loc_error"),
+        point_tau=result["point_metrics"]["primary_tau"] if cell else None,
     )
 
 

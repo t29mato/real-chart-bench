@@ -30,6 +30,9 @@ class CategoryBreakdown:
     category: str
     n_figures: int
     mean_summary_score: float
+    # design §7.67: mean per-figure point_f1 at the result's primary tau;
+    # None when the result has no point metrics
+    mean_point_f1: float | None = None
 
 
 def categorize_figure(figure_id: str, pairings_by_figure_id: dict[str, VerifiedPairing]) -> str:
@@ -53,19 +56,27 @@ def build_model_breakdown(
 ) -> list[CategoryBreakdown]:
     """`result` is one results/*.json payload (pending-run payloads have no
     "per_figure" key and correctly yield an empty breakdown)."""
-    buckets: dict[str, list[float]] = {}
+    block = result.get("point_metrics")
+    tau_key = f"{block['primary_tau']:g}" if block else None
+    buckets: dict[str, list[dict]] = {}
     for pf in result.get("per_figure", []):
         category = categorize_figure(pf["figure_id"], pairings_by_figure_id)
-        buckets.setdefault(category, []).append(pf["summary_score"])
+        buckets.setdefault(category, []).append(pf)
+
+    def point_f1(rows: list[dict]) -> float | None:
+        if tau_key is None or any("point" not in r for r in rows):
+            return None
+        return sum(r["point"]["by_tau"][tau_key]["point_f1"] for r in rows) / len(rows)
 
     return sorted(
         (
             CategoryBreakdown(
                 category=category,
-                n_figures=len(scores),
-                mean_summary_score=sum(scores) / len(scores),
+                n_figures=len(rows),
+                mean_summary_score=sum(r["summary_score"] for r in rows) / len(rows),
+                mean_point_f1=point_f1(rows),
             )
-            for category, scores in buckets.items()
+            for category, rows in buckets.items()
         ),
         key=lambda b: b.category,
     )

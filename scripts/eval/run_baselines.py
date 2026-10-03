@@ -51,12 +51,18 @@ from real_chart_bench.adapter.verified_pairing_registry import load_registry  # 
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
 from real_chart_bench.domain.verified_pairing import VerifiedPairing  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
+    PRIMARY_POINT_TAU,
     DatasetItem,
     evaluate_model_on_dataset,
     matcher_for_task,
 )
 from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
+from real_chart_bench.usecase.result_payload import (  # noqa: E402
+    POINT_METRIC_LABEL,
+    aggregate_point_metrics,
+    figure_result_row,
+)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RESULTS_DIR = REPO_ROOT / "results"
@@ -216,17 +222,7 @@ def run(model_id: str, model_name: str, model) -> dict:
     items, n_real = build_dataset()
     results = evaluate_model_on_dataset(model, items, matcher_for=matcher_for_task)
 
-    per_figure = [
-        {
-            "figure_id": r.figure_id,
-            "summary_score": r.evaluation.summary_score,
-            "match_rate": r.evaluation.match_rate,
-            "mean_curve_distance": r.evaluation.mean_curve_distance,
-            "mean_coverage_ratio": r.evaluation.mean_coverage_ratio,
-            "error": r.error,
-        }
-        for r in results
-    ]
+    per_figure = [figure_result_row(r) for r in results]
     # The headline mean must cover the real figures only. The 3 synthetic
     # fixtures exist to exercise the harness, and folding them into
     # mean_summary_score both misreports the number and -- for a benchmark
@@ -248,7 +244,10 @@ def run(model_id: str, model_name: str, model) -> dict:
         "run_at": datetime.now(UTC).isoformat(),
         "n_figures": len(real_rows),
         "metric": METRIC_LABEL,
+        "point_metric": POINT_METRIC_LABEL,
         "mean_summary_score": mean_score,
+        # design 7.67: the primary metric; summary_score above is the reference
+        "point_metrics": aggregate_point_metrics(real_rows, PRIMARY_POINT_TAU),
         "n_synthetic_fixtures": len(synthetic_rows),
         "mean_synthetic_score": (
             sum(p["summary_score"] for p in synthetic_rows) / len(synthetic_rows)
@@ -267,6 +266,7 @@ def run(model_id: str, model_name: str, model) -> dict:
 
 
 METRIC_LABEL = "normalized-y-distance, span floor 5% of linear y axis (design 7.66)"
+
 
 NAIVE_CV_RESULTS_PATH = RESULTS_DIR / "naive-cv-v0.json"
 # The n42 LineFormer run and the subsets built to compare against it are
@@ -335,6 +335,7 @@ def _achromatic_vs_hue_zero_subset(achromatic_payload: dict) -> dict | None:
         "run_at": achromatic_payload["run_at"],
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
+        "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
         "per_figure": per_figure,
         "excluded_figure_ids": missing,
         "comparison_note": (
@@ -419,6 +420,7 @@ def _lineformer_comparable_subset(full_payload: dict) -> dict | None:
         "run_at": full_payload["run_at"],
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
+        "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
         "per_figure": per_figure,
         "excluded_figure_ids": missing,
         "comparison_note": (
@@ -469,6 +471,7 @@ def _lineformer_recomputed_subset(subset_payload: dict) -> dict | None:
         "run_at": lineformer["run_at"],
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
+        "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
         "per_figure": per_figure,
         "excluded_figure_ids": subset_payload["excluded_figure_ids"],
         "comparison_note": (

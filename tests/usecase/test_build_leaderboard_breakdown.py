@@ -121,3 +121,25 @@ class TestBuildModelBreakdown:
 
     def test_empty_per_figure_yields_empty_breakdown(self):
         assert build_model_breakdown(_result([]), {}) == []
+
+
+def test_breakdown_carries_mean_point_f1_at_the_primary_tau_when_present():
+    def with_point(row, f1):
+        row["point"] = {"norm": "euclidean", "by_tau": {"0.02": {"point_f1": f1}}}
+        return row
+
+    pairings = {"1-a": _pairing("1", "a"), "2-b": _pairing("2", "b")}
+    result = _result([with_point(_figure("1-a", 1.0), 0.8), with_point(_figure("2-b", 0.5), 0.4)])
+    result["point_metrics"] = {"primary_tau": 0.02}
+
+    (linear,) = build_model_breakdown(result, pairings)
+
+    assert abs(linear.mean_point_f1 - 0.6) < 1e-12
+
+
+def test_breakdown_point_f1_is_none_without_point_metrics():
+    pairings = {"1-a": _pairing("1", "a")}
+
+    (linear,) = build_model_breakdown(_result([_figure("1-a", 1.0)]), pairings)
+
+    assert linear.mean_point_f1 is None

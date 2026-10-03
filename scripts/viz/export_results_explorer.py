@@ -38,7 +38,13 @@ from real_chart_bench.adapter.verified_pairing_registry import load_registry  # 
 from real_chart_bench.domain.curve import Curve  # noqa: E402
 from real_chart_bench.domain.evaluation import evaluate_figure  # noqa: E402
 from real_chart_bench.domain.pixel_calibration import PixelCalibration  # noqa: E402
-from real_chart_bench.usecase.evaluate_dataset import matcher_for_task  # noqa: E402
+from real_chart_bench.domain.point_metrics import evaluate_points  # noqa: E402
+from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
+    POINT_NORM,
+    PRIMARY_POINT_TAU,
+    axis_frame_for_task,
+    matcher_for_task,
+)
 
 MAX_POINTS = 400  # per curve, for display only; scoring uses every point
 
@@ -196,6 +202,15 @@ def main() -> None:
             entry, ev = _package(pred, gt, matcher_for_task(task))
             if pub and abs(ev.summary_score - pub["summary_score"]) > 1e-6:
                 mismatches.append((mid, fid, ev.summary_score, pub["summary_score"]))
+            # design 7.67: the primary metric is checked the same way
+            pt = evaluate_points(
+                pred, gt, axis_frame_for_task(task), PRIMARY_POINT_TAU, POINT_NORM
+            )
+            pub_pt = _primary_point(pub)
+            if pub and (pub_pt is None or abs(pt.point_f1 - pub_pt["point_f1"]) > 1e-9):
+                mismatches.append(
+                    (mid, fid, "point_f1", pt.point_f1, pub_pt and pub_pt["point_f1"])
+                )
             fig["models"][mid] = {**entry, **_scores(pub)}
 
         # Exploratory, not a leaderboard row: LineFormer's same raw pixels,
@@ -222,9 +237,15 @@ def main() -> None:
                         )
                     )
             entry, ev = _package(pred, gt, matcher_for_task(task))
+            pt = evaluate_points(
+                pred, gt, axis_frame_for_task(task), PRIMARY_POINT_TAU, POINT_NORM
+            )
             fig["models"]["lineformer-axis"] = {
                 **entry,
                 "score": ev.summary_score,
+                "point_f1": pt.point_f1,
+                "point_recall": pt.point_recall,
+                "point_precision": pt.point_precision,
                 "match_rate": ev.match_rate,
                 "dist": ev.mean_curve_distance,
                 "cov": ev.mean_coverage_ratio,
@@ -246,6 +267,7 @@ def main() -> None:
                 "name": name,
                 "kind": kind,
                 "mean": res["mean_summary_score"],
+                **_primary_macro(res),
                 "n": len(rows),
                 **{
                     k: sum(r[k] for r in rows) / len(rows)
@@ -261,6 +283,10 @@ def main() -> None:
             "kind": "exploratory",
             "mean": sum(f["models"]["lineformer-axis"]["score"] for f in axis_figs)
             / len(axis_figs),
+            **{
+                k: sum(f["models"]["lineformer-axis"][k] for f in axis_figs) / len(axis_figs)
+                for k in ("point_f1", "point_recall", "point_precision")
+            },
             "n": len(axis_figs),
             **{
                 k: sum(f["models"]["lineformer-axis"][v] for f in axis_figs) / len(axis_figs)
@@ -279,7 +305,8 @@ def main() -> None:
     n_axis = sum(f["axis_px"] is not None for f in figures)
     print(
         f"wrote {args.out}/data.json ({size:.1f} MB): {len(figures)} figures, "
-        f"{n_axis} with usable axis pixel positions; all scores match results/*.json"
+        f"{n_axis} with usable axis pixel positions; all scores (summary_score and "
+        "point_f1) match results/*.json"
     )
 
 
@@ -310,10 +337,29 @@ def _package(pred, gt, matcher):
     return {"curves": curves, "error": None}, ev
 
 
+def _primary_point(pub: dict | None) -> dict | None:
+    """A published per_figure row's point metrics at the primary tau."""
+    if pub is None or "point" not in pub:
+        return None
+    return pub["point"]["by_tau"].get(f"{PRIMARY_POINT_TAU:g}")
+
+
+def _primary_macro(res: dict) -> dict:
+    block = res.get("point_metrics")
+    if not block:
+        return {}
+    macro = block["by_tau"][f"{block['primary_tau']:g}"]["macro"]
+    return {k: macro[k] for k in ("point_f1", "point_recall", "point_precision")}
+
+
 def _scores(pub: dict | None) -> dict:
     if pub is None:
         return {"score": None}
+    pt = _primary_point(pub) or {}
     return {
+        "point_f1": pt.get("point_f1"),
+        "point_recall": pt.get("point_recall"),
+        "point_precision": pt.get("point_precision"),
         "score": pub["summary_score"],
         "match_rate": pub["match_rate"],
         "dist": pub["mean_curve_distance"],
