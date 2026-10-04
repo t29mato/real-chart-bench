@@ -1,4 +1,7 @@
-from real_chart_bench.usecase.build_leaderboard import build_leaderboard_rows
+from real_chart_bench.usecase.build_leaderboard import (
+    build_dense_marker_rows,
+    build_leaderboard_rows,
+)
 
 
 def _result(model_id, score, n=4, dataset_version="v0-eval-pilot-2026-08-16"):
@@ -250,3 +253,78 @@ def test_rows_without_point_metrics_rank_after_point_scored_rows_in_their_group(
 
     assert [r.model_id for r in rows] == ["new", "legacy"]
     assert rows[1].point_f1 is None
+
+
+# --- design §7.72: dense-marker figures get their own curve-distance table ---
+
+
+def _with_dense(result, n_point, n_dense, dense_score, match=1.0, dist=0.1, cov=0.9):
+    result["point_metrics"]["n_figures"] = n_point
+    result["dense_marker_metrics"] = {
+        "criterion": "spacing < 2 tau",
+        "n_figures": n_dense,
+        "mean_summary_score": dense_score,
+        "mean_match_rate": match,
+        "mean_curve_distance": dist,
+        "mean_coverage_ratio": cov,
+    }
+    return result
+
+
+def test_main_row_carries_the_point_figure_count():
+    rows = build_leaderboard_rows(
+        [_with_dense(_with_points(_result("a", 0.9, n=10), f1=0.6), 8, 2, 0.7)]
+    )
+
+    assert rows[0].n_figures == 10
+    assert rows[0].point_n_figures == 8
+
+
+def test_point_figure_count_is_none_without_point_metrics():
+    assert build_leaderboard_rows([_result("legacy", 0.9)])[0].point_n_figures is None
+
+
+def test_dense_rows_rank_by_the_dense_summary_score_not_point_f1():
+    results = [
+        _with_dense(_with_points(_result("pointy", 0.9, n=10), f1=0.9), 8, 2, 0.5),
+        _with_dense(_with_points(_result("curvy", 0.8, n=10), f1=0.1), 8, 2, 0.95),
+    ]
+
+    rows = build_dense_marker_rows(results)
+
+    assert [r.model_id for r in rows] == ["curvy", "pointy"]
+    assert [r.rank for r in rows] == [1, 2]
+    assert rows[0].mean_summary_score == 0.95
+    assert rows[0].n_figures == 2
+    assert (rows[0].mean_match_rate, rows[0].mean_curve_distance, rows[0].mean_coverage_ratio) == (
+        1.0,
+        0.1,
+        0.9,
+    )
+
+
+def test_dense_rows_rank_within_each_dataset_version():
+    results = [
+        _with_dense(_with_points(_result("a", 0.9, n=10, dataset_version="big"), 0.5), 8, 2, 0.4),
+        _with_dense(_with_points(_result("b", 0.9, n=4, dataset_version="small"), 0.5), 3, 1, 0.9),
+        _with_dense(_with_points(_result("c", 0.9, n=10, dataset_version="big"), 0.5), 8, 2, 0.6),
+    ]
+
+    rows = build_dense_marker_rows(results)
+
+    assert [(r.dataset_version, r.model_id, r.rank) for r in rows] == [
+        ("big", "c", 1),
+        ("big", "a", 2),
+        ("small", "b", 1),
+    ]
+
+
+def test_dense_rows_skip_results_without_dense_figures_or_the_block():
+    results = [
+        _with_dense(_with_points(_result("none-dense", 0.9), f1=0.5), 4, 0, None),
+        _with_points(_result("pre-7-72", 0.9), f1=0.5),
+        _result("legacy", 0.9),
+        _pending("lf"),
+    ]
+
+    assert build_dense_marker_rows(results) == []

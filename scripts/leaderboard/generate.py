@@ -15,7 +15,10 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
-from real_chart_bench.usecase.build_leaderboard import build_leaderboard_rows  # noqa: E402
+from real_chart_bench.usecase.build_leaderboard import (  # noqa: E402
+    build_dense_marker_rows,
+    build_leaderboard_rows,
+)
 from real_chart_bench.usecase.build_leaderboard_breakdown import (  # noqa: E402
     build_model_breakdown,
 )
@@ -101,7 +104,15 @@ of matched points (normalized units) are shown alongside. <code>summary_score</c
 is the earlier curve-distance score, kept as a reference column so every earlier row
 stays comparable. &tau; = 0.01 / 0.05 and micro (pooled) values are in each
 results file's <code>point_metrics</code>.</p>
+<p><strong>Dense-marker figures (design &sect;7.72, since 2026-10-04):</strong> a figure
+whose ground-truth markers sit closer together than 2&tau; (median within-series
+nearest-neighbour spacing in the axis-normalized space &lt; 0.04) cannot be matched point
+by point. Those figures leave the point columns above (<em>#figures</em> shows
+point-scored / all) and are ranked separately by curve distance
+(<code>summary_score</code>) in the dense-marker tables below.
+<code>summary_score (ref.)</code> in the main table still covers every figure.</p>
 {sections}
+{dense_sections}
 {pending_section}
 {head_to_head}
 </body>
@@ -120,7 +131,8 @@ _SECTION_TEMPLATE = """<section class="dataset-section">
 <table>
 <thead><tr>
 <th>Rank</th><th>Model</th><th>Point F1</th><th>Point recall</th>
-<th>Point precision</th><th>Loc. error</th><th>summary_score (ref.)</th><th>#figures</th>
+<th>Point precision</th><th>Loc. error</th><th>summary_score (ref.)</th>
+<th>#figures (point / all)</th>
 <th>Run at (UTC)</th><th>Breakdown</th>
 </tr></thead>
 <tbody>
@@ -223,9 +235,56 @@ _ROW_TEMPLATE = (
     '<td class="score"><strong>{point_f1}</strong></td>'
     '<td class="score">{point_recall}</td><td class="score">{point_precision}</td>'
     '<td class="score">{point_loc_error}</td>'
-    '<td class="score">{score:.3f}</td><td>{n_figures}</td>'
+    '<td class="score">{score:.3f}</td><td>{point_n_figures} / {n_figures}</td>'
     "<td>{run_at}</td><td>{breakdown_html}</td></tr>"
 )
+
+# design §7.72: the dense-marker figures, ranked on curve distance
+_DENSE_SECTION_TEMPLATE = """<section class="dataset-section">
+<h2 class="dataset-section">Dense-marker figures (curve distance) -- {heading}</h2>
+<table>
+<thead><tr>
+<th>Rank</th><th>Model</th><th>summary_score</th><th>Match rate</th>
+<th>Curve distance</th><th>Coverage</th><th>#dense figures</th>
+</tr></thead>
+<tbody>
+{rows}
+</tbody>
+</table>
+</section>"""
+
+_DENSE_ROW_TEMPLATE = (
+    "<tr><td>{rank}</td><td>{model_name}</td>"
+    '<td class="score"><strong>{score}</strong></td>'
+    '<td class="score">{match}</td><td class="score">{dist}</td>'
+    '<td class="score">{cov}</td><td>{n_figures}</td></tr>'
+)
+
+
+def _render_dense_sections_html(dense_rows: list) -> str:
+    sections = []
+    for dataset_version, group_iter in itertools.groupby(
+        dense_rows, key=lambda r: r.dataset_version
+    ):
+        group_rows = list(group_iter)
+        rows_html = "\n".join(
+            _DENSE_ROW_TEMPLATE.format(
+                rank=r.rank,
+                model_name=r.model_name,
+                score=_fmt(r.mean_summary_score),
+                match=_fmt(r.mean_match_rate),
+                dist=_fmt(r.mean_curve_distance, 4),
+                cov=_fmt(r.mean_coverage_ratio),
+                n_figures=r.n_figures,
+            )
+            for r in group_rows
+        )
+        sections.append(
+            _DENSE_SECTION_TEMPLATE.format(
+                heading=f"<code>{dataset_version}</code>", rows=rows_html
+            )
+        )
+    return "\n".join(sections)
 
 
 def _fmt(value: float | None, digits: int = 3) -> str:
@@ -238,14 +297,15 @@ _PENDING_ROW_TEMPLATE = (
 
 _BREAKDOWN_TEMPLATE = (
     "<details><summary>by figure type</summary>"
-    "<table><thead><tr><th>Type</th><th>Point F1</th><th>summary_score</th><th>#</th>"
+    "<table><thead><tr><th>Type</th><th>Point F1</th><th>#point</th>"
+    "<th>summary_score</th><th>#</th>"
     "</tr></thead>"
     "<tbody>{category_rows}</tbody></table></details>"
 )
 
 _BREAKDOWN_CATEGORY_ROW_TEMPLATE = (
     "<tr><td>{label}</td>"
-    '<td class="score">{point_f1}</td>'
+    '<td class="score">{point_f1}</td><td>{n_point}</td>'
     '<td class="score">{score:.3f}</td><td>{n_figures}</td></tr>'
 )
 
@@ -261,6 +321,7 @@ def _render_breakdown_html(breakdown: list) -> str:
         _BREAKDOWN_CATEGORY_ROW_TEMPLATE.format(
             label=_CATEGORY_LABELS.get(b.category, b.category),
             point_f1=_fmt(b.mean_point_f1),
+            n_point="—" if b.n_point_figures is None else b.n_point_figures,
             score=b.mean_summary_score,
             n_figures=b.n_figures,
         )
@@ -307,6 +368,7 @@ def _render_sections_html(
                 point_loc_error=_fmt(r.point_loc_error, 4),
                 score=r.mean_summary_score,
                 n_figures=r.n_figures,
+                point_n_figures="—" if r.point_n_figures is None else r.point_n_figures,
                 run_at=r.run_at,
                 breakdown_html=_render_breakdown_html(
                     build_model_breakdown(results_by_model_id[r.model_id], pairings_by_figure_id)
@@ -373,6 +435,7 @@ def main() -> None:
     (SITE_DIR / "index.html").write_text(
         _TEMPLATE.format(
             sections=sections_html,
+            dense_sections=_render_dense_sections_html(build_dense_marker_rows(results)),
             pending_section=pending_section_html,
             latest_dataset_version=latest_dataset_version,
             latest_run_at=latest_run_at,

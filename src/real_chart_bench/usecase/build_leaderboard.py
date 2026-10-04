@@ -50,6 +50,11 @@ metric since 2026-10-03; mean_summary_score (the curve distance) is carried
 as a reference column. A row whose file has no point_metrics (scored before
 §7.67, or derived from such a file) ranks after every point-scored row of
 its group, by mean_summary_score -- it cannot be placed on the point scale.
+
+Since design §7.72 the point columns cover only the figures whose markers are
+not too dense for one-to-one matching (``point_n_figures``); the dense
+figures get a second table, ``build_dense_marker_rows``, ranked within each
+dataset_version by their mean summary_score (curve distance).
 """
 
 from __future__ import annotations
@@ -77,6 +82,25 @@ class LeaderboardRow:
     point_precision: float | None = None
     point_loc_error: float | None = None
     point_tau: float | None = None
+    # design §7.72: the (non-dense) figures the point columns cover
+    point_n_figures: int | None = None
+
+
+@dataclass(frozen=True)
+class DenseMarkerRow:
+    """One row of the dense-marker table (design §7.72): the curve-distance
+    means over a result's dense-marker figures."""
+
+    rank: int
+    model_id: str
+    model_name: str
+    dataset_version: str | None
+    n_figures: int
+    mean_summary_score: float
+    mean_match_rate: float | None
+    mean_curve_distance: float | None
+    mean_coverage_ratio: float | None
+    run_at: str | None
 
 
 def _is_pending(result: dict) -> bool:
@@ -120,6 +144,7 @@ def _scored_row(result: dict, rank: int) -> LeaderboardRow:
         point_precision=cell.get("point_precision"),
         point_loc_error=cell.get("point_loc_error"),
         point_tau=result["point_metrics"]["primary_tau"] if cell else None,
+        point_n_figures=result["point_metrics"]["n_figures"] if cell else None,
     )
 
 
@@ -137,22 +162,59 @@ def _pending_row(result: dict) -> LeaderboardRow:
     )
 
 
+def _ordered_groups(scored: list[dict]) -> list[tuple[str | None, list[dict]]]:
+    groups: dict[str | None, list[dict]] = {}
+    for r in scored:
+        groups.setdefault(r.get("dataset_version"), []).append(r)
+    return [(k, groups[k]) for k in sorted(groups, key=lambda k: _group_sort_key(k, groups))]
+
+
 def build_leaderboard_rows(results: list[dict]) -> list[LeaderboardRow]:
     scored = [r for r in results if not _is_pending(r)]
     pending = [r for r in results if _is_pending(r)]
 
-    groups: dict[str | None, list[dict]] = {}
-    for r in scored:
-        groups.setdefault(r.get("dataset_version"), []).append(r)
-
-    ordered_group_keys = sorted(groups, key=lambda k: _group_sort_key(k, groups))
-
     rows: list[LeaderboardRow] = []
-    for group_key in ordered_group_keys:
-        group_results = sorted(groups[group_key], key=_within_group_sort_key)
+    for _, group in _ordered_groups(scored):
+        group_results = sorted(group, key=_within_group_sort_key)
         rows.extend(_scored_row(r, rank=i) for i, r in enumerate(group_results, start=1))
 
     for r in sorted(pending, key=lambda r: r["model_id"]):
         rows.append(_pending_row(r))
 
+    return rows
+
+
+def _dense_block(result: dict) -> dict | None:
+    block = result.get("dense_marker_metrics")
+    if not block or not block.get("n_figures"):
+        return None
+    return block
+
+
+def build_dense_marker_rows(results: list[dict]) -> list[DenseMarkerRow]:
+    """The dense-marker table (design §7.72): every result with at least one
+    dense figure, grouped by dataset_version like the main table, ranked
+    within a group by the dense figures' mean summary_score."""
+    with_dense = [r for r in results if not _is_pending(r) and _dense_block(r)]
+    rows: list[DenseMarkerRow] = []
+    for _, group in _ordered_groups(with_dense):
+        ordered = sorted(
+            group, key=lambda r: (-r["dense_marker_metrics"]["mean_summary_score"], r["model_id"])
+        )
+        for rank, r in enumerate(ordered, start=1):
+            b = r["dense_marker_metrics"]
+            rows.append(
+                DenseMarkerRow(
+                    rank=rank,
+                    model_id=r["model_id"],
+                    model_name=r["model_name"],
+                    dataset_version=r.get("dataset_version"),
+                    n_figures=b["n_figures"],
+                    mean_summary_score=b["mean_summary_score"],
+                    mean_match_rate=b.get("mean_match_rate"),
+                    mean_curve_distance=b.get("mean_curve_distance"),
+                    mean_coverage_ratio=b.get("mean_coverage_ratio"),
+                    run_at=r.get("run_at"),
+                )
+            )
     return rows

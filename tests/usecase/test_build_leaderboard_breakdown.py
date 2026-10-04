@@ -143,3 +143,39 @@ def test_breakdown_point_f1_is_none_without_point_metrics():
     (linear,) = build_model_breakdown(_result([_figure("1-a", 1.0)]), pairings)
 
     assert linear.mean_point_f1 is None
+
+
+def test_breakdown_point_f1_leaves_out_dense_marker_figures():
+    # design §7.72: the point F1 covers the non-dense figures only, like the
+    # result's point_metrics; summary_score still covers every figure
+    def with_point(row, f1, dense):
+        row["point"] = {"norm": "euclidean", "by_tau": {"0.02": {"point_f1": f1}}}
+        row["marker_density"] = {"median_nn_spacing": 0.01 if dense else 0.1, "dense": dense}
+        return row
+
+    pairings = {"1-a": _pairing("1", "a"), "2-b": _pairing("2", "b")}
+    result = _result(
+        [with_point(_figure("1-a", 1.0), 0.8, False), with_point(_figure("2-b", 0.5), 0.0, True)]
+    )
+    result["point_metrics"] = {"primary_tau": 0.02}
+
+    (linear,) = build_model_breakdown(result, pairings)
+
+    assert linear.n_figures == 2
+    assert abs(linear.mean_summary_score - 0.75) < 1e-12
+    assert linear.mean_point_f1 == 0.8
+    assert linear.n_point_figures == 1
+
+
+def test_breakdown_point_f1_is_none_when_every_figure_in_the_category_is_dense():
+    pairings = {"1-a": _pairing("1", "a")}
+    row = _figure("1-a", 1.0)
+    row["point"] = {"norm": "euclidean", "by_tau": {"0.02": {"point_f1": 0.3}}}
+    row["marker_density"] = {"median_nn_spacing": 0.01, "dense": True}
+    result = _result([row])
+    result["point_metrics"] = {"primary_tau": 0.02}
+
+    (linear,) = build_model_breakdown(result, pairings)
+
+    assert linear.mean_point_f1 is None
+    assert linear.n_point_figures == 0

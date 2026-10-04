@@ -33,6 +33,9 @@ class CategoryBreakdown:
     # design §7.67: mean per-figure point_f1 at the result's primary tau;
     # None when the result has no point metrics
     mean_point_f1: float | None = None
+    # design §7.72: the figures mean_point_f1 covers -- dense-marker figures
+    # are left out, as in the result's point_metrics; None without points
+    n_point_figures: int | None = None
 
 
 def categorize_figure(figure_id: str, pairings_by_figure_id: dict[str, VerifiedPairing]) -> str:
@@ -63,10 +66,21 @@ def build_model_breakdown(
         category = categorize_figure(pf["figure_id"], pairings_by_figure_id)
         buckets.setdefault(category, []).append(pf)
 
-    def point_f1(rows: list[dict]) -> float | None:
+    def point_rows(rows: list[dict]) -> list[dict] | None:
         if tau_key is None or any("point" not in r for r in rows):
             return None
-        return sum(r["point"]["by_tau"][tau_key]["point_f1"] for r in rows) / len(rows)
+        # a row from before design §7.72 carries no density: kept, as then
+        return [r for r in rows if not r.get("marker_density", {}).get("dense", False)]
+
+    def point_f1(rows: list[dict]) -> float | None:
+        kept = point_rows(rows)
+        if not kept:
+            return None
+        return sum(r["point"]["by_tau"][tau_key]["point_f1"] for r in kept) / len(kept)
+
+    def n_point(rows: list[dict]) -> int | None:
+        kept = point_rows(rows)
+        return None if kept is None else len(kept)
 
     return sorted(
         (
@@ -75,6 +89,7 @@ def build_model_breakdown(
                 n_figures=len(rows),
                 mean_summary_score=sum(r["summary_score"] for r in rows) / len(rows),
                 mean_point_f1=point_f1(rows),
+                n_point_figures=n_point(rows),
             )
             for category, rows in buckets.items()
         ),

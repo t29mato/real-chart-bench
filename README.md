@@ -42,11 +42,65 @@ end-to-end chart-understanding score.
 | **Verified real-image pairs** | Live. **97 figures**, all CC BY, every one drawn with markers (the 3 line-only figures were excluded on 2026-10-03, `excluded_reason: no_markers`). `dataset_version v0-eval-pilot-n97`. Registry holds 139 VERIFIED entries total; entries with `excluded_reason` are not scored. See [`data/verified_pairs/registry.json`](data/verified_pairs/registry.json). |
 | **Evaluation harness** | Live. Pure-domain metrics (`src/real_chart_bench/domain/metrics.py`, `matching.py`, `evaluation.py`) ranked by the point-level F1 (`domain/point_metrics.py`, design §7.67); the curve-distance `summary_score` (normalized y-distance, span floor 5%, design §7.66) is kept as a reference column — see [How the score is computed](#how-the-score-is-computed) + a naive-CV baseline. |
 | **Leaderboard** | Live, auto-deployed from `results/*.json` on every push — <https://t29mato.github.io/real-chart-bench/>. Ranks are scoped to a `dataset_version`: a score is only comparable to another score on the *same* figure set. |
-| **LineFormer** | **n=97, v0 task:** point F1 0.011 (recall 0.169, precision 0.006), summary_score 0.7462 — [`results/lineformer-pretrained-n97.json`](results/lineformer-pretrained-n97.json). It outputs each line as a dense run of pixels, so it never singles out the markers: precision, and with it F1, is near zero. Tick-calibrated mapping on 45 figures ([`results/lineformer-pretrained-tickcal.json`](results/lineformer-pretrained-tickcal.json)): point recall 0.860 (vs. 0.162 standard) but F1 still 0.039; summary_score 0.8725 vs. 0.7289. Local RTX 4090. |
-| **Classic-CV baselines** | **n=97, v0 task:** naive-CV (hue) point F1 0.024 (summary_score 0.7430) — [`results/naive-cv-v0.json`](results/naive-cv-v0.json); achromatic-CV (luminance) point F1 0.019 (summary_score 0.6634) — [`results/achromatic-cv-v0.json`](results/achromatic-cv-v0.json). Like LineFormer, both trace lines as dense pixels rather than locating markers. |
+| **LineFormer** | **n=97, v0 task:** point F1 0.006 on the 80 non-dense figures (recall 0.166, precision 0.003), summary_score 0.7462 over all 97 — [`results/lineformer-pretrained-n97.json`](results/lineformer-pretrained-n97.json). It outputs each line as a dense run of pixels, so it never singles out the markers: precision, and with it F1, is near zero. Tick-calibrated mapping on 45 figures ([`results/lineformer-pretrained-tickcal.json`](results/lineformer-pretrained-tickcal.json)): point recall 0.876 on the 37 non-dense figures (vs. 0.159 standard) but F1 still 0.027; summary_score 0.8725 vs. 0.7289. Local RTX 4090. |
+| **Classic-CV baselines** | **n=97, v0 task:** naive-CV (hue) point F1 0.016 on the 80 non-dense figures (summary_score 0.7430 over all 97) — [`results/naive-cv-v0.json`](results/naive-cv-v0.json); achromatic-CV (luminance) point F1 0.011 (summary_score 0.6634) — [`results/achromatic-cv-v0.json`](results/achromatic-cv-v0.json). Like LineFormer, both trace lines as dense pixels rather than locating markers. |
 | **Human ceiling** | Harness live, awaiting data. Independent re-digitizations of a stratified 25-figure subset get scored with the *same* metric as models, so the ground truth's own error bar sits on the leaderboard next to every model score. Registered as a pending row until real annotations exist — see `data/human_ceiling/FORMAT.md`. |
-| **LLM baselines (Claude)** | **n=97, v0 task (axis calibration given, 2026-10-01 run), point F1 at τ=0.02 (macro) / summary_score:** Claude Opus 5.5 0.894 / 0.9691 — [`results/claude-opus-5-5-v0-r2.json`](results/claude-opus-5-5-v0-r2.json); Claude Fable 5.1 0.862 / 0.9786 — [`results/claude-fable-5-1-v0-r2.json`](results/claude-fable-5-1-v0-r2.json); Claude Sonnet 5.5 0.849 / 0.9831 — [`results/claude-sonnet-5-5-v0-r2.json`](results/claude-sonnet-5-5-v0-r2.json); Claude Haiku 4.5 0.039 / 0.6031 — [`results/claude-haiku-4-5-v0-r2.json`](results/claude-haiku-4-5-v0-r2.json). Previous versions (September, same figures): Fable 5 0.856 / 0.9843, Opus 5 0.827 / 0.9847, Sonnet 5 0.586 / 0.9638, Haiku 4.5 0.038 / 0.5597 — [`results/claude-*-v0-full.json`](results/claude-sonnet-5-v0-full.json). **No-axis condition** (calibration withheld, n=97): Opus 5.5 0.923 / 0.9848, Fable 5.1 0.873 / 0.9818, Sonnet 5.5 0.860 / 0.9838, Haiku 4.5 0.029 / 0.2767 — [`results/claude-*-v0-r2-noaxis.json`](results/claude-sonnet-5-5-v0-r2-noaxis.json). The point metric reorders the top three: on summary_score Sonnet 5.5 led and Opus 5.5 was third. |
+| **LLM baselines (Claude)** | **n=97, v0 task**, axis calibration given (2026-10-01 run) and withheld (no-axis), plus the September runs on the same figures: see [Current results](#current-results-n97) for the point table (80 non-dense figures) and the dense-marker table (17 figures) — [`results/claude-*-v0-r2.json`](results/claude-opus-5-5-v0-r2.json), [`results/claude-*-v0-r2-noaxis.json`](results/claude-opus-5-5-v0-r2-noaxis.json), [`results/claude-*-v0-full.json`](results/claude-sonnet-5-v0-full.json). |
 | **Results explorer** | [`scripts/viz/`](scripts/viz/) (export_results_explorer.py + results_explorer.html): render every model's predicted curves overlaid on source images. |
+
+## Current results (n=97)
+
+The 97 figures are split by how densely their markers sit (design §7.72): a
+figure whose median within-series nearest-neighbour spacing of ground-truth
+points, in the axis-normalized space, is below 2τ = 0.04 is **dense** — markers
+overlap, one-to-one point matching is ambiguous there, and the human
+digitization itself skips markers. 17 figures are dense, 80 are not.
+
+**Main table — point-level, 80 non-dense figures** (macro, τ = 0.02).
+`summary_score` (reference) is over all 97 figures.
+
+| Condition | Model | n | Point F1 | Recall | Precision | summary_score (97) |
+|---|---|---:|---:|---:|---:|---:|
+| axis given | Claude Sonnet 5.5 | 80 | **0.953** | 0.949 | 0.960 | 0.9831 |
+| axis given | Claude Opus 5.5 | 80 | **0.951** | 0.989 | 0.932 | 0.9691 |
+| axis given | Claude Fable 5 (Sept.) | 80 | **0.941** | 0.942 | 0.942 | 0.9843 |
+| axis given | Claude Opus 5 (Sept.) | 80 | **0.918** | 0.917 | 0.920 | 0.9847 |
+| axis given | Claude Fable 5.1 | 80 | **0.917** | 0.921 | 0.915 | 0.9786 |
+| axis given | Claude Sonnet 5 (Sept.) | 80 | **0.672** | 0.673 | 0.675 | 0.9638 |
+| axis given | Claude Haiku 4.5 (Sept.) | 80 | **0.039** | 0.075 | 0.030 | 0.5597 |
+| axis given | Claude Haiku 4.5 | 80 | **0.030** | 0.123 | 0.020 | 0.6031 |
+| axis given | naive-CV | 80 | **0.016** | 0.255 | 0.009 | 0.7430 |
+| axis given | achromatic-CV | 80 | **0.011** | 0.206 | 0.006 | 0.6634 |
+| axis given | LineFormer (pretrained) | 80 | **0.006** | 0.166 | 0.003 | 0.7462 |
+| axis withheld | Claude Opus 5.5 | 80 | **0.986** | 0.987 | 0.985 | 0.9848 |
+| axis withheld | Claude Sonnet 5.5 | 80 | **0.973** | 0.970 | 0.978 | 0.9838 |
+| axis withheld | Claude Fable 5.1 | 80 | **0.934** | 0.939 | 0.931 | 0.9818 |
+| axis withheld | Claude Haiku 4.5 | 80 | **0.031** | 0.030 | 0.034 | 0.2767 |
+
+**Second table — curve distance, 17 dense-marker figures** (mean
+`summary_score`; ground-truth points treated as samples of the curve).
+
+| Condition | Model | n | summary_score | Match rate | Curve distance | Coverage |
+|---|---|---:|---:|---:|---:|---:|
+| axis given | Claude Fable 5 (Sept.) | 17 | **0.9741** | 1.000 | 0.0550 | 0.977 |
+| axis given | Claude Sonnet 5.5 | 17 | **0.9645** | 0.971 | 0.0581 | 0.981 |
+| axis given | Claude Opus 5 (Sept.) | 17 | **0.9640** | 1.000 | 0.0825 | 0.974 |
+| axis given | Claude Sonnet 5 (Sept.) | 17 | **0.9532** | 1.000 | 0.1175 | 0.977 |
+| axis given | Claude Fable 5.1 | 17 | **0.9424** | 0.931 | 0.0788 | 0.975 |
+| axis given | Claude Opus 5.5 | 17 | **0.9417** | 0.902 | 0.0419 | 0.965 |
+| axis given | achromatic-CV | 17 | **0.7055** | 0.610 | 0.4751 | 0.981 |
+| axis given | naive-CV | 17 | **0.6736** | 0.604 | 0.3794 | 0.796 |
+| axis given | LineFormer (pretrained) | 17 | **0.6631** | 0.569 | 0.2539 | 0.674 |
+| axis given | Claude Haiku 4.5 | 17 | **0.6183** | 0.571 | 0.4277 | 0.711 |
+| axis given | Claude Haiku 4.5 (Sept.) | 17 | **0.5808** | 0.534 | 0.4242 | 0.632 |
+| axis withheld | Claude Sonnet 5.5 | 17 | **0.9439** | 0.971 | 0.0629 | 0.924 |
+| axis withheld | Claude Fable 5.1 | 17 | **0.9432** | 0.931 | 0.0492 | 0.948 |
+| axis withheld | Claude Opus 5.5 | 17 | **0.9431** | 0.902 | 0.0362 | 0.964 |
+| axis withheld | Claude Haiku 4.5 | 17 | **0.2730** | 0.407 | 0.8210 | 0.233 |
+
+Every results file records the split: `per_figure[].marker_density`
+(`median_nn_spacing`, `dense`), `point_metrics` (non-dense figures only,
+`n_dense_figures_excluded`, `dense_criterion`) and `dense_marker_metrics`.
 
 ## Evaluate your own model
 
@@ -116,7 +170,10 @@ predicted series are extra points. Per figure this gives `point_recall`,
 points). The leaderboard ranks by **macro `point_f1` at τ = 0.02** (mean over
 figures); τ = 0.01 / 0.05 and micro (pooled-point) values are in each results
 file's `point_metrics` block, and every figure's counts are in
-`per_figure[].point`. See `tests/domain/test_point_metrics.py` for the exact
+`per_figure[].point`. Figures whose markers are too dense for one-to-one
+matching (median within-series nearest-neighbour spacing < 2τ, design §7.72)
+are left out of the point aggregate and ranked on `summary_score` in a
+separate table. See `tests/domain/test_point_metrics.py` for the exact
 boundary-case behavior.
 
 **Reference: `summary_score`** (`NormalizedYDistanceMetric`,
