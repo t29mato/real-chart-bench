@@ -2,7 +2,7 @@
   "model_id": "claude-fable-5",
   "model_name": "Claude Fable 5",
   "dataset_version": "v0-eval-pilot-n97-llm-subset-n8",
-  "run_at": "2026-10-03T08:42:55.645059+00:00",
+  "run_at": "2026-10-04T06:03:30.370915+00:00",
   "n_figures": 8,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
@@ -11,63 +11,73 @@
     "primary_tau": 0.02,
     "norm": "euclidean",
     "primary": "macro point_f1 at primary_tau (design 7.67)",
-    "n_figures": 8,
+    "n_figures": 5,
+    "n_dense_figures_excluded": 3,
+    "dense_criterion": "dense when the median, over the ground-truth points, of the distance to the nearest point of the same series in the axis-normalized space (log axes in log10) is below 2*tau, tau = the primary point tau (0.02 -> 0.04); dense figures leave point_metrics and are summarized on curve distance in dense_marker_metrics (design 7.72)",
     "by_tau": {
       "0.01": {
         "macro": {
-          "point_recall": 0.8972897968673768,
-          "point_precision": 0.7853839741312262,
-          "point_f1": 0.8283465301204681,
-          "point_loc_error": 0.004379876115515902,
-          "n_figures_with_matches": 8
+          "point_recall": 0.9079370629370629,
+          "point_precision": 0.9079370629370629,
+          "point_f1": 0.9079370629370629,
+          "point_loc_error": 0.0043165695238609495,
+          "n_figures_with_matches": 5
         },
         "micro": {
-          "point_recall": 0.8766756032171582,
-          "point_precision": 0.6288461538461538,
-          "point_f1": 0.7323628219484883,
-          "point_loc_error": 0.00440135239855461,
-          "n_matched": 654,
-          "n_predicted": 1040,
-          "n_ground_truth": 746
+          "point_recall": 0.8804347826086957,
+          "point_precision": 0.8804347826086957,
+          "point_f1": 0.8804347826086957,
+          "point_loc_error": 0.004581042036001914,
+          "n_matched": 162,
+          "n_predicted": 184,
+          "n_ground_truth": 184
         }
       },
       "0.02": {
         "macro": {
-          "point_recall": 0.9764811542019027,
-          "point_precision": 0.858595253775738,
-          "point_f1": 0.903959293287425,
-          "point_loc_error": 0.004955718888342057,
-          "n_figures_with_matches": 8
+          "point_recall": 1.0,
+          "point_precision": 1.0,
+          "point_f1": 1.0,
+          "point_loc_error": 0.004921008001156395,
+          "n_figures_with_matches": 5
         },
         "micro": {
-          "point_recall": 0.9504021447721179,
-          "point_precision": 0.6817307692307693,
-          "point_f1": 0.793952967525196,
-          "point_loc_error": 0.005010420286295432,
-          "n_matched": 709,
-          "n_predicted": 1040,
-          "n_ground_truth": 746
+          "point_recall": 1.0,
+          "point_precision": 1.0,
+          "point_f1": 1.0,
+          "point_loc_error": 0.005469922295426786,
+          "n_matched": 184,
+          "n_predicted": 184,
+          "n_ground_truth": 184
         }
       },
       "0.05": {
         "macro": {
-          "point_recall": 0.9836026278409091,
-          "point_precision": 0.8634624661186435,
-          "point_f1": 0.9097145024527387,
-          "point_loc_error": 0.005345784666100682,
-          "n_figures_with_matches": 8
+          "point_recall": 1.0,
+          "point_precision": 1.0,
+          "point_f1": 1.0,
+          "point_loc_error": 0.004921008001156395,
+          "n_figures_with_matches": 5
         },
         "micro": {
-          "point_recall": 0.9611260053619303,
-          "point_precision": 0.6894230769230769,
-          "point_f1": 0.8029115341545353,
-          "point_loc_error": 0.005745686559729448,
-          "n_matched": 717,
-          "n_predicted": 1040,
-          "n_ground_truth": 746
+          "point_recall": 1.0,
+          "point_precision": 1.0,
+          "point_f1": 1.0,
+          "point_loc_error": 0.005469922295426786,
+          "n_matched": 184,
+          "n_predicted": 184,
+          "n_ground_truth": 184
         }
       }
     }
+  },
+  "dense_marker_metrics": {
+    "criterion": "dense when the median, over the ground-truth points, of the distance to the nearest point of the same series in the axis-normalized space (log axes in log10) is below 2*tau, tau = the primary point tau (0.02 -> 0.04); dense figures leave point_metrics and are summarized on curve distance in dense_marker_metrics (design 7.72)",
+    "n_figures": 3,
+    "mean_summary_score": 0.9944909498804684,
+    "mean_match_rate": 1.0,
+    "mean_curve_distance": 0.007154270138234838,
+    "mean_coverage_ratio": 0.99062711977964
   },
   "per_figure": [
     {
@@ -108,6 +118,10 @@
             "n_ground_truth": 52
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.08635495598903273,
+        "dense": false
       }
     },
     {
@@ -148,6 +162,10 @@
             "n_ground_truth": 220
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.02261102816372803,
+        "dense": true
       }
     },
     {
@@ -188,6 +206,10 @@
             "n_ground_truth": 44
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10231069807371156,
+        "dense": false
       }
     },
     {
@@ -228,6 +250,10 @@
             "n_ground_truth": 40
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.14403629055544878,
+        "dense": false
       }
     },
     {
@@ -268,6 +294,10 @@
             "n_ground_truth": 27
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.1362369973694738,
+        "dense": false
       }
     },
     {
@@ -308,6 +338,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10136619778862423,
+        "dense": false
       }
     },
     {
@@ -348,6 +382,10 @@
             "n_ground_truth": 256
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.02211200730236948,
+        "dense": true
       }
     },
     {
@@ -388,6 +426,10 @@
             "n_ground_truth": 86
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.02840186439050039,
+        "dense": true
       }
     }
   ],

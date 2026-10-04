@@ -2,70 +2,80 @@
   "model_id": "claude-opus-5-full-tickcal-subset",
   "model_name": "Claude Opus 5\uff08\u63a1\u70b9\u5bfe\u8c61\u5168\u56f3\uff09",
   "dataset_version": "v0-eval-pilot-n97-tickcal-subset-n45",
-  "run_at": "2026-10-03T08:42:58.408325+00:00",
+  "run_at": "2026-10-04T06:03:32.351396+00:00",
   "n_figures": 45,
   "mean_summary_score": 0.9904290729648247,
   "point_metrics": {
     "primary_tau": 0.02,
     "norm": "euclidean",
     "primary": "macro point_f1 at primary_tau (design 7.67)",
-    "n_figures": 45,
+    "n_figures": 37,
+    "n_dense_figures_excluded": 8,
+    "dense_criterion": "dense when the median, over the ground-truth points, of the distance to the nearest point of the same series in the axis-normalized space (log axes in log10) is below 2*tau, tau = the primary point tau (0.02 -> 0.04); dense figures leave point_metrics and are summarized on curve distance in dense_marker_metrics (design 7.72)",
     "by_tau": {
       "0.01": {
         "macro": {
-          "point_recall": 0.7532570036959026,
-          "point_precision": 0.7828954836746,
-          "point_f1": 0.7614567414591632,
-          "point_loc_error": 0.0042679714759775115,
-          "n_figures_with_matches": 45
+          "point_recall": 0.8656727916181698,
+          "point_precision": 0.8623619983914101,
+          "point_f1": 0.8639839271982461,
+          "point_loc_error": 0.003842411338162425,
+          "n_figures_with_matches": 37
         },
         "micro": {
-          "point_recall": 0.46257861635220127,
-          "point_precision": 0.7001427891480247,
-          "point_f1": 0.5570914599507669,
-          "point_loc_error": 0.004355349731932259,
-          "n_matched": 1471,
-          "n_predicted": 2101,
-          "n_ground_truth": 3180
+          "point_recall": 0.8179035960214232,
+          "point_precision": 0.8141660319878141,
+          "point_f1": 0.816030534351145,
+          "point_loc_error": 0.0038024564301951075,
+          "n_matched": 1069,
+          "n_predicted": 1313,
+          "n_ground_truth": 1307
         }
       },
       "0.02": {
         "macro": {
-          "point_recall": 0.8528530828736525,
-          "point_precision": 0.9083216474890994,
-          "point_f1": 0.8682184150563668,
-          "point_loc_error": 0.005676314219137192,
-          "n_figures_with_matches": 45
+          "point_recall": 0.95519716633162,
+          "point_precision": 0.951314517490988,
+          "point_f1": 0.9532148576226368,
+          "point_loc_error": 0.004808365420729413,
+          "n_figures_with_matches": 37
         },
         "micro": {
-          "point_recall": 0.580503144654088,
-          "point_precision": 0.8786292241789624,
-          "point_f1": 0.6991100170422269,
-          "point_loc_error": 0.006309325045117222,
-          "n_matched": 1846,
-          "n_predicted": 2101,
-          "n_ground_truth": 3180
+          "point_recall": 0.9441469013006886,
+          "point_precision": 0.9398324447829398,
+          "point_f1": 0.9419847328244274,
+          "point_loc_error": 0.0052029843278855945,
+          "n_matched": 1234,
+          "n_predicted": 1313,
+          "n_ground_truth": 1307
         }
       },
       "0.05": {
         "macro": {
-          "point_recall": 0.9021576882386516,
-          "point_precision": 0.9796359918951939,
-          "point_f1": 0.9229637142165086,
-          "point_loc_error": 0.007639589068210131,
-          "n_figures_with_matches": 45
+          "point_recall": 0.9960393085393086,
+          "point_precision": 0.9917188924541865,
+          "point_f1": 0.993831792697647,
+          "point_loc_error": 0.005936559707160209,
+          "n_figures_with_matches": 37
         },
         "micro": {
-          "point_recall": 0.639308176100629,
-          "point_precision": 0.9676344597810567,
-          "point_f1": 0.7699299375118349,
-          "point_loc_error": 0.009063726982840505,
-          "n_matched": 2033,
-          "n_predicted": 2101,
-          "n_ground_truth": 3180
+          "point_recall": 0.9946442234123948,
+          "point_precision": 0.9900990099009901,
+          "point_f1": 0.9923664122137403,
+          "point_loc_error": 0.00663578973322655,
+          "n_matched": 1300,
+          "n_predicted": 1313,
+          "n_ground_truth": 1307
         }
       }
     }
+  },
+  "dense_marker_metrics": {
+    "criterion": "dense when the median, over the ground-truth points, of the distance to the nearest point of the same series in the axis-normalized space (log axes in log10) is below 2*tau, tau = the primary point tau (0.02 -> 0.04); dense figures leave point_metrics and are summarized on curve distance in dense_marker_metrics (design 7.72)",
+    "n_figures": 8,
+    "mean_summary_score": 0.9756478223272684,
+    "mean_match_rate": 1.0,
+    "mean_curve_distance": 0.06309942151070472,
+    "mean_coverage_ratio": 0.99004288849251
   },
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
@@ -109,6 +119,10 @@
             "n_ground_truth": 220
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.02261102816372803,
+        "dense": true
       }
     },
     {
@@ -149,6 +163,10 @@
             "n_ground_truth": 40
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.14403629055544878,
+        "dense": false
       }
     },
     {
@@ -189,6 +207,10 @@
             "n_ground_truth": 27
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.1362369973694738,
+        "dense": false
       }
     },
     {
@@ -229,6 +251,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10136619778862423,
+        "dense": false
       }
     },
     {
@@ -269,6 +295,10 @@
             "n_ground_truth": 256
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.02211200730236948,
+        "dense": true
       }
     },
     {
@@ -309,6 +339,10 @@
             "n_ground_truth": 16
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.25178983066001737,
+        "dense": false
       }
     },
     {
@@ -349,6 +383,10 @@
             "n_ground_truth": 35
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.16903917399363744,
+        "dense": false
       }
     },
     {
@@ -389,6 +427,10 @@
             "n_ground_truth": 35
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.16675957959206744,
+        "dense": false
       }
     },
     {
@@ -429,6 +471,10 @@
             "n_ground_truth": 46
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.03984928694095334,
+        "dense": true
       }
     },
     {
@@ -469,6 +515,10 @@
             "n_ground_truth": 48
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.08918849777166123,
+        "dense": false
       }
     },
     {
@@ -509,6 +559,10 @@
             "n_ground_truth": 52
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.0880586279552498,
+        "dense": false
       }
     },
     {
@@ -549,6 +603,10 @@
             "n_ground_truth": 49
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.0917265802752943,
+        "dense": false
       }
     },
     {
@@ -589,6 +647,10 @@
             "n_ground_truth": 28
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.14541086759896893,
+        "dense": false
       }
     },
     {
@@ -629,6 +691,10 @@
             "n_ground_truth": 27
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.17716489145109304,
+        "dense": false
       }
     },
     {
@@ -669,6 +735,10 @@
             "n_ground_truth": 52
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.08969118615762418,
+        "dense": false
       }
     },
     {
@@ -709,6 +779,10 @@
             "n_ground_truth": 33
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10434113268026181,
+        "dense": false
       }
     },
     {
@@ -749,6 +823,10 @@
             "n_ground_truth": 34
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.113772179004334,
+        "dense": false
       }
     },
     {
@@ -789,6 +867,10 @@
             "n_ground_truth": 98
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.02408809906004474,
+        "dense": true
       }
     },
     {
@@ -829,6 +911,10 @@
             "n_ground_truth": 191
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.02055328285065054,
+        "dense": true
       }
     },
     {
@@ -869,6 +955,10 @@
             "n_ground_truth": 36
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10374317937922227,
+        "dense": false
       }
     },
     {
@@ -909,6 +999,10 @@
             "n_ground_truth": 36
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.11547142389176554,
+        "dense": false
       }
     },
     {
@@ -949,6 +1043,10 @@
             "n_ground_truth": 36
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10324249501866149,
+        "dense": false
       }
     },
     {
@@ -989,6 +1087,10 @@
             "n_ground_truth": 36
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10078169515373969,
+        "dense": false
       }
     },
     {
@@ -1029,6 +1131,10 @@
             "n_ground_truth": 36
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10102304437327377,
+        "dense": false
       }
     },
     {
@@ -1069,6 +1175,10 @@
             "n_ground_truth": 36
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10357704403986792,
+        "dense": false
       }
     },
     {
@@ -1109,6 +1219,10 @@
             "n_ground_truth": 27
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.12608704197062906,
+        "dense": false
       }
     },
     {
@@ -1149,6 +1263,10 @@
             "n_ground_truth": 26
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10404778382719657,
+        "dense": false
       }
     },
     {
@@ -1189,6 +1307,10 @@
             "n_ground_truth": 27
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.15910490437368704,
+        "dense": false
       }
     },
     {
@@ -1229,6 +1351,10 @@
             "n_ground_truth": 27
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.12706631703563273,
+        "dense": false
       }
     },
     {
@@ -1269,6 +1395,10 @@
             "n_ground_truth": 27
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.1691482557798367,
+        "dense": false
       }
     },
     {
@@ -1309,6 +1439,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.12335010985986171,
+        "dense": false
       }
     },
     {
@@ -1349,6 +1483,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.12452472299170159,
+        "dense": false
       }
     },
     {
@@ -1389,6 +1527,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10660900455845032,
+        "dense": false
       }
     },
     {
@@ -1429,6 +1571,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10171369790721414,
+        "dense": false
       }
     },
     {
@@ -1469,6 +1615,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.10109484039035144,
+        "dense": false
       }
     },
     {
@@ -1509,6 +1659,10 @@
             "n_ground_truth": 20
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.11235674651194774,
+        "dense": false
       }
     },
     {
@@ -1549,6 +1703,10 @@
             "n_ground_truth": 21
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.11200403743169272,
+        "dense": false
       }
     },
     {
@@ -1589,6 +1747,10 @@
             "n_ground_truth": 72
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.09201988702999236,
+        "dense": false
       }
     },
     {
@@ -1629,6 +1791,10 @@
             "n_ground_truth": 72
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.09853302353323187,
+        "dense": false
       }
     },
     {
@@ -1669,6 +1835,10 @@
             "n_ground_truth": 72
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.0885634516583908,
+        "dense": false
       }
     },
     {
@@ -1709,6 +1879,10 @@
             "n_ground_truth": 72
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.0875637402868922,
+        "dense": false
       }
     },
     {
@@ -1749,6 +1923,10 @@
             "n_ground_truth": 258
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.018859295342232435,
+        "dense": true
       }
     },
     {
@@ -1789,6 +1967,10 @@
             "n_ground_truth": 430
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.008400395125921545,
+        "dense": true
       }
     },
     {
@@ -1829,6 +2011,10 @@
             "n_ground_truth": 374
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.01186933333333351,
+        "dense": true
       }
     },
     {
@@ -1869,6 +2055,10 @@
             "n_ground_truth": 26
           }
         }
+      },
+      "marker_density": {
+        "median_nn_spacing": 0.08002691285611771,
+        "dense": false
       }
     }
   ]
