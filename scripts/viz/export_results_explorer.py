@@ -9,14 +9,26 @@ them -- and re-scored here. Each recomputed score is checked against the
 published results/*.json, so the page cannot show curves that are not the
 ones that were scored.
 
+Every model x figure also carries its point evaluation at the primary tau
+(design §7.67): which ground-truth points were found or missed, which
+predicted points matched or were extra, and the matched pairs -- for both the
+calibrated condition (axis ranges given) and, for the LLMs, noaxis.
+
+LLM-style runs kept outside the repo (e.g. local VLMs) can be added with
+--extra-llm-archive (same layout as data/llm_run_v2) and --extra-results (their
+scored payloads, <model>-v0-r2.json / -v0-r2-noaxis.json); they are verified
+against those payloads the same way and marked as local runs.
+
 Output: <out>/data.json and <out>/images/<figure_id>.<ext>
 Usage: python scripts/viz/export_results_explorer.py [--out DIR]
+           [--extra-llm-archive DIR --extra-results DIR]
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import pathlib
 import sys
 
@@ -79,21 +91,32 @@ def _thin(xs, ys):
     return [round(v, 6) for v in xs[::step]], [round(v, 6) for v in ys[::step]]
 
 
-def _llm_answers(task_by_fid: dict) -> dict[str, dict[str, list]]:
-    """model -> figure_id ("paper-fig") -> list[Curve], scorer-identical."""
-    run = REPO / "data/llm_run_v2"
+def _llm_answers(
+    task_by_fid: dict,
+    models,
+    condition: str = "calibrated",
+    run: pathlib.Path = REPO / "data/llm_run_v2",
+) -> dict[str, dict[str, list]]:
+    """model -> figure_id ("paper-fig") -> list[Curve], scorer-identical.
+
+    Only the calibrated condition is rescaled, exactly as score_llm_predictions
+    does for v2 (the noaxis models read the printed units themselves)."""
     key = json.loads((run / "_key.json").read_text())
-    out = {m: {} for m in LLM_MODELS}
-    for m in LLM_MODELS:
+    out = {m: {} for m in models}
+    for m in models:
         raw = {}
-        for f in sorted((run / "calibrated" / m).glob("part*.predictions.json")):
+        for f in sorted((run / condition / m).glob("part*.predictions.json")):
             raw |= json.loads(f.read_text())
         for task_id, answer in raw.items():
             k = key[task_id]
             fid = f"{k['paper_id']}-{k['figure_id']}"
             if fid not in task_by_fid:
                 continue  # excluded from scoring since the run
-            factors = PREDICTION_RESCALE_V2_CALIBRATED.get(k["figure_id"])
+            factors = (
+                PREDICTION_RESCALE_V2_CALIBRATED.get(k["figure_id"])
+                if condition == "calibrated"
+                else None
+            )
             if factors:
                 answer = [
                     {
@@ -125,7 +148,25 @@ def _axis_overlay(entry: dict | None, pairing) -> dict | None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=pathlib.Path, default=REPO / "data/cache/results_explorer")
+    parser.add_argument(
+        "--extra-llm-archive",
+        type=pathlib.Path,
+        help="LLM run outside the repo, laid out like data/llm_run_v2 (shown as local runs)",
+    )
+    parser.add_argument(
+        "--extra-results",
+        type=pathlib.Path,
+        help="scored payloads for --extra-llm-archive (<model>-v0-r2[-noaxis].json)",
+    )
     args = parser.parse_args()
+    if (args.extra_llm_archive is None) != (args.extra_results is None):
+        parser.error("--extra-llm-archive and --extra-results go together")
+    extra = _extra_models(args.extra_llm_archive, args.extra_results)
+    models = MODELS + [(m, n, "llm", f) for m, n, f in extra]
+    local_ids = {m for m, _, _ in extra}
+    results_dir = {mid: REPO / "results" for mid, _, _, _ in MODELS} | {
+        m: args.extra_results for m in local_ids
+    }
     (args.out / "images").mkdir(parents=True, exist_ok=True)
 
     items, _ = build_dataset()
@@ -152,8 +193,22 @@ def main() -> None:
         "naive-cv": NaiveCvModelRunner(),
         "achromatic-cv": AchromaticCvModelRunner(),
     }
-    llm = _llm_answers(task_by_fid)
-    published = {mid: {p["figure_id"]: p for p in _per_figure(f)} for mid, _, _, f in MODELS}
+    llm = _llm_answers(task_by_fid, LLM_MODELS)
+    llm_noaxis = _llm_answers(task_by_fid, LLM_MODELS, "noaxis")
+    if extra:
+        ids = [m for m, _, _ in extra]
+        llm |= _llm_answers(task_by_fid, ids, "calibrated", args.extra_llm_archive)
+        llm_noaxis |= _llm_answers(task_by_fid, ids, "noaxis", args.extra_llm_archive)
+    published = {
+        mid: {p["figure_id"]: p for p in _per_figure(results_dir[mid] / f)}
+        for mid, _, _, f in models
+    }
+    # noaxis: LLMs only -- the other extractors are always handed the ranges
+    noaxis_models = [(mid, name, f) for mid, name, kind, f in models if kind == "llm"]
+    published_noaxis = {
+        mid: {p["figure_id"]: p for p in _per_figure(results_dir[mid] / _noaxis_file(f))}
+        for mid, _, f in noaxis_models
+    }
 
     figures, mismatches = [], []
     for item in items:
@@ -179,7 +234,11 @@ def main() -> None:
                 }
                 for c in gt
             ],
+            # every ground-truth point, in each Curve's own (x-sorted) order --
+            # the indices the point evaluation's statuses and pairs refer to
+            "gt_points": [_points(c) for c in gt],
             "models": {},
+            "noaxis": {},
         }
         lf = lf_raw[image_key(task.image_bytes)]
         fig["image_size"] = [lf.width, lf.height]
@@ -188,30 +247,40 @@ def main() -> None:
             for s in lf.series
         ]
 
-        for mid, _, kind, _ in MODELS:
-            pub = published[mid].get(fid)
-            try:
-                pred = llm[mid].get(fid) if kind == "llm" else runners[mid].extract(task)
-            except Exception as exc:  # noqa: BLE001 -- shown on the page, same as the scorer
-                pred, err = None, f"{type(exc).__name__}: {exc}"
-            else:
-                err = None if pred is not None else "no answer"
-            if pred is None:
-                fig["models"][mid] = {"curves": [], "error": err, **_scores(pub)}
-                continue
-            entry, ev = _package(pred, gt, matcher_for_task(task))
-            if pub and abs(ev.summary_score - pub["summary_score"]) > 1e-6:
-                mismatches.append((mid, fid, ev.summary_score, pub["summary_score"]))
-            # design 7.67: the primary metric is checked the same way
-            pt = evaluate_points(
-                pred, gt, axis_frame_for_task(task), PRIMARY_POINT_TAU, POINT_NORM
-            )
-            pub_pt = _primary_point(pub)
-            if pub and (pub_pt is None or abs(pt.point_f1 - pub_pt["point_f1"]) > 1e-9):
-                mismatches.append(
-                    (mid, fid, "point_f1", pt.point_f1, pub_pt and pub_pt["point_f1"])
-                )
-            fig["models"][mid] = {**entry, **_scores(pub)}
+        frame = axis_frame_for_task(task)
+        for cond, cond_models, answers, pubs in (
+            ("calibrated", [(m, k) for m, _, k, _ in models], llm, published),
+            ("noaxis", [(m, "llm") for m, _, _ in noaxis_models], llm_noaxis, published_noaxis),
+        ):
+            out = fig["models"] if cond == "calibrated" else fig["noaxis"]
+            for mid, kind in cond_models:
+                pub = pubs[mid].get(fid)
+                try:
+                    pred = answers[mid].get(fid) if kind == "llm" else runners[mid].extract(task)
+                except Exception as exc:  # noqa: BLE001 -- shown on the page, same as the scorer
+                    pred, err = None, f"{type(exc).__name__}: {exc}"
+                else:
+                    err = None if pred is not None else "no answer"
+                # design 7.67: the primary metric, checked like summary_score;
+                # no answer is scored as nothing predicted, as the scorer does
+                pt = evaluate_points(pred or [], gt, frame, PRIMARY_POINT_TAU, POINT_NORM)
+                pub_pt = _primary_point(pub)
+                if pub and (pub_pt is None or abs(pt.point_f1 - pub_pt["point_f1"]) > 1e-9):
+                    mismatches.append(
+                        (cond, mid, fid, "point_f1", pt.point_f1, pub_pt and pub_pt["point_f1"])
+                    )
+                if pred is None:
+                    out[mid] = {
+                        "curves": [],
+                        "error": err,
+                        **_scores(pub),
+                        "point": _point_detail(pt, [], gt),
+                    }
+                    continue
+                entry, ev = _package(pred, gt, matcher_for_task(task))
+                if pub and abs(ev.summary_score - pub["summary_score"]) > 1e-6:
+                    mismatches.append((cond, mid, fid, ev.summary_score, pub["summary_score"]))
+                out[mid] = {**entry, **_scores(pub), "point": _point_detail(pt, pred, gt)}
 
         # Exploratory, not a leaderboard row: LineFormer's same raw pixels,
         # mapped through the tick-mark positions instead of the full frame.
@@ -237,10 +306,9 @@ def main() -> None:
                         )
                     )
             entry, ev = _package(pred, gt, matcher_for_task(task))
-            pt = evaluate_points(
-                pred, gt, axis_frame_for_task(task), PRIMARY_POINT_TAU, POINT_NORM
-            )
+            pt = evaluate_points(pred, gt, frame, PRIMARY_POINT_TAU, POINT_NORM)
             fig["models"]["lineformer-axis"] = {
+                "point": _point_detail(pt, pred, gt),
                 **entry,
                 "score": ev.summary_score,
                 "point_f1": pt.point_f1,
@@ -258,14 +326,15 @@ def main() -> None:
         raise SystemExit(f"{len(mismatches)} recomputed score(s) differ from results/*.json")
 
     summary = []
-    for mid, name, kind, f in MODELS:
-        res = json.loads((REPO / "results" / f).read_text())
+    for mid, name, kind, f in models:
+        res = json.loads((results_dir[mid] / f).read_text())
         rows = [published[mid][fig["id"]] for fig in figures if fig["id"] in published[mid]]
         summary.append(
             {
                 "id": mid,
                 "name": name,
                 "kind": kind,
+                "local": mid in local_ids,
                 "mean": res["mean_summary_score"],
                 **_primary_macro(res),
                 "n": len(rows),
@@ -281,6 +350,7 @@ def main() -> None:
             "id": "lineformer-axis",
             "name": "LineFormer (tick-calibrated, exploratory)",
             "kind": "exploratory",
+            "local": False,
             "mean": sum(f["models"]["lineformer-axis"]["score"] for f in axis_figs)
             / len(axis_figs),
             **{
@@ -299,14 +369,40 @@ def main() -> None:
         }
     )
     dataset_version = json.loads((REPO / "results/naive-cv-v0.json").read_text())["dataset_version"]
-    payload = {"dataset_version": dataset_version, "models": summary, "figures": figures}
+    summary_noaxis = []
+    for mid, name, f in noaxis_models:
+        res = json.loads((results_dir[mid] / _noaxis_file(f)).read_text())
+        summary_noaxis.append(
+            {
+                "id": mid,
+                "name": name,
+                "kind": "llm",
+                "local": mid in local_ids,
+                "mean": res["mean_summary_score"],
+                **_primary_macro(res),
+                "n": res["n_figures"],
+            }
+        )
+    payload = {
+        "dataset_version": dataset_version,
+        "point_tau": PRIMARY_POINT_TAU,
+        "point_norm": POINT_NORM,
+        # kept for the calibrated view; "conditions" has both leaderboards
+        "models": summary,
+        "conditions": {
+            "calibrated": {"label": "軸レンジあり", "models": summary},
+            "noaxis": {"label": "軸レンジなし", "models": summary_noaxis},
+        },
+        "figures": figures,
+    }
     (args.out / "data.json").write_text(json.dumps(payload, separators=(",", ":")))
     size = (args.out / "data.json").stat().st_size / 1e6
     n_axis = sum(f["axis_px"] is not None for f in figures)
     print(
         f"wrote {args.out}/data.json ({size:.1f} MB): {len(figures)} figures, "
         f"{n_axis} with usable axis pixel positions; all scores (summary_score and "
-        "point_f1) match results/*.json"
+        f"point_f1, both conditions) match the results files; "
+        f"{len(local_ids)} local model(s) added"
     )
 
 
@@ -315,8 +411,67 @@ def _lineformer_raw_predictions() -> str:
     return json.loads((REPO / "results" / lf_file).read_text())["raw_predictions"]
 
 
-def _per_figure(results_file: str) -> list[dict]:
-    return json.loads((REPO / "results" / results_file).read_text())["per_figure"]
+def _per_figure(results_file: pathlib.Path) -> list[dict]:
+    return json.loads(results_file.read_text())["per_figure"]
+
+
+def _noaxis_file(calibrated_file: str) -> str:
+    return calibrated_file.removesuffix(".json") + "-noaxis.json"
+
+
+def _extra_models(archive: pathlib.Path | None, results: pathlib.Path | None):
+    """(id, display name, results file) for each model in an extra LLM archive."""
+    if archive is None:
+        return []
+    out = []
+    for d in sorted(p for p in (archive / "calibrated").iterdir() if p.is_dir()):
+        f = f"{d.name}-v0-r2.json"
+        if not (results / f).exists() or not (results / _noaxis_file(f)).exists():
+            raise SystemExit(f"{d.name}: no scored payload {f} (and -noaxis) in {results}")
+        name = json.loads((results / f).read_text())["model_name"]
+        out.append((d.name, name.split("（")[0].strip(), f))
+    return out
+
+
+def _sig(v: float) -> float | None:
+    return float(f"{v:.7g}") if math.isfinite(v) else None
+
+
+def _points(c: Curve) -> list[list[float | None]]:
+    return [[_sig(x), _sig(y)] for x, y in zip(c.x_values, c.y_values, strict=True)]
+
+
+def _point_detail(pt, pred, gt) -> dict:
+    """One model's point evaluation on one figure, for drawing.
+
+    pred: every predicted point (each Curve's x-sorted order); pred_ok / gt_ok:
+    1 = matched / found, 0 = extra / missed; pairs: [pred curve, pred point,
+    gt curve, gt point]; series: [pred curve or None, gt curve or None, n]."""
+    p_ix = {id(c): i for i, c in enumerate(pred)}
+    g_ix = {id(c): j for j, c in enumerate(gt)}
+    pred_ok = [[0] * len(c) for c in pred]
+    gt_ok = [[0] * len(c) for c in gt]
+    pairs, series = [], []
+    for s in pt.series:
+        i = p_ix[id(s.predicted)] if s.predicted is not None else None
+        j = g_ix[id(s.ground_truth)] if s.ground_truth is not None else None
+        series.append([i, j, s.n_matched])
+        for pi, gi in s.matched_pairs:
+            pred_ok[i][pi] = gt_ok[j][gi] = 1
+            pairs.append([i, pi, j, gi])
+    return {
+        "f1": pt.point_f1,
+        "recall": pt.point_recall,
+        "precision": pt.point_precision,
+        "n_gt": pt.n_ground_truth,
+        "n_pred": pt.n_predicted,
+        "n_matched": pt.n_matched,
+        "series": series,
+        "pred": [_points(c) for c in pred],
+        "pred_ok": pred_ok,
+        "gt_ok": gt_ok,
+        "pairs": pairs,
+    }
 
 
 def _package(pred, gt, matcher):

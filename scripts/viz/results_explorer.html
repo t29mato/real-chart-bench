@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>real-chart-bench 抽出結果ビューア</title>
+<title>real-chart-bench 点レベル評価ビューア</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
@@ -104,24 +104,72 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2)
 .tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-family: var(--font-data); font-size: 12px; padding: 4px 8px; border-radius: 4px; z-index: 10; white-space: nowrap; }
 .err { color: var(--ink-3); font-size: 12px; }
 .loading { color: var(--ink-2); }
-@media (prefers-reduced-motion: no-preference) { .row, .chip { transition: background-color .12s; } }
+/* point evaluation marks (Okabe-Ito hues; shape also differs per status) */
+:root { --pt-found: #009e73; --pt-missed: #d55e00; --pt-match: #0072b2; --pt-extra: #e69f00; --pt-pair: #8c939a; --local: #6b4a00; --local-bg: #fdf0d0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pt-found: #2cc79a; --pt-missed: #ff7a3a; --pt-match: #56b4e9; --pt-extra: #f0b93a; --pt-pair: #7d858d; --local: #f0cf7e; --local-bg: #3a2f12; }
+}
+:root[data-theme="dark"] { --pt-found: #2cc79a; --pt-missed: #ff7a3a; --pt-match: #56b4e9; --pt-extra: #f0b93a; --pt-pair: #7d858d; --local: #f0cf7e; --local-bg: #3a2f12; }
+/* the image overlay sits on the (white) figure image in both themes */
+.imgbox { --pt-found: #009e73; --pt-missed: #d55e00; --pt-match: #0072b2; --pt-extra: #e69f00; --pt-pair: #6f777f; }
+.condbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 4px 14px; border: 0; background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.badge-local { font-size: 11px; color: var(--local); background: var(--local-bg); border-radius: 3px; padding: 0 5px; margin-left: 6px; }
+#board tbody tr { cursor: pointer; }
+#board tbody tr:hover { background: var(--sel); }
+#board tbody tr[aria-current="true"] { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+.row { grid-template-columns: 1fr auto auto; }
+.row .id { white-space: nowrap; }
+.row .cells .cell { width: 10px; height: 14px; }
+.row .cells { gap: 1px; }
+.row .f1 { font-family: var(--font-data); font-size: 12.5px; min-width: 3.2em; text-align: right; }
+input[type=search] { font: inherit; font-size: 13px; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 6px; width: 9em; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--ink-2); align-items: center; }
+.legend span { display: inline-flex; gap: 5px; align-items: center; }
+.mblock { display: grid; gap: 10px; border-top: 1px solid var(--rule); padding-top: 12px; min-width: 0; }
+.mhead { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; }
+.mhead h3 { font-size: 15px; margin: 0; }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ink-2); }
+.stats b { font-family: var(--font-data); font-weight: 500; color: var(--ink); font-size: 15px; margin-left: 4px; }
+.series { font-size: 12.5px; color: var(--ink-2); margin: 0; padding-left: 1.2em; display: grid; gap: 2px; }
+#figtable tbody tr { cursor: pointer; }
+#figtable tbody tr:hover { background: var(--sel); }
+#figtable tbody tr[aria-current="true"] { background: var(--sel); }
+details summary { cursor: pointer; color: var(--ink-2); }
 </style>
 
 <div class="wrap">
   <header>
-    <div class="eyebrow" id="eyebrow">real-chart-bench · 軸レンジあり条件</div>
-    <h1>抽出結果ビューア</h1>
-    <p class="sub" id="lede">実論文の図について、各モデルが抽出した曲線を正解(Starrydata の人手デジタイズ)と重ねて確認します。下のスコア分布の点か、左の一覧から図を選んでください。</p>
+    <div class="eyebrow" id="eyebrow">real-chart-bench</div>
+    <h1>点レベル評価ビューア</h1>
+    <p class="sub" id="lede">実論文の図について、正解(Starrydata の人手デジタイズ)の実験点ひとつひとつを、各手法が見つけたか・見逃したか・余計な点を出したかを確認します。</p>
   </header>
 
-  <section class="finding" id="finding" aria-live="polite"><span class="loading">データを読み込んでいます…</span></section>
+  <section class="finding" id="explain">
+    <strong>点レベル評価のしくみ</strong>
+    <ul>
+      <li>正解と出力の点を、軸レンジで 0〜1 に正規化した空間(対数軸は log10 で)に置き、距離が τ = <span class="num" id="tauTxt">0.02</span>(軸幅の 2%)以内の点を一対一で対応づけます。対応の数を最大にし、その中で距離の合計を最小にします。</li>
+      <li>系列どうしは F1 が最大になるように一対一で対応づけます。対応先のない正解系列の点はすべて見逃し、対応先のない出力系列の点はすべて余計な点です。</li>
+      <li>再現率 = 見つけた正解点 / 正解点、適合率 = 対応した出力点 / 出力点。表の値は図ごとの値の平均(マクロ平均)です。</li>
+    </ul>
+  </section>
 
   <section class="panel">
-    <h2>モデル別の成績</h2>
-    <p class="sub">score = (系列一致率 + (1 − 曲線距離) + 被覆率) / 3。右端の帯は図ごとのスコアの分布で、点をクリックするとその図を開きます。</p>
-    <div class="tablewrap"><table id="summary"><thead><tr>
-      <th>モデル</th><th class="num">score</th><th class="num">系列一致率</th><th class="num">曲線距離</th><th class="num">被覆率</th><th class="num">図数</th><th>図ごとのスコア (0 → 1)</th>
+    <div class="condbar">
+      <h2>リーダーボード(点F1 順)</h2>
+      <div class="seg" role="group" aria-label="条件">
+        <button type="button" data-cond="calibrated" aria-pressed="true">軸レンジあり</button>
+        <button type="button" data-cond="noaxis" aria-pressed="false">軸レンジなし</button>
+      </div>
+    </div>
+    <p class="sub" id="condNote"></p>
+    <div class="tablewrap"><table id="board"><thead><tr>
+      <th>手法</th><th>実行場所</th><th class="num">点F1</th><th class="num">再現率</th><th class="num">適合率</th><th class="num">旧summary_score</th><th class="num">図数</th><th>図ごとの点F1 (0 → 1)</th>
     </tr></thead><tbody></tbody></table></div>
+    <p class="note">行をクリックすると、その手法を下の図の一覧と詳細で選びます。帯の点をクリックするとその図を開きます。</p>
   </section>
 
   <section class="browse">
@@ -129,33 +177,47 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2)
       <div class="controls">
         <label for="sort">並び順
           <select id="sort">
-            <option value="gap">LLM最良とLineFormerの差が大きい順</option>
-            <option value="lf">LineFormer のスコアが低い順</option>
+            <option value="low">点F1 が低い順</option>
+            <option value="high">点F1 が高い順</option>
+            <option value="missed">見逃しの多い順</option>
+            <option value="extra">余計な点の多い順</option>
             <option value="id">図ID順</option>
           </select>
         </label>
-        <label for="axisOnly"><input type="checkbox" id="axisOnly">軸位置がわかる図のみ</label>
+        <label for="filt">絞り込み
+          <select id="filt">
+            <option value="all">すべて</option>
+            <option value="lt05">点F1 &lt; 0.5</option>
+            <option value="lt08">点F1 &lt; 0.8</option>
+            <option value="lt1">点F1 &lt; 1</option>
+            <option value="eq1">点F1 = 1</option>
+          </select>
+        </label>
+        <label for="q"><input type="search" id="q" placeholder="図IDで検索" aria-label="図IDで検索"></label>
+        <label for="axisOnly"><input type="checkbox" id="axisOnly">画像に重ねられる図のみ</label>
       </div>
-      <div class="note" id="cellLegend"></div>
+      <div class="note" id="listHead"></div>
       <div class="list" id="list" role="listbox" aria-label="図の一覧"></div>
     </div>
 
     <div class="panel detail" id="detail"></div>
   </section>
+
+  <details class="panel" id="oldFinding"><summary>旧指標(summary_score)での所見: LineFormer と軸合わせ</summary><div class="finding" id="finding" style="margin-top:10px"></div></details>
 </div>
 <div class="tip" id="tip" hidden></div>
 
 <script>
-const ORDER = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5", "lineformer", "lineformer-axis", "naive-cv", "achromatic-cv"];
-const COLOR = { "claude-fable-5-1": "--s1", "lineformer": "--s2", "claude-opus-5-5": "--s3", "claude-haiku-4-5": "--s4", "lineformer-axis": "--s5", "naive-cv": "--s6", "claude-sonnet-5-5": "--s7", "achromatic-cv": "--s8" };
 const KIND = { llm: "LLM", dedicated: "専用モデル", cv: "古典CV", exploratory: "参考・未掲載" };
-const NAME_JA = { "lineformer-axis": "LineFormer (目盛で校正)" };
-const LLM_IDS = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"];
+const NAME_JA = { "lineformer-axis": "LineFormer (目盛で校正・参考)" };
+const COND_NOTE = {
+  calibrated: "各手法に軸レンジ(数値範囲)とスケールを与えた条件。LLM 以外の抽出器はこの条件だけです。",
+  noaxis: "LLM に軸レンジを与えず、画像の目盛から自分で読ませた条件。LineFormer と古典CVは軸レンジがないと数値に直せないため載りません。",
+};
 const NS = "http://www.w3.org/2000/svg";
-let DATA, MODELS, FIGS, cur = 0, shown = new Set(["claude-fable-5-1", "lineformer", "lineformer-axis"]), showRaw = true;
+let DATA, FIGS, COND = "calibrated", modelA = null, modelB = "", cur = 0;
+const opt = { curves: true, pairs: true, raw: false };
 
-const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const col = id => `var(${COLOR[id]})`;
 const fmt = (v, d = 3) => v == null ? "–" : v.toFixed(d);
 const heat = s => s == null ? null : `var(--h${Math.min(5, Math.floor(s * 6))})`;
 const el = (tag, attrs = {}, parent) => {
@@ -166,174 +228,311 @@ const el = (tag, attrs = {}, parent) => {
   if (parent) parent.appendChild(e);
   return e;
 };
-const name = m => NAME_JA[m.id] || m.name;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const tip = document.getElementById("tip");
-function showTip(ev, text) { tip.textContent = text; tip.hidden = false; tip.style.left = (ev.clientX + 12) + "px"; tip.style.top = (ev.clientY + 12) + "px"; }
+function showTip(ev, text) { tip.textContent = text; tip.hidden = false; tip.style.left = Math.min(ev.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (ev.clientY + 12) + "px"; }
 function hideTip() { tip.hidden = true; }
 
-function bestLlm(f) { return Math.max(...LLM_IDS.map(i => f.models[i]?.score ?? 0)); }
+// ---------- condition / model helpers ----------
+const models = () => [...DATA.conditions[COND].models].sort((a, b) => (b.point_f1 ?? -1) - (a.point_f1 ?? -1));
+const modelById = id => DATA.conditions[COND].models.find(m => m.id === id);
+const res = (f, id) => (COND === "calibrated" ? f.models : f.noaxis)[id];
+const name = m => NAME_JA[m.id] || m.name;
+const badges = m => `<span class="kind">${KIND[m.kind]}</span>${m.local ? '<span class="badge-local">ローカル実行</span>' : ""}`;
+const place = m => m.kind !== "llm" ? "–" : m.local ? "ローカル" : "クラウド";
+const ptOf = (f, id) => res(f, id)?.point;
 
-function renderFinding() {
-  const ax = FIGS.filter(f => f.models["lineformer-axis"]);
-  const mean = (arr, k) => arr.reduce((a, f) => a + f.models[k].score, 0) / arr.length;
-  const markers = FIGS.filter(f => f.figure_kind === "markers").length;
-  const lf = MODELS.find(m => m.id === "lineformer");
-  document.getElementById("finding").innerHTML = `
-    <strong>LineFormer の低さは、主に軸合わせから来ています</strong>
-    <ul>
-      <li>採点では LineFormer の出力を「画像全体 = プロット領域」として数値に直しています(旧 Colab 実行と同じ扱い)。軸目盛のピクセル位置がわかる ${ax.length} 図で、同じ検出結果を目盛位置で直すと <span class="num">${fmt(mean(ax, "lineformer"))} → ${fmt(mean(ax, "lineformer-axis"))}</span> に上がります(Fable 5 は同じ図で <span class="num">${fmt(mean(ax, "claude-fable-5-1"))}</span>)。</li>
-      <li>${FIGS.length} 図中 ${markers} 図はマーカー(散布点)の図です。LineFormer は折れ線の検出用に学習されたモデルで、点の列は想定外の入力です。目盛で直しても残る差はここから来ていると見ています。</li>
-      <li>LLM は画像の中の目盛を自分で探して軸を合わせています。全図での LineFormer は <span class="num">${fmt(lf.mean)}</span>。「目盛で校正」は探索用の参考値で、リーダーボードには載せていません。</li>
-    </ul>`;
+function setCond(c) {
+  COND = c;
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.cond === c ? "true" : "false"));
+  const ids = models().map(m => m.id);
+  if (!ids.includes(modelA)) modelA = ids[0];
+  if (modelB && !ids.includes(modelB)) modelB = "";
+  document.getElementById("eyebrow").textContent = `real-chart-bench · ${DATA.dataset_version} · ${DATA.conditions[COND].label}`;
+  document.getElementById("condNote").textContent = COND_NOTE[COND];
+  renderBoard(); renderList(); renderDetail();
 }
 
-function renderSummary() {
-  const tb = document.querySelector("#summary tbody");
+// ---------- leaderboard ----------
+function renderBoard() {
+  const tb = document.querySelector("#board tbody");
   tb.innerHTML = "";
-  const W = 280, H = 26;
-  for (const id of ORDER) {
-    const m = MODELS.find(x => x.id === id);
-    if (!m) continue;
-    const tr = el("tr", {}, tb);
-    el("td", { html: `<span class="sw" style="background:${col(id)}"></span>${name(m)}<span class="kind">${KIND[m.kind]}</span>` }, tr);
-    el("td", { class: "num big", text: fmt(m.mean) }, tr);
-    el("td", { class: "num", text: fmt(m.match_rate) }, tr);
-    el("td", { class: "num", text: fmt(m.mean_curve_distance) }, tr);
-    el("td", { class: "num", text: fmt(m.mean_coverage_ratio) }, tr);
+  const W = 240, H = 24;
+  for (const m of models()) {
+    const tr = el("tr", { "aria-current": m.id === modelA ? "true" : "false", tabindex: 0 }, tb);
+    el("td", { html: `${esc(name(m))}${badges(m)}` }, tr);
+    el("td", { text: place(m) }, tr);
+    el("td", { class: "num big", text: fmt(m.point_f1) }, tr);
+    el("td", { class: "num", text: fmt(m.point_recall) }, tr);
+    el("td", { class: "num", text: fmt(m.point_precision) }, tr);
+    el("td", { class: "num", text: fmt(m.mean) }, tr);
     el("td", { class: "num", text: m.n }, tr);
     const td = el("td", {}, tr);
-    const svg = el("svg:svg", { class: "strip", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name(m)} の図ごとのスコア分布` }, td);
+    const svg = el("svg:svg", { class: "strip", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name(m)} の図ごとの点F1の分布` }, td);
     el("svg:line", { x1: 4, x2: W - 4, y1: H - 3, y2: H - 3, stroke: "var(--rule)", "stroke-width": 1 }, svg);
     FIGS.forEach((f, i) => {
-      const s = f.models[id]?.score;
+      const s = ptOf(f, m.id)?.f1;
       if (s == null) return;
       const jitter = ((i * 7919) % 13) / 13;
-      const c = el("svg:circle", { cx: 4 + s * (W - 8), cy: 4 + jitter * (H - 10), r: 3, fill: col(id), "fill-opacity": .55, stroke: "var(--surface)", "stroke-width": 1 }, svg);
-      c.addEventListener("mousemove", ev => showTip(ev, `${f.id}  ${fmt(s)}`));
+      const c = el("svg:circle", { cx: 4 + s * (W - 8), cy: 4 + jitter * (H - 10), r: 3, fill: "var(--accent)", "fill-opacity": .5, stroke: "var(--surface)", "stroke-width": 1 }, svg);
+      c.addEventListener("mousemove", ev => showTip(ev, `${f.id}  点F1 ${fmt(s)}`));
       c.addEventListener("mouseleave", hideTip);
-      c.addEventListener("click", () => { select(FIGS.indexOf(f)); document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" }); });
+      c.addEventListener("click", ev => { ev.stopPropagation(); modelA = m.id; select(i, true); renderBoard(); renderList(); document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" }); });
     });
+    const pick = () => { modelA = m.id; if (modelB === m.id) modelB = ""; renderBoard(); renderList(); renderDetail(); };
+    tr.addEventListener("click", pick);
+    tr.addEventListener("keydown", ev => { if (ev.key === "Enter") pick(); });
   }
 }
 
+// ---------- figure list ----------
 function sortedFigs() {
-  const mode = document.getElementById("sort").value;
+  const mode = document.getElementById("sort").value, filt = document.getElementById("filt").value;
+  const q = document.getElementById("q").value.trim();
+  const f1 = f => ptOf(f, modelA)?.f1 ?? -1;
   let arr = FIGS.map((f, i) => ({ f, i }));
   if (document.getElementById("axisOnly").checked) arr = arr.filter(x => x.f.axis_px);
-  const lf = f => f.models.lineformer?.score ?? 0;
-  if (mode === "gap") arr.sort((a, b) => (bestLlm(b.f) - lf(b.f)) - (bestLlm(a.f) - lf(a.f)));
-  else if (mode === "lf") arr.sort((a, b) => lf(a.f) - lf(b.f));
-  else arr.sort((a, b) => a.f.id.localeCompare(b.f.id, undefined, { numeric: true }));
-  return arr;
+  if (q) arr = arr.filter(x => x.f.id.includes(q));
+  const cut = { lt05: v => v < 0.5, lt08: v => v < 0.8, lt1: v => v < 1, eq1: v => v >= 1 }[filt];
+  if (cut) arr = arr.filter(x => cut(f1(x.f)));
+  const missed = f => { const p = ptOf(f, modelA); return p ? p.n_gt - p.n_matched : 0; };
+  const extra = f => { const p = ptOf(f, modelA); return p ? p.n_pred - p.n_matched : 0; };
+  const byId = (a, b) => a.f.id.localeCompare(b.f.id, undefined, { numeric: true });
+  const cmp = {
+    low: (a, b) => f1(a.f) - f1(b.f) || byId(a, b),
+    high: (a, b) => f1(b.f) - f1(a.f) || byId(a, b),
+    missed: (a, b) => missed(b.f) - missed(a.f) || byId(a, b),
+    extra: (a, b) => extra(b.f) - extra(a.f) || byId(a, b),
+    id: byId,
+  }[mode];
+  return arr.sort(cmp);
 }
 
 function renderList() {
   const list = document.getElementById("list");
   list.innerHTML = "";
-  for (const { f, i } of sortedFigs()) {
+  const ms = models();
+  const arr = sortedFigs();
+  for (const { f, i } of arr) {
     const b = el("button", { class: "row", role: "option", "aria-current": i === cur ? "true" : "false", "data-i": i }, list);
     el("span", { class: "id", text: f.id + (f.axis_px ? "" : " ·") }, b);
+    el("span", { class: "f1", text: fmt(ptOf(f, modelA)?.f1, 2) }, b);
     const cells = el("span", { class: "cells" }, b);
-    for (const id of ORDER) {
-      const s = f.models[id]?.score;
-      const m = MODELS.find(x => x.id === id);
-      el("span", { class: "cell" + (s == null ? " na" : ""), style: s == null ? "" : `background:${heat(s)}`, title: `${name(m)}: ${fmt(s)}` }, cells);
+    for (const m of ms) {
+      const s = ptOf(f, m.id)?.f1;
+      el("span", { class: "cell" + (s == null ? " na" : ""), style: s == null ? "" : `background:${heat(s)}${m.id === modelA ? ";outline:1.5px solid var(--ink)" : ""}`, title: `${name(m)}: 点F1 ${fmt(s)}` }, cells);
     }
     b.addEventListener("click", () => select(i));
   }
-  const lg = document.getElementById("cellLegend");
-  lg.innerHTML = `マスの並び: ${ORDER.map(id => name(MODELS.find(x => x.id === id))).join(" / ")}。濃いほど高スコア、点線は対象外。「·」付きの図は軸位置が未確定で、画像上には LineFormer の検出ピクセルだけを重ねます。`;
+  const mA = modelById(modelA);
+  document.getElementById("listHead").innerHTML = `${arr.length} / ${FIGS.length} 図。数値は <b>${esc(name(mA))}</b> の点F1(並び順・絞り込みもこの手法で)。マスは点F1(濃いほど高い)で、並びはリーダーボード順、枠付きが選択中の手法。「·」付きの図は軸目盛のピクセル位置が未確定で、画像には重ねられません。j / k キーで前後の図へ移れます。`;
 }
 
-function select(i) {
+function syncHash() {
+  const h = new URLSearchParams({ cond: COND, model: modelA, fig: FIGS[cur].id });
+  if (modelB) h.set("compare", modelB);
+  history.replaceState(null, "", "#" + h);
+}
+
+function select(i, quiet) {
   cur = i;
   document.querySelectorAll(".row").forEach(r => r.setAttribute("aria-current", +r.dataset.i === i ? "true" : "false"));
+  const row = document.querySelector(`.row[data-i="${i}"]`), list = document.getElementById("list");
+  // scroll only the list, never the page
+  if (!quiet && row) {
+    const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    if (top < list.scrollTop || top + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top - list.clientHeight / 2;
+  }
   renderDetail();
 }
 
 // ---------- detail ----------
+function legendHtml() {
+  const sym = inner => `<svg width="16" height="16" viewBox="-8 -8 16 16" aria-hidden="true">${inner}</svg>`;
+  return [
+    [sym('<circle r="5" fill="var(--pt-found)" stroke="var(--surface)" stroke-width="1"/>'), "正解点・見つけた"],
+    [sym('<circle r="4.5" fill="none" stroke="var(--pt-missed)" stroke-width="2"/>'), "正解点・見逃し"],
+    [sym('<circle r="2.3" fill="var(--pt-match)"/>'), "出力点・対応あり"],
+    [sym('<path d="M-4,-4L4,4M-4,4L4,-4" stroke="var(--pt-extra)" stroke-width="2"/>'), "出力点・余計な点"],
+    [sym('<line x1="-7" y1="3" x2="7" y2="-3" stroke="var(--pt-pair)" stroke-width="1.2"/>'), "対応(出力点 → 正解点)"],
+    [sym('<ellipse rx="6" ry="4" fill="none" stroke="var(--ink-2)" stroke-dasharray="2 1.5"/>'), "τ = 軸幅の2%(この楕円内なら対応できる)"],
+  ].map(([s, t]) => `<span>${s}${t}</span>`).join("");
+}
+
 function renderDetail() {
   const f = FIGS[cur];
+  syncHash();
   const d = document.getElementById("detail");
   d.innerHTML = "";
   const head = el("div", { class: "dhead" }, d);
   el("h2", { text: f.id }, head);
-  el("span", { class: "meta", text: `${f.figure_kind === "markers" ? "マーカー図" : "線のみの図"} · x ${f.x_range.map(v => +v.toPrecision(6)).join("–")} (${f.x_scale}) · y ${f.y_range.map(v => +v.toPrecision(6)).join("–")} (${f.y_scale}) · 正解 ${f.gt.length} 系列` }, head);
+  const nGt = f.gt_points.reduce((a, s) => a + s.length, 0);
+  el("span", { class: "meta", text: `${f.figure_kind === "markers" ? "マーカー図" : "線のみの図"} · x ${f.x_range.map(v => +v.toPrecision(6)).join("–")} (${f.x_scale}) · y ${f.y_range.map(v => +v.toPrecision(6)).join("–")} (${f.y_scale}) · 正解 ${f.gt.length} 系列 ${nGt} 点 · ${DATA.conditions[COND].label}` }, head);
 
-  const chips = el("div", { class: "chips", role: "group", "aria-label": "表示するモデル" }, d);
-  for (const id of ORDER) {
-    const m = MODELS.find(x => x.id === id), r = f.models[id];
-    const c = el("button", { class: "chip", "aria-pressed": shown.has(id) ? "true" : "false", html: `<span class="sw" style="background:${col(id)};margin:0"></span>${name(m)} <span class="num">${r ? fmt(r.score) : "–"}</span>` }, chips);
-    if (!r) c.disabled = true;
-    c.addEventListener("click", () => { shown.has(id) ? shown.delete(id) : shown.add(id); renderDetail(); });
+  // controls
+  const ctl = el("div", { class: "controls" }, d);
+  const ms = models();
+  const selA = el("select", { id: "selA", "aria-label": "表示する手法" }, el("label", { for: "selA", text: "手法 " }, ctl));
+  const selB = el("select", { id: "selB", "aria-label": "比較する手法" }, el("label", { for: "selB", text: "比較 " }, ctl));
+  el("option", { value: "", text: "なし" }, selB);
+  for (const m of ms) {
+    const t = `${name(m)}${m.local ? "(ローカル)" : ""} — ${fmt(ptOf(f, m.id)?.f1, 2)}`;
+    el("option", { value: m.id, text: t }, selA);
+    el("option", { value: m.id, text: t }, selB);
   }
-  const rawLbl = el("label", { for: "showRaw" }, chips);
-  const rawCb = el("input", { type: "checkbox", id: "showRaw" }, rawLbl);
-  rawCb.checked = showRaw;
-  rawLbl.append("LineFormer の検出ピクセル(破線)");
-  rawCb.addEventListener("change", () => { showRaw = rawCb.checked; renderDetail(); });
+  selA.value = modelA; selB.value = modelB;
+  selA.addEventListener("change", () => { modelA = selA.value; renderBoard(); renderList(); renderDetail(); });
+  selB.addEventListener("change", () => { modelB = selB.value; renderDetail(); });
+  for (const [k, txt] of [["curves", "出力の線"], ["pairs", "対応線"], ["raw", "LineFormer の検出ピクセル"]]) {
+    const lb = el("label", { for: "opt-" + k }, ctl);
+    const cb = el("input", { type: "checkbox", id: "opt-" + k }, lb);
+    cb.checked = opt[k]; lb.append(txt);
+    cb.addEventListener("change", () => { opt[k] = cb.checked; renderDetail(); });
+  }
+  el("div", { class: "legend", html: legendHtml() }, d);
 
-  const views = el("div", { class: "views" }, d);
-  const v1 = el("div", { class: "view" }, views);
-  el("div", { class: "eyebrow", text: "元画像に重ねる" }, v1);
-  drawOverlay(f, v1);
-  const v2 = el("div", { class: "view" }, views);
-  el("div", { class: "eyebrow", text: "データ空間" }, v2);
-  drawPlot(f, v2);
+  for (const id of [modelA, modelB].filter((v, i, a) => v && a.indexOf(v) === i)) renderModelBlock(f, id, d);
 
-  // per-figure table
+  // every model on this figure
   const tw = el("div", { class: "tablewrap" }, d);
-  const t = el("table", {}, tw);
-  el("thead", { html: `<tr><th>モデル</th><th class="num">score</th><th class="num">系列一致率</th><th class="num">曲線距離</th><th class="num">被覆率</th><th class="num">出力系列 / 一致</th></tr>` }, t);
+  el("div", { class: "eyebrow", text: "この図の全手法(行をクリックで表示切替)" }, tw);
+  const t = el("table", { id: "figtable" }, tw);
+  el("thead", { html: `<tr><th>手法</th><th class="num">点F1</th><th class="num">再現率</th><th class="num">適合率</th><th class="num">見つけた / 正解点</th><th class="num">余計 / 出力点</th><th class="num">旧score</th></tr>` }, t);
   const tb = el("tbody", {}, t);
-  for (const id of ORDER) {
-    const m = MODELS.find(x => x.id === id), r = f.models[id];
-    if (!r) continue;
-    const matched = r.curves.filter(c => c.gt != null).length;
-    el("tr", { html: `<td><span class="sw" style="background:${col(id)}"></span>${name(m)}</td><td class="num">${fmt(r.score)}</td><td class="num">${fmt(r.match_rate)}</td><td class="num">${fmt(r.dist)}</td><td class="num">${fmt(r.cov)}</td><td class="num">${r.curves.length} / ${matched}${r.error ? ` <span class="err">${r.error.split("\n")[0].slice(0, 60)}</span>` : ""}</td>` }, tb);
+  for (const m of [...ms].sort((a, b) => (ptOf(f, b.id)?.f1 ?? -1) - (ptOf(f, a.id)?.f1 ?? -1))) {
+    const r = res(f, m.id), p = r?.point;
+    if (!p) continue;
+    const tr = el("tr", { "aria-current": m.id === modelA ? "true" : "false", html: `<td>${esc(name(m))}${m.local ? '<span class="badge-local">ローカル実行</span>' : ""}</td><td class="num">${fmt(p.f1)}</td><td class="num">${fmt(p.recall)}</td><td class="num">${fmt(p.precision)}</td><td class="num">${p.n_matched} / ${p.n_gt}</td><td class="num">${p.n_pred - p.n_matched} / ${p.n_pred}</td><td class="num">${fmt(r.score)}${r.error ? ` <span class="err">${esc(r.error.split("\n")[0].slice(0, 40))}</span>` : ""}</td>` }, tb);
+    tr.addEventListener("click", () => { modelA = m.id; renderBoard(); renderList(); renderDetail(); });
   }
 }
 
-function tf(v, lo, hi, log) { return log ? (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)) : (v - lo) / (hi - lo); }
+function renderModelBlock(f, id, parent) {
+  const m = modelById(id), r = res(f, id);
+  const blk = el("div", { class: "mblock" }, parent);
+  const mh = el("div", { class: "mhead" }, blk);
+  el("h3", { html: `${esc(name(m))}${badges(m)}` }, mh);
+  if (!r) { el("div", { class: "err", text: "この図の結果はありません。" }, blk); return; }
+  const p = r.point;
+  el("div", { class: "stats", html: `<span>点F1<b>${fmt(p.f1)}</b></span><span>再現率<b>${fmt(p.recall)}</b></span><span>適合率<b>${fmt(p.precision)}</b></span><span>正解点<b>${p.n_gt}</b></span><span>見つけた<b>${p.n_matched}</b></span><span>見逃し<b>${p.n_gt - p.n_matched}</b></span><span>余計な点<b>${p.n_pred - p.n_matched}</b></span><span>(出力点<b>${p.n_pred}</b>)</span><span>旧score<b>${fmt(r.score)}</b></span>` }, mh);
+  if (r.error) el("div", { class: "err", text: `回答なし・エラー: ${r.error.split("\n")[0].slice(0, 120)}(何も出力しなかったものとして採点)` }, blk);
+  const ul = el("ul", { class: "series" }, blk);
+  for (const [i, j, n] of p.series) {
+    const gl = j != null ? `正解 ${j + 1}${f.gt[j]?.label ? "(" + f.gt[j].label + ")" : ""}` : null;
+    const txt = i != null && j != null
+      ? `出力 ${i + 1} ↔ ${gl}: 正解 ${f.gt_points[j].length} 点中 ${n} 点を発見、出力 ${p.pred[i].length} 点中 ${p.pred[i].length - n} 点が余計`
+      : j != null ? `${gl}: 対応する出力系列なし(${f.gt_points[j].length} 点すべて見逃し)`
+      : `出力 ${i + 1}: 対応する正解系列なし(${p.pred[i].length} 点すべて余計)`;
+    el("li", { text: txt }, ul);
+  }
+  const views = el("div", { class: "views" }, blk);
+  const v1 = el("div", { class: "view" }, views);
+  el("div", { class: "eyebrow", text: "元画像に重ねる" }, v1);
+  drawOverlay(f, r, id, v1);
+  const v2 = el("div", { class: "view" }, views);
+  el("div", { class: "eyebrow", text: "データ空間" }, v2);
+  drawPlot(f, r, v2);
+}
 
-function drawOverlay(f, parent) {
+function tf(v, lo, hi, log) {
+  if (v == null) return NaN;
+  if (log) return v > 0 ? (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)) : NaN;
+  return (v - lo) / (hi - lo);
+}
+
+// Draws the point evaluation through `map` (data -> svg coords, or null when not placeable).
+// s = marker size in svg units. Returns hover targets [x, y, text].
+function drawMarks(g, f, r, map, s, gtLabel) {
+  const p = r.point, hits = [];
+  const P = (pt) => { const q = map(pt[0], pt[1]); return q && q.every(Number.isFinite) ? q : null; };
+  const nsw = { "vector-effect": "non-scaling-stroke" };
+  if (opt.curves) {
+    for (const c of r.curves) {
+      const pts = c.x.map((x, k) => P([x, c.y[k]])).filter(Boolean);
+      if (pts.length > 1) el("svg:polyline", { points: pts.map(q => q.join(",")).join(" "), fill: "none", stroke: "var(--pt-match)", "stroke-width": 1.2, opacity: .35, ...nsw }, g);
+    }
+  }
+  if (opt.pairs) {
+    for (const [ci, pi, gj, gi] of p.pairs) {
+      const a = P(p.pred[ci][pi]), b = P(f.gt_points[gj][gi]);
+      if (a && b) el("svg:line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: "var(--pt-pair)", "stroke-width": 1.2, ...nsw }, g);
+    }
+  }
+  const fmtv = v => v == null ? "–" : +v.toPrecision(5);
+  p.pred.forEach((c, ci) => c.forEach((pt, k) => {
+    if (p.pred_ok[ci][k]) return;
+    const q = P(pt); if (!q) return;
+    const h = s * .75;
+    el("svg:path", { d: `M${q[0] - h},${q[1] - h}L${q[0] + h},${q[1] + h}M${q[0] - h},${q[1] + h}L${q[0] + h},${q[1] - h}`, stroke: "var(--pt-extra)", "stroke-width": 1.6, ...nsw }, g);
+    hits.push([q[0], q[1], `出力 ${ci + 1} #${k + 1} 余計な点  x=${fmtv(pt[0])}  y=${fmtv(pt[1])}`]);
+  }));
+  f.gt_points.forEach((c, gj) => c.forEach((pt, k) => {
+    const q = P(pt); if (!q) return;
+    const ok = p.gt_ok[gj][k];
+    if (ok) el("svg:circle", { cx: q[0], cy: q[1], r: s, fill: "var(--pt-found)", stroke: gtLabel, "stroke-width": 1, ...nsw }, g);
+    else el("svg:circle", { cx: q[0], cy: q[1], r: s * .9, fill: "none", stroke: "var(--pt-missed)", "stroke-width": 2, ...nsw }, g);
+    const lab = f.gt[gj]?.label ? `(${f.gt[gj].label})` : "";
+    hits.push([q[0], q[1], `正解 ${gj + 1}${lab} #${k + 1} ${ok ? "見つけた" : "見逃し"}  x=${fmtv(pt[0])}  y=${fmtv(pt[1])}`]);
+  }));
+  p.pred.forEach((c, ci) => c.forEach((pt, k) => {
+    if (!p.pred_ok[ci][k]) return;
+    const q = P(pt); if (!q) return;
+    el("svg:circle", { cx: q[0], cy: q[1], r: s * .42, fill: "var(--pt-match)" }, g);
+    hits.push([q[0], q[1], `出力 ${ci + 1} #${k + 1} 対応あり  x=${fmtv(pt[0])}  y=${fmtv(pt[1])}`]);
+  }));
+  return hits;
+}
+
+function hover(svg, hits, radius) {
+  const ring = el("svg:circle", { r: radius / 3, fill: "none", stroke: "var(--accent)", "stroke-width": 2, "vector-effect": "non-scaling-stroke", visibility: "hidden" }, svg);
+  svg.addEventListener("mousemove", ev => {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+    let best = null, bd = radius * radius;
+    for (const h of hits) { const dd = (h[0] - q.x) ** 2 + (h[1] - q.y) ** 2; if (dd < bd) { bd = dd; best = h; } }
+    if (best) { ring.setAttribute("cx", best[0]); ring.setAttribute("cy", best[1]); ring.setAttribute("visibility", "visible"); showTip(ev, best[2]); }
+    else { ring.setAttribute("visibility", "hidden"); hideTip(); }
+  });
+  svg.addEventListener("mouseleave", () => { ring.setAttribute("visibility", "hidden"); hideTip(); });
+}
+
+// tau ellipse + bars: 2% of each axis range, in the given axis box (svg coords)
+function scaleMark(svg, x0, x1, y0, y1, tau, fontSize) {
+  const rx = Math.abs(x1 - x0) * tau, ry = Math.abs(y1 - y0) * tau;
+  const cx = Math.max(x0, x1) - rx - fontSize * 0.6, cy = Math.min(y0, y1) + ry + fontSize * 0.6;
+  const g = el("svg:g", { "aria-label": "軸幅の2%の目安" }, svg);
+  el("svg:ellipse", { cx, cy, rx, ry, fill: "none", stroke: "var(--ink-2)", "stroke-dasharray": "2 1.5", "vector-effect": "non-scaling-stroke" }, g);
+  el("svg:line", { x1: cx - rx, x2: cx + rx, y1: cy + ry + fontSize * .5, y2: cy + ry + fontSize * .5, stroke: "var(--ink-2)", "stroke-width": 2, "vector-effect": "non-scaling-stroke" }, g);
+  const t = el("svg:text", { x: cx - rx - fontSize * .4, y: cy + fontSize * .35, "text-anchor": "end", "font-size": fontSize, fill: "var(--ink-2)", text: `${tau * 100}%` }, g);
+  t.style.fontFamily = "var(--font-data)";
+}
+
+function drawOverlay(f, r, id, parent) {
   const box = el("div", { class: "imgbox" }, parent);
-  const img = el("img", { src: f.image, alt: `図 ${f.id} の元画像` }, box);
+  el("img", { src: f.image, alt: `図 ${f.id} の元画像` }, box);
   const [W, H] = f.image_size;
   const svg = el("svg:svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" }, box);
-  const r = Math.max(2, W / 200);
   const a = f.axis_px;
-  const toPx = a ? (x, y) => [
-    a.x_min_px + tf(x, f.x_range[0], f.x_range[1], f.x_scale === "log") * (a.x_max_px - a.x_min_px),
-    a.y_min_px + tf(y, f.y_range[0], f.y_range[1], f.y_scale === "log") * (a.y_max_px - a.y_min_px),
-  ] : null;
-  if (a) {
-    el("svg:rect", { x: a.x_min_px, y: a.y_max_px, width: a.x_max_px - a.x_min_px, height: a.y_min_px - a.y_max_px, fill: "none", stroke: "#888", "stroke-dasharray": "4 3", "vector-effect": "non-scaling-stroke" }, svg);
-  }
-  if (showRaw && f.lineformer_px) {
+  if (opt.raw && f.lineformer_px) {
     for (const s of f.lineformer_px) {
       if (s.length < 2) continue;
-      el("svg:polyline", { points: s.map(p => p.join(",")).join(" "), fill: "none", stroke: col("lineformer"), "stroke-width": 2, "stroke-dasharray": "5 3", "vector-effect": "non-scaling-stroke", opacity: .9 }, svg);
+      el("svg:polyline", { points: s.map(p => p.join(",")).join(" "), fill: "none", stroke: "var(--s2)", "stroke-width": 1.5, "stroke-dasharray": "5 3", "vector-effect": "non-scaling-stroke", opacity: .8 }, svg);
     }
   }
-  if (toPx) {
-    for (const id of ORDER) {
-      if (!shown.has(id) || !f.models[id]) continue;
-      for (const c of f.models[id].curves) {
-        const pts = c.x.map((x, k) => toPx(x, c.y[k])).filter(p => p.every(Number.isFinite));
-        el("svg:polyline", { points: pts.map(p => p.join(",")).join(" "), fill: "none", stroke: col(id), "stroke-width": 2, "vector-effect": "non-scaling-stroke", opacity: .9 }, svg);
-      }
-    }
-    for (const g of f.gt) {
-      g.x.forEach((x, k) => {
-        const [px, py] = toPx(x, g.y[k]);
-        el("svg:circle", { cx: px, cy: py, r, fill: "none", stroke: "#111", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" }, svg);
-      });
-    }
+  if (a) {
+    el("svg:rect", { x: a.x_min_px, y: a.y_max_px, width: a.x_max_px - a.x_min_px, height: a.y_min_px - a.y_max_px, fill: "none", stroke: "#888", "stroke-dasharray": "4 3", "vector-effect": "non-scaling-stroke" }, svg);
+    const map = (x, y) => [
+      a.x_min_px + tf(x, f.x_range[0], f.x_range[1], f.x_scale === "log") * (a.x_max_px - a.x_min_px),
+      a.y_min_px + tf(y, f.y_range[0], f.y_range[1], f.y_scale === "log") * (a.y_max_px - a.y_min_px),
+    ];
+    const sz = Math.max(2.5, W / 160);
+    const hits = drawMarks(el("svg:g", {}, svg), f, r, map, sz, "#fff");
+    scaleMark(svg, a.x_min_px, a.x_max_px, a.y_min_px, a.y_max_px, DATA.point_tau, Math.max(10, W / 45));
+    hover(svg, hits, W / 40);
   }
   el("div", { class: "cap", text: a
-    ? "黒丸 = 正解、実線 = 各モデルの出力を目盛位置で画像座標に戻したもの、灰色の破線枠 = 軸目盛の範囲。"
-    : "この図は軸目盛のピクセル位置が未確定なので、正解とモデル出力は右のデータ空間で比べてください。" }, parent);
+    ? "目盛のピクセル位置で正解と出力を画像座標に戻して重ねています。灰色の破線枠 = 与えた軸レンジ。"
+    : "この図は軸目盛のピクセル位置が未確定なので、点の比較は右のデータ空間で見てください。" }, parent);
 }
 
 function niceTicks(lo, hi, n = 5) {
@@ -349,15 +548,18 @@ function logTicks(lo, hi) {
   return out.length >= 2 ? out : [lo, hi];
 }
 const tickLabel = v => Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(1) : +v.toPrecision(4) + "";
+let clipSeq = 0;
 
-function drawPlot(f, parent) {
+function drawPlot(f, r, parent) {
   const W = 560, H = 400, m = { l: 62, r: 14, t: 12, b: 34 };
-  const svg = el("svg:svg", { class: "plot", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `図 ${f.id} の正解と抽出結果` }, parent);
+  const svg = el("svg:svg", { class: "plot", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `図 ${f.id} の点の対応` }, parent);
   const xl = f.x_scale === "log", yl = f.y_scale === "log";
   const pad = 0.08;
-  const sx = v => m.l + (pad + tf(v, f.x_range[0], f.x_range[1], xl) * (1 - 2 * pad)) * (W - m.l - m.r);
-  const sy = v => H - m.b - (pad + tf(v, f.y_range[0], f.y_range[1], yl) * (1 - 2 * pad)) * (H - m.t - m.b);
-  const clipId = "clip" + cur;
+  const nx = u => m.l + (pad + u * (1 - 2 * pad)) * (W - m.l - m.r);
+  const ny = u => H - m.b - (pad + u * (1 - 2 * pad)) * (H - m.t - m.b);
+  const sx = v => nx(tf(v, f.x_range[0], f.x_range[1], xl));
+  const sy = v => ny(tf(v, f.y_range[0], f.y_range[1], yl));
+  const clipId = "clip" + (++clipSeq);
   const defs = el("svg:defs", {}, svg);
   el("svg:rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }, el("svg:clipPath", { id: clipId }, defs));
   el("svg:rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "var(--surface)", stroke: "var(--rule)" }, svg);
@@ -371,53 +573,59 @@ function drawPlot(f, parent) {
     el("svg:line", { x1: m.l, x2: W - m.r, y1: sy(v), y2: sy(v), stroke: "var(--grid)" }, svg);
     el("svg:text", { x: m.l - 6, y: sy(v) + 4, "text-anchor": "end", text: tickLabel(v) }, svg);
   }
-  // given calibration range
-  el("svg:rect", { x: sx(f.x_range[0]), y: sy(f.y_range[1]), width: sx(f.x_range[1]) - sx(f.x_range[0]), height: sy(f.y_range[0]) - sy(f.y_range[1]), fill: "none", stroke: "var(--ink-3)", "stroke-dasharray": "4 3" }, svg);
+  el("svg:rect", { x: nx(0), y: ny(1), width: nx(1) - nx(0), height: ny(0) - ny(1), fill: "none", stroke: "var(--ink-3)", "stroke-dasharray": "4 3" }, svg);
   const g = el("svg:g", { "clip-path": `url(#${clipId})` }, svg);
-  const hits = [];
-  for (const id of ORDER) {
-    if (!shown.has(id) || !f.models[id]) continue;
-    const mname = name(MODELS.find(x => x.id === id));
-    for (const c of f.models[id].curves) {
-      const pts = c.x.map((x, k) => [sx(x), sy(c.y[k]), x, c.y[k]]).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
-      el("svg:polyline", { points: pts.map(p => p[0] + "," + p[1]).join(" "), fill: "none", stroke: col(id), "stroke-width": 2, "stroke-linejoin": "round" }, g);
-      if (pts.length <= 60) pts.forEach(p => el("svg:circle", { cx: p[0], cy: p[1], r: 2.5, fill: col(id) }, g));
-      pts.forEach(p => hits.push([p[0], p[1], `${mname}  x=${tickLabel(p[2])}  y=${tickLabel(p[3])}`]));
-    }
-  }
-  f.gt.forEach((s, si) => s.x.forEach((x, k) => {
-    const px = sx(x), py = sy(s.y[k]);
-    el("svg:circle", { cx: px, cy: py, r: 4, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, g);
-    hits.push([px, py, `正解 ${si + 1}${s.label ? " (" + s.label + ")" : ""}  x=${tickLabel(x)}  y=${tickLabel(s.y[k])}`]);
-  }));
-  const cross = el("svg:circle", { r: 6, fill: "none", stroke: "var(--accent)", "stroke-width": 2, visibility: "hidden" }, svg);
-  svg.addEventListener("mousemove", ev => {
-    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
-    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
-    let best = null, bd = 18 * 18;
-    for (const h of hits) { const dd = (h[0] - p.x) ** 2 + (h[1] - p.y) ** 2; if (dd < bd) { bd = dd; best = h; } }
-    if (best) { cross.setAttribute("cx", best[0]); cross.setAttribute("cy", best[1]); cross.setAttribute("visibility", "visible"); showTip(ev, best[2]); }
-    else { cross.setAttribute("visibility", "hidden"); hideTip(); }
-  });
-  svg.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
-  el("div", { class: "cap", text: "黒丸 = 正解、実線 = 各モデル(採点に使った値そのもの)、破線枠 = 与えた軸レンジ。枠の外に出た出力も描いています。" }, parent);
+  const hits = drawMarks(g, f, r, (x, y) => [sx(x), sy(y)], 4.2, "var(--surface)");
+  scaleMark(svg, nx(0), nx(1), ny(0), ny(1), DATA.point_tau, 11);
+  hover(svg, hits, 14);
+  el("div", { class: "cap", text: `破線枠 = 軸レンジ(正規化の 0〜1)。${xl || yl ? "対数軸は log10 で描いています(採点と同じ)。" : ""}右上の楕円 = τ(軸幅の 2%)。枠の外の点は描いていません。` }, parent);
+}
+
+// ---------- old finding (summary_score) ----------
+function renderFinding() {
+  const cal = DATA.conditions.calibrated.models;
+  const ax = FIGS.filter(f => f.models["lineformer-axis"]);
+  const mean = (arr, k) => arr.reduce((a, f) => a + (f.models[k]?.score ?? 0), 0) / arr.length;
+  const lf = cal.find(m => m.id === "lineformer");
+  if (!lf || !ax.length) { document.getElementById("oldFinding").hidden = true; return; }
+  document.getElementById("finding").innerHTML = `
+    <ul>
+      <li>採点では LineFormer の出力を「画像全体 = プロット領域」として数値に直しています。軸目盛のピクセル位置がわかる ${ax.length} 図で、同じ検出結果を目盛位置で直すと旧 score は <span class="num">${fmt(mean(ax, "lineformer"))} → ${fmt(mean(ax, "lineformer-axis"))}</span> に上がります(Fable 5.1 は同じ図で <span class="num">${fmt(mean(ax, "claude-fable-5-1"))}</span>)。</li>
+      <li>LineFormer は折れ線の検出用に学習されたモデルで、マーカー(散布点)の列は想定外の入力です。全図での LineFormer の旧 score は <span class="num">${fmt(lf.mean)}</span>、点F1 は <span class="num">${fmt(lf.point_f1)}</span>。</li>
+    </ul>`;
 }
 
 async function boot() {
   try {
     DATA = await (await fetch("data.json")).json();
   } catch (e) {
-    document.getElementById("finding").textContent = "data.json を読み込めませんでした。ページを再読み込みしてください。";
+    document.getElementById("condNote").textContent = "data.json を読み込めませんでした。ページを再読み込みしてください。";
     return;
   }
-  MODELS = DATA.models; FIGS = DATA.figures;
-  document.getElementById("eyebrow").textContent = `real-chart-bench · ${DATA.dataset_version} · 軸レンジあり条件`;
+  FIGS = DATA.figures;
+  document.getElementById("tauTxt").textContent = DATA.point_tau;
   document.getElementById("lede").textContent = document.getElementById("lede").textContent.replace("実論文の図", `実論文の図${FIGS.length}枚`);
-  const gap = f => bestLlm(f) - (f.models.lineformer?.score ?? 0);
-  cur = FIGS.indexOf([...FIGS].filter(f => f.axis_px).sort((a, b) => gap(b) - gap(a))[0]);
-  renderFinding(); renderSummary(); renderList(); renderDetail();
-  document.getElementById("sort").addEventListener("change", renderList);
-  document.getElementById("axisOnly").addEventListener("change", renderList);
+  modelA = [...DATA.conditions.calibrated.models].sort((a, b) => b.point_f1 - a.point_f1)[0].id;
+  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => setCond(b.dataset.cond)));
+  for (const id of ["sort", "filt", "axisOnly"]) document.getElementById(id).addEventListener("change", renderList);
+  document.getElementById("q").addEventListener("input", renderList);
+  document.addEventListener("keydown", ev => {
+    if (ev.target.closest("input, select, textarea") || !["j", "k"].includes(ev.key)) return;
+    const ids = sortedFigs().map(x => x.i);
+    if (!ids.length) return;
+    const pos = ids.indexOf(cur);
+    select(ids[pos < 0 ? 0 : Math.max(0, Math.min(ids.length - 1, pos + (ev.key === "j" ? 1 : -1)))]);
+  });
+  renderFinding();
+  // deep link: #cond=noaxis&model=<id>&compare=<id>&fig=<figure id>
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("model")) modelA = h.get("model");
+  if (h.get("compare")) modelB = h.get("compare");
+  setCond(h.get("cond") === "noaxis" ? "noaxis" : "calibrated");
+  const want = FIGS.findIndex(f => f.id === h.get("fig"));
+  const first = sortedFigs()[0];
+  if (want >= 0) select(want); else if (first) select(first.i);
+  addEventListener("hashchange", () => location.reload());
 }
 boot();
 </script>
