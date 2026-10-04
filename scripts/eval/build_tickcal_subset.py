@@ -117,6 +117,8 @@ def main() -> None:
         out = {
             "model_id": row["model_id"] + SUFFIX,
             "model_name": row["model_name"],
+            # cloud / local, when the source row records it (design 7.69)
+            **({"execution": row["execution"]} if "execution" in row else {}),
             "dataset_version": version,
             "run_at": row["run_at"],
             "n_figures": len(kept),

@@ -41,7 +41,10 @@ src = ["src", "tests"]
 # notebooks/ are self-contained Colab-run scratch notebooks (design §7.19),
 # not library code -- excluded from the lint gate the same way generated/
 # vendored code would be. Their imports and style are Colab's, not this repo's.
-extend-exclude = ["notebooks"]
+# scripts/eval/local_vlm/ holds the local VLM inference workers exactly as they
+# ran (design §7.69, separate mlx-vlm venv) -- kept verbatim as the record of
+# what produced data/local_vlm_run_v2/, so excluded the same way.
+extend-exclude = ["notebooks", "scripts/eval/local_vlm"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

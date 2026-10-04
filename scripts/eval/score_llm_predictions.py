@@ -30,6 +30,7 @@ from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
     ground_truth_revision,
     load_ground_truth,
 )
+from real_chart_bench.adapter.local_vlm_run import load_local_vlm_run  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
@@ -230,6 +231,90 @@ V2_NOTES = (
     "生の回答は data/llm_run_v2/ に保存。"
 )
 
+# Local VLMs (design §7.69, §7.73 (3)): the same v2 tasks, answered in one
+# inference per figure on a laptop with mlx-vlm instead of by an agent. Raw
+# output lives in data/local_vlm_run_v2/<model>/<condition>.jsonl; only the
+# parsed series list is replayed, and a figure whose output did not parse is
+# left out -- a total miss, as for an LLM that did not answer. The tasks, key,
+# ground truth and dataset_version are the v2 run's, so these rows rank in the
+# same table as the Claude v2 rows of the same condition.
+LOCAL_V2_ARCHIVE = REPO / "data/local_vlm_run_v2"
+MODELS_LOCAL_V2 = {
+    "qwen3.5-9b-8bit": "Qwen3.5-9B (8bit)",
+    "qwen3.8-27b-8bit": "Qwen3.8-27B (8bit)",
+    "gemma-4-31b-8bit": "Gemma 4 31B (8bit)",
+}
+CONDITIONS["local-v2-calibrated"] = {
+    "v2": "calibrated",
+    "local": True,
+    "models": MODELS_LOCAL_V2,
+    "suffix": "-local-v2",
+    "name_suffix": "（ローカル、2026-10-03）",
+    "label": "軸レンジを与えた条件（ローカル VLM、v2 プロンプトの単発版、採点対象全図）",
+}
+CONDITIONS["local-v2-noaxis"] = {
+    "v2": "noaxis",
+    "local": True,
+    "models": MODELS_LOCAL_V2,
+    "suffix": "-local-v2-noaxis",
+    "name_suffix": "（軸レンジなし、ローカル、2026-10-03）",
+    "label": "軸レンジを与えない条件（ローカル VLM、v2 プロンプトの単発版、採点対象全図）",
+}
+LOCAL_HARDWARE = "Apple M3 Max, 128GB unified memory (laptop)"
+LOCAL_V2_NOTES = (
+    "ローカル実行(ノート PC: Apple M3 Max 128GB、mlx-vlm 0.7.4 / mlx 0.32.3、2026-10-03〜04)。"
+    "1図1回の推論で、エージェントではない(ツールなし)。プロンプトは LLM run v2 "
+    "(scripts/eval/llm_run_v2_prompt.md)からエージェント向けの文を除いた単発版"
+    "(scripts/eval/local_vlm/prompt/、差分は diff_vs_v2.diff)。図・タスク・軸レンジ・正解は "
+    "Claude の v2 実行と同一。設定: greedy(温度0)、enable_thinking=False、JSON スキーマでの"
+    "制約付きデコード、max_tokens 8192、HF_HUB_OFFLINE=1(ネットワークなしで実行)、"
+    "画像は元ファイルを"
+    "そのまま渡す。Gemma 4 は画像トークン予算を 1120 に上げた(processor.image_processor."
+    "max_soft_tokens、既定 280)。パースできなかった図・実行時エラーの図は回答なし(全図ミス)として"
+    "採点する(LLM と同じ規則)。件数は local_run を参照。3モデルを同時に並列実行したため、"
+    "1図あたりの秒数はモデル間でも単独実行とも比較できない(記録はしているが使わない)。"
+    "生出力(raw テキストを含む)は data/local_vlm_run_v2/、推論コードは scripts/eval/local_vlm/。"
+)
+
+
+def _local_run_block(model_id: str, condition: str, run, key: dict, scoreable: set) -> dict:
+    """What a reader of a local row needs to judge it: the exact model, the
+    settings, and how many figures produced no usable answer and why."""
+    env = json.loads((LOCAL_V2_ARCHIVE / model_id / "env.json").read_text())
+
+    def figs(ids):
+        # paper-figure ids, and only those still scored (4 of the 101 tasks
+        # left the scoreable set after the run)
+        return [
+            f"{key[i]['paper_id']}-{key[i]['figure_id']}"
+            for i in ids
+            if key[i]["figure_id"] in scoreable
+        ]
+
+    return {
+        "hardware": LOCAL_HARDWARE,
+        "raw_output": f"data/local_vlm_run_v2/{model_id}/{condition}.jsonl",
+        "model_repo_id": env["repo_id"],
+        "model_revision": env["revision"],
+        "quantization": env.get("quantization") or "8bit (MLX, per repo id)",
+        "mlx_vlm": env["mlx_vlm"],
+        "mlx": env["mlx"],
+        "transformers": env.get("transformers"),
+        "temperature": env["temperature"],
+        "enable_thinking": env["enable_thinking"],
+        "constrained_json_schema": env["constrained_json_schema"],
+        "max_tokens": env["max_tokens"],
+        "hf_hub_offline": env["HF_HUB_OFFLINE"] == "1",
+        "image_max_soft_tokens": env.get("image_max_soft_tokens_set"),
+        "concurrent_with_other_models": True,
+        "peak_memory_gb_max": run.peak_memory_gb_max,
+        "n_scored_figures_without_answer": len(figs(run.parse_failures)) + len(figs(run.errors)),
+        "parse_failures": figs(run.parse_failures),
+        "truncated_at_max_tokens": figs(run.truncated),
+        "runtime_errors": figs(run.errors),
+        "accepted_with_parser_warning": figs(run.accepted_with_warning),
+    }
+
 
 class ReplayRunner:
     """Serves one model's recorded answers as a ModelRunnerPort."""
@@ -341,7 +426,13 @@ def main() -> None:
     written = []
     for model_id, model_name in cond.get("models", MODELS).items():
         raw = {}
-        if cond.get("v2"):
+        local_run = None
+        if cond.get("local"):
+            local_run = load_local_vlm_run(
+                LOCAL_V2_ARCHIVE / model_id / f"{cond['v2']}.jsonl"
+            )
+            raw = {f"{name}:{k}": v for k, v in local_run.answers.items()}
+        elif cond.get("v2"):
             files = sorted((V2_ARCHIVE / cond["v2"] / model_id).glob("part*.predictions.json"))
             for f in files:
                 raw |= {f"{name}:{k}": v for k, v in json.loads(f.read_text()).items()}
@@ -390,6 +481,9 @@ def main() -> None:
         payload = {
             "model_id": model_id + cond["suffix"],
             "model_name": model_name + cond["name_suffix"],
+            # where the model ran (design §7.69): the deployment question --
+            # a local row needs no data to leave the machine
+            "execution": "local" if cond.get("local") else "cloud",
             "dataset_version": (
                 f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-noaxis"
                 if cond.get("v2") == "noaxis"
@@ -411,7 +505,18 @@ def main() -> None:
             "per_figure": per_figure,
             "agent_effort": EFFORT.get(model_id) if name == "calibrated" else None,
             "condition": cond["label"],
-            "notes": V2_NOTES if cond.get("v2") else (
+            **(
+                {"local_run": _local_run_block(
+                    model_id, cond["v2"], local_run, v2_key, scoreable_ids
+                )}
+                if local_run
+                else {}
+            ),
+            "notes": LOCAL_V2_NOTES
+            if cond.get("local")
+            else V2_NOTES
+            if cond.get("v2")
+            else (
                 "Claude Code のサブエージェントとして各モデルを起動し、"
                 "図の画像と軸レンジ(ExtractionTask と同じ情報)だけを与えて抽出させた結果。"
                 "採点は他のベースラインと同一(Hungarian マッチャ + 正規化Y距離)。"

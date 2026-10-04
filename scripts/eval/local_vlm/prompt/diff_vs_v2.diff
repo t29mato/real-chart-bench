@@ -1,0 +1,51 @@
+--- prompt/original_v2_body.md	2026-10-03 16:03:29
++++ prompt/single_shot_prompt.md	2026-10-03 16:00:43
+@@ -1,15 +1,11 @@
++You are taking part in a chart data-extraction benchmark. Your answer is
++compared against hidden ground truth.
+ 
+-You are taking part in a chart data-extraction benchmark. Work only inside
+-`{DIR}`. Do not read, list or search anything outside that directory (no other
+-directories, no git repositories, no web). Your answers are compared against
+-hidden ground truth; looking for it would invalidate the run.
++The attached image is a chart from a published research paper; the task below
++describes it. Extract the XY data of every data series plotted in the main
++chart: each legend entry or distinct marker/line style, including reference or
++comparison curves drawn in the plot. Ignore insets and other panels.
+ 
+-`{DIR}/images/` holds {N} chart images from published research papers, and
+-`{DIR}/tasks.json` lists them. For each image, extract the XY data of every
+-data series plotted in the main chart: each legend entry or distinct
+-marker/line style, including reference or comparison curves drawn in the plot.
+-Ignore insets and other panels.
+-
+ - Marker series: one point per marker, at the marker centre.
+ - Lines without markers: enough points to follow the shape (at least one per x
+   tick interval, more where it bends).
+@@ -18,20 +14,14 @@
+ 
+ {CONDITION}
+ 
+-You may use any method: look at the images, crop and zoom, write and run
+-Python (python3 with numpy and Pillow is available).
++Task:
++{TASK_JSON}
+ 
+-Write `{DIR}/predictions.json`:
++Answer with this JSON and nothing else:
+ 
+ ```json
+-{"fig_001.png": [{"label": "legend text or a short description", "x": [..], "y": [..]}, ...], ...}
++{"{ID}": [{"label": "legend text or a short description", "x": [..], "y": [..]}, ...]}
+ ```
+ 
+-one key per task id, plain numbers, x and y of equal length. {AXIS_NOTES}
+-Rewrite the file every few figures so finished work is never lost. Answer
+-every task; if a figure is hard to read, still give your best attempt.
+-
+-When done, check that the file parses and has all {N} keys. Final reply: first
+-line `MODEL: <your exact model id>`, then one line with the figure, series and
+-point counts measured from the file you wrote.
+-
++one key, the task id, plain numbers, x and y of equal length. If the figure is
++hard to read, still give your best attempt.
