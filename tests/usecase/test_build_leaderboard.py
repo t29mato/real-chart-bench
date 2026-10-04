@@ -328,3 +328,28 @@ def test_dense_rows_skip_results_without_dense_figures_or_the_block():
     ]
 
     assert build_dense_marker_rows(results) == []
+
+
+# design §7.69 / §7.73 (3): where the model ran is shown next to its score
+def test_row_carries_execution_from_the_result():
+    local = {**_result("qwen", 0.9), "execution": "local"}
+    cloud = {**_result("claude", 0.8), "execution": "cloud"}
+
+    rows = {r.model_id: r for r in build_leaderboard_rows([local, cloud])}
+
+    assert rows["qwen"].execution == "local"
+    assert rows["claude"].execution == "cloud"
+
+
+def test_row_execution_is_none_when_the_result_does_not_record_it():
+    assert build_leaderboard_rows([_result("naive", 0.5)])[0].execution is None
+
+
+def test_dense_row_carries_execution_from_the_result():
+    result = {
+        **_result("qwen", 0.9),
+        "execution": "local",
+        "dense_marker_metrics": {"n_figures": 2, "mean_summary_score": 0.7},
+    }
+
+    assert build_dense_marker_rows([result])[0].execution == "local"

@@ -55,6 +55,10 @@ Since design §7.72 the point columns cover only the figures whose markers are
 not too dense for one-to-one matching (``point_n_figures``); the dense
 figures get a second table, ``build_dense_marker_rows``, ranked within each
 dataset_version by their mean summary_score (curve distance).
+
+Rows carry ``execution`` ("cloud" / "local", design §7.69) when the result
+records it: the deployment question -- can it run where the data cannot leave --
+is read off the same table. It does not affect ranking.
 """
 
 from __future__ import annotations
@@ -84,6 +88,8 @@ class LeaderboardRow:
     point_tau: float | None = None
     # design §7.72: the (non-dense) figures the point columns cover
     point_n_figures: int | None = None
+    # design §7.69: "cloud" / "local" as the result records it; None if it does not
+    execution: str | None = None
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,7 @@ class DenseMarkerRow:
     mean_curve_distance: float | None
     mean_coverage_ratio: float | None
     run_at: str | None
+    execution: str | None = None
 
 
 def _is_pending(result: dict) -> bool:
@@ -145,6 +152,7 @@ def _scored_row(result: dict, rank: int) -> LeaderboardRow:
         point_loc_error=cell.get("point_loc_error"),
         point_tau=result["point_metrics"]["primary_tau"] if cell else None,
         point_n_figures=result["point_metrics"]["n_figures"] if cell else None,
+        execution=result.get("execution"),
     )
 
 
@@ -215,6 +223,7 @@ def build_dense_marker_rows(results: list[dict]) -> list[DenseMarkerRow]:
                     mean_curve_distance=b.get("mean_curve_distance"),
                     mean_coverage_ratio=b.get("mean_coverage_ratio"),
                     run_at=r.get("run_at"),
+                    execution=r.get("execution"),
                 )
             )
     return rows

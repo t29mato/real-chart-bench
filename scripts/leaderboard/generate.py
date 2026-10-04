@@ -111,6 +111,13 @@ by point. Those figures leave the point columns above (<em>#figures</em> shows
 point-scored / all) and are ranked separately by curve distance
 (<code>summary_score</code>) in the dense-marker tables below.
 <code>summary_score (ref.)</code> in the main table still covers every figure.</p>
+<p><strong>Runs (design &sect;7.69, since 2026-10-04):</strong> where an LLM / VLM row
+ran. <em>Cloud</em> = a hosted model (Claude, run as a Claude Code subagent with tools);
+<em>Local</em> = an open-weight model on a laptop (Apple M3 Max 128GB, mlx-vlm, 8bit,
+one inference per figure, no network: <code>HF_HUB_OFFLINE=1</code>) -- nothing leaves
+the machine. Settings and parse-failure counts are in each local result's
+<code>local_run</code>; raw outputs in <code>data/local_vlm_run_v2/</code>. A dash = not
+an LLM row (CV baselines, LineFormer).</p>
 {sections}
 {dense_sections}
 {pending_section}
@@ -130,7 +137,7 @@ _SECTION_TEMPLATE = """<section class="dataset-section">
 <h2 class="dataset-section">{heading}</h2>
 <table>
 <thead><tr>
-<th>Rank</th><th>Model</th><th>Point F1</th><th>Point recall</th>
+<th>Rank</th><th>Model</th><th>Runs</th><th>Point F1</th><th>Point recall</th>
 <th>Point precision</th><th>Loc. error</th><th>summary_score (ref.)</th>
 <th>#figures (point / all)</th>
 <th>Run at (UTC)</th><th>Breakdown</th>
@@ -231,7 +238,7 @@ def _render_head_to_head_html(results_by_model_id: dict) -> str:
     )
 
 _ROW_TEMPLATE = (
-    "<tr><td>{rank}</td><td>{model_name}</td>"
+    "<tr><td>{rank}</td><td>{model_name}</td><td>{execution}</td>"
     '<td class="score"><strong>{point_f1}</strong></td>'
     '<td class="score">{point_recall}</td><td class="score">{point_precision}</td>'
     '<td class="score">{point_loc_error}</td>'
@@ -244,7 +251,7 @@ _DENSE_SECTION_TEMPLATE = """<section class="dataset-section">
 <h2 class="dataset-section">Dense-marker figures (curve distance) -- {heading}</h2>
 <table>
 <thead><tr>
-<th>Rank</th><th>Model</th><th>summary_score</th><th>Match rate</th>
+<th>Rank</th><th>Model</th><th>Runs</th><th>summary_score</th><th>Match rate</th>
 <th>Curve distance</th><th>Coverage</th><th>#dense figures</th>
 </tr></thead>
 <tbody>
@@ -254,7 +261,7 @@ _DENSE_SECTION_TEMPLATE = """<section class="dataset-section">
 </section>"""
 
 _DENSE_ROW_TEMPLATE = (
-    "<tr><td>{rank}</td><td>{model_name}</td>"
+    "<tr><td>{rank}</td><td>{model_name}</td><td>{execution}</td>"
     '<td class="score"><strong>{score}</strong></td>'
     '<td class="score">{match}</td><td class="score">{dist}</td>'
     '<td class="score">{cov}</td><td>{n_figures}</td></tr>'
@@ -271,6 +278,7 @@ def _render_dense_sections_html(dense_rows: list) -> str:
             _DENSE_ROW_TEMPLATE.format(
                 rank=r.rank,
                 model_name=r.model_name,
+                execution=_execution_label(r.execution),
                 score=_fmt(r.mean_summary_score),
                 match=_fmt(r.mean_match_rate),
                 dist=_fmt(r.mean_curve_distance, 4),
@@ -285,6 +293,14 @@ def _render_dense_sections_html(dense_rows: list) -> str:
             )
         )
     return "\n".join(sections)
+
+
+# design §7.69: where an LLM / VLM ran; rows that do not record it show a dash
+_EXECUTION_LABELS = {"cloud": "Cloud", "local": "Local"}
+
+
+def _execution_label(execution: str | None) -> str:
+    return _EXECUTION_LABELS.get(execution, execution or "—")
 
 
 def _fmt(value: float | None, digits: int = 3) -> str:
@@ -362,6 +378,7 @@ def _render_sections_html(
             _ROW_TEMPLATE.format(
                 rank=r.rank,
                 model_name=r.model_name,
+                execution=_execution_label(r.execution),
                 point_f1=_fmt(r.point_f1),
                 point_recall=_fmt(r.point_recall),
                 point_precision=_fmt(r.point_precision),

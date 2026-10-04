@@ -21,14 +21,13 @@ ranked on summary_score in a second one; their point view is reference only.
 Both the per-figure density and both leaderboards' means are checked against
 the results files.
 
-LLM-style runs kept outside the repo (e.g. local VLMs) can be added with
---extra-llm-archive (same layout as data/llm_run_v2) and --extra-results (their
-scored payloads, <model>-v0-r2.json / -v0-r2-noaxis.json); they are verified
-against those payloads the same way and marked as local runs.
+The local VLM runs (design §7.69 / §7.73 (3)) are read from
+data/local_vlm_run_v2/ (the parsed answers in each jsonl, as the scorer reads
+them) and verified against results/<model>-v0-local-v2[-noaxis].json the same
+way. Whether a row ran locally comes from the results file's `execution`.
 
 Output: <out>/data.json and <out>/images/<figure_id>.<ext>
 Usage: python scripts/viz/export_results_explorer.py [--out DIR]
-           [--extra-llm-archive DIR --extra-results DIR]
 """
 
 from __future__ import annotations
@@ -44,7 +43,12 @@ sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts/eval"))
 
 from run_baselines import build_dataset  # noqa: E402
-from score_llm_predictions import PREDICTION_RESCALE_V2_CALIBRATED, parse_curves  # noqa: E402
+from score_llm_predictions import (  # noqa: E402
+    LOCAL_V2_ARCHIVE,
+    MODELS_LOCAL_V2,
+    PREDICTION_RESCALE_V2_CALIBRATED,
+    parse_curves,
+)
 
 from real_chart_bench.adapter.achromatic_cv_extractor import AchromaticCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.lineformer_model_runner import (  # noqa: E402
@@ -52,6 +56,7 @@ from real_chart_bench.adapter.lineformer_model_runner import (  # noqa: E402
     PrecomputedLineFormerModelRunner,
     image_key,
 )
+from real_chart_bench.adapter.local_vlm_run import load_local_vlm_run  # noqa: E402
 from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve  # noqa: E402
@@ -94,6 +99,8 @@ MODELS = [
     ),
     ("naive-cv", "naive-cv (hue)", "cv", "naive-cv-v0.json"),
     ("achromatic-cv", "achromatic-cv (luminance)", "cv", "achromatic-cv-v0.json"),
+    # local VLMs, same tasks as the 2026-10-01 run (design 7.73 (3))
+    *[(m, n, "llm", f"{m}-v0-local-v2.json") for m, n in MODELS_LOCAL_V2.items()],
 ]
 
 
@@ -103,20 +110,22 @@ def _thin(xs, ys):
 
 
 def _llm_answers(
-    task_by_fid: dict,
-    models,
-    condition: str = "calibrated",
-    run: pathlib.Path = REPO / "data/llm_run_v2",
+    task_by_fid: dict, models, condition: str = "calibrated", local: bool = False
 ) -> dict[str, dict[str, list]]:
     """model -> figure_id ("paper-fig") -> list[Curve], scorer-identical.
 
     Only the calibrated condition is rescaled, exactly as score_llm_predictions
-    does for v2 (the noaxis models read the printed units themselves)."""
+    does for v2 (the noaxis models read the printed units themselves). Local
+    VLMs answered the same v2 tasks; their answers are the parsed series in
+    data/local_vlm_run_v2/<model>/<condition>.jsonl."""
+    run = REPO / "data/llm_run_v2"
     key = json.loads((run / "_key.json").read_text())
     out = {m: {} for m in models}
     for m in models:
         raw = {}
-        for f in sorted((run / condition / m).glob("part*.predictions.json")):
+        if local:
+            raw = load_local_vlm_run(LOCAL_V2_ARCHIVE / m / f"{condition}.jsonl").answers
+        for f in [] if local else sorted((run / condition / m).glob("part*.predictions.json")):
             raw |= json.loads(f.read_text())
         for task_id, answer in raw.items():
             k = key[task_id]
@@ -159,24 +168,14 @@ def _axis_overlay(entry: dict | None, pairing) -> dict | None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=pathlib.Path, default=REPO / "data/cache/results_explorer")
-    parser.add_argument(
-        "--extra-llm-archive",
-        type=pathlib.Path,
-        help="LLM run outside the repo, laid out like data/llm_run_v2 (shown as local runs)",
-    )
-    parser.add_argument(
-        "--extra-results",
-        type=pathlib.Path,
-        help="scored payloads for --extra-llm-archive (<model>-v0-r2[-noaxis].json)",
-    )
     args = parser.parse_args()
-    if (args.extra_llm_archive is None) != (args.extra_results is None):
-        parser.error("--extra-llm-archive and --extra-results go together")
-    extra = _extra_models(args.extra_llm_archive, args.extra_results)
-    models = MODELS + [(m, n, "llm", f) for m, n, f in extra]
-    local_ids = {m for m, _, _ in extra}
-    results_dir = {mid: REPO / "results" for mid, _, _, _ in MODELS} | {
-        m: args.extra_results for m in local_ids
+    models = MODELS
+    results_dir = {mid: REPO / "results" for mid, _, _, _ in MODELS}
+    # where each row ran, as its results file records it (design 7.69)
+    local_ids = {
+        mid
+        for mid, _, _, f in models
+        if json.loads((results_dir[mid] / f).read_text()).get("execution") == "local"
     }
     (args.out / "images").mkdir(parents=True, exist_ok=True)
 
@@ -206,10 +205,8 @@ def main() -> None:
     }
     llm = _llm_answers(task_by_fid, LLM_MODELS)
     llm_noaxis = _llm_answers(task_by_fid, LLM_MODELS, "noaxis")
-    if extra:
-        ids = [m for m, _, _ in extra]
-        llm |= _llm_answers(task_by_fid, ids, "calibrated", args.extra_llm_archive)
-        llm_noaxis |= _llm_answers(task_by_fid, ids, "noaxis", args.extra_llm_archive)
+    llm |= _llm_answers(task_by_fid, MODELS_LOCAL_V2, "calibrated", local=True)
+    llm_noaxis |= _llm_answers(task_by_fid, MODELS_LOCAL_V2, "noaxis", local=True)
     published = {
         mid: {p["figure_id"]: p for p in _per_figure(results_dir[mid] / f)}
         for mid, _, _, f in models
@@ -446,7 +443,7 @@ def main() -> None:
         f"{sum(f['marker_density']['dense'] for f in figures)} dense-marker; all scores "
         f"(summary_score, point_f1, marker density and both leaderboards' means, both "
         f"conditions) match the results files; "
-        f"{len(local_ids)} local model(s) added"
+        f"{len(local_ids)} of them local"
     )
 
 
@@ -461,20 +458,6 @@ def _per_figure(results_file: pathlib.Path) -> list[dict]:
 
 def _noaxis_file(calibrated_file: str) -> str:
     return calibrated_file.removesuffix(".json") + "-noaxis.json"
-
-
-def _extra_models(archive: pathlib.Path | None, results: pathlib.Path | None):
-    """(id, display name, results file) for each model in an extra LLM archive."""
-    if archive is None:
-        return []
-    out = []
-    for d in sorted(p for p in (archive / "calibrated").iterdir() if p.is_dir()):
-        f = f"{d.name}-v0-r2.json"
-        if not (results / f).exists() or not (results / _noaxis_file(f)).exists():
-            raise SystemExit(f"{d.name}: no scored payload {f} (and -noaxis) in {results}")
-        name = json.loads((results / f).read_text())["model_name"]
-        out.append((d.name, name.split("（")[0].strip(), f))
-    return out
 
 
 def _sig(v: float) -> float | None:
