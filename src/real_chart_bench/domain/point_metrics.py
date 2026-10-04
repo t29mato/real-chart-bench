@@ -248,3 +248,37 @@ def evaluate_points(
         point_f1=f1,
         point_loc_error=sum(distances) / n_matched if n_matched else None,
     )
+
+
+# design §7.72: a figure is "dense" -- one-to-one point matching is ambiguous
+# there -- when its markers sit closer than this many tau to their neighbour
+DENSE_SPACING_TAU_FACTOR = 2.0
+
+
+def median_nearest_neighbor_spacing(ground_truth: Sequence[Curve], frame: AxisFrame) -> float:
+    """Median, over every ground-truth point, of the Euclidean distance to the
+    nearest other point of the *same* series, in the axis-normalized space
+    (log axes in log10) -- design §7.72.
+
+    A point that cannot be placed on the axis is neither a neighbour nor
+    counted. A series with fewer than two placeable points contributes
+    nothing; ``inf`` when no series has two.
+    """
+    nearest: list[float] = []
+    for curve in ground_truth:
+        pts = frame.normalize(curve)
+        pts = pts[np.isfinite(pts).all(axis=1)]
+        if len(pts) < 2:
+            continue
+        d = np.sqrt(((pts[:, None, :] - pts[None, :, :]) ** 2).sum(axis=2))
+        np.fill_diagonal(d, np.inf)
+        nearest.extend(d.min(axis=1).tolist())
+    if not nearest:
+        return math.inf
+    return float(np.median(nearest))
+
+
+def is_dense_marker_figure(spacing: float, tau: float) -> bool:
+    """design §7.72: dense when the median spacing is strictly below 2*tau
+    (exactly 2*tau is not dense)."""
+    return spacing < DENSE_SPACING_TAU_FACTOR * tau

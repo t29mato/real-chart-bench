@@ -13,7 +13,12 @@ from real_chart_bench.domain.curve import Curve, ScaleType
 from real_chart_bench.domain.evaluation import evaluate_figure
 from real_chart_bench.domain.matching import HungarianCurveMatcher
 from real_chart_bench.domain.metrics import NormalizedYDistanceMetric
-from real_chart_bench.domain.point_metrics import AxisFrame, evaluate_points
+from real_chart_bench.domain.point_metrics import (
+    AxisFrame,
+    evaluate_points,
+    is_dense_marker_figure,
+    median_nearest_neighbor_spacing,
+)
 
 UNIT = AxisFrame(x_range=(0.0, 1.0), y_range=(0.0, 1.0))
 
@@ -484,3 +489,118 @@ def test_matched_pairs_across_two_series_follow_the_series_pairing():
     for s in result.series:
         assert s.predicted.series_label == s.ground_truth.series_label
         assert sorted(s.matched_pairs) == [(0, 0), (1, 1)]
+
+
+# --- marker density (design §7.72) ----------------------------------------------
+#
+# A figure whose ground-truth markers sit closer together than 2*tau cannot be
+# matched one to one; it is scored on the curve distance instead. The spacing
+# is the median, over every ground-truth point, of the distance to the nearest
+# other point of the same series, in the axis-normalized space.
+
+
+def test_spacing_of_evenly_spaced_points_is_the_step():
+    gt = [_curve([(0.1 * i, 0.5) for i in range(1, 6)])]
+
+    assert median_nearest_neighbor_spacing(gt, UNIT) == pytest.approx(0.1)
+
+
+def test_spacing_is_measured_in_the_axis_normalized_space():
+    frame = AxisFrame(x_range=(0.0, 200.0), y_range=(0.0, 10.0))
+    gt = [_curve([(0.0, 5.0), (20.0, 5.0), (40.0, 5.0)])]  # 0.1 of the x axis apart
+
+    assert median_nearest_neighbor_spacing(gt, frame) == pytest.approx(0.1)
+
+
+def test_spacing_uses_euclidean_distance_in_both_coordinates():
+    gt = [_curve([(0.0, 0.0), (0.3, 0.4)])]
+
+    assert median_nearest_neighbor_spacing(gt, UNIT) == pytest.approx(0.5)
+
+
+def test_spacing_on_a_log_axis_is_measured_in_log10_space():
+    # x 1..1000 on a log axis: 1, 10, 100, 1000 are a third of the axis apart,
+    # although linearly they are anything but evenly spaced
+    frame = AxisFrame(x_range=(1.0, 1000.0), y_range=(0.0, 1.0), x_scale=ScaleType.LOG)
+    gt = [_curve([(1.0, 0.5), (10.0, 0.5), (100.0, 0.5), (1000.0, 0.5)])]
+
+    assert median_nearest_neighbor_spacing(gt, frame) == pytest.approx(1 / 3)
+
+
+def test_spacing_is_the_median_not_the_mean():
+    # nearest-neighbour distances: 0.01, 0.01, 0.01 (middle), 0.5 -> median 0.01
+    gt = [_curve([(0.0, 0.0), (0.01, 0.0), (0.02, 0.0), (0.52, 0.0)])]
+
+    assert median_nearest_neighbor_spacing(gt, UNIT) == pytest.approx(0.01)
+
+
+def test_spacing_takes_the_median_of_an_even_count_as_the_midpoint():
+    # nearest-neighbour distances: 0.1, 0.1, 0.3, 0.3 -> median 0.2
+    gt = [_curve([(0.0, 0.0), (0.1, 0.0)]), _curve([(0.0, 0.5), (0.3, 0.5)])]
+
+    assert median_nearest_neighbor_spacing(gt, UNIT) == pytest.approx(0.2)
+
+
+def test_spacing_ignores_points_of_other_series():
+    # two series interleaved 0.005 apart; within each series the step is 0.1
+    a = _curve([(0.1 * i, 0.5) for i in range(1, 6)])
+    b = _curve([(0.1 * i + 0.005, 0.5) for i in range(1, 6)])
+
+    assert median_nearest_neighbor_spacing([a, b], UNIT) == pytest.approx(0.1)
+
+
+def test_single_point_series_contribute_nothing():
+    dense = _curve([(0.01 * i, 0.5) for i in range(5)])
+    lone = [_curve([(0.9, 0.9)]), _curve([(0.95, 0.1)])]
+
+    assert median_nearest_neighbor_spacing([dense, *lone], UNIT) == pytest.approx(0.01)
+
+
+def test_mixed_series_pool_every_point_of_every_series():
+    # 4 points 0.01 apart (4 distances of 0.01) and 3 points 0.2 apart (3 of
+    # 0.2): pooled, the median of the 7 distances is 0.01
+    tight = _curve([(0.01 * i, 0.1) for i in range(4)])
+    loose = _curve([(0.2 * i, 0.9) for i in range(3)])
+
+    assert median_nearest_neighbor_spacing([tight, loose], UNIT) == pytest.approx(0.01)
+
+
+def test_spacing_is_infinite_when_no_series_has_two_points():
+    assert median_nearest_neighbor_spacing([_curve([(0.5, 0.5)])], UNIT) == math.inf
+    assert median_nearest_neighbor_spacing([], UNIT) == math.inf
+
+
+def test_unplaceable_points_do_not_count():
+    # a non-positive value on a log axis cannot be placed; it is neither a
+    # neighbour nor a point with a neighbour
+    frame = AxisFrame(x_range=(1.0, 100.0), y_range=(0.0, 1.0), x_scale=ScaleType.LOG)
+    gt = [_curve([(-1.0, 0.5), (1.0, 0.5), (10.0, 0.5)])]
+
+    assert median_nearest_neighbor_spacing(gt, frame) == pytest.approx(0.5)
+
+
+def test_duplicate_points_have_zero_spacing():
+    gt = [_curve([(0.5, 0.5), (0.5, 0.5)])]
+
+    assert median_nearest_neighbor_spacing(gt, UNIT) == 0.0
+
+
+def test_dense_means_spacing_strictly_below_twice_tau():
+    assert is_dense_marker_figure(0.039, tau=0.02)
+    assert not is_dense_marker_figure(0.041, tau=0.02)
+    assert not is_dense_marker_figure(math.inf, tau=0.02)
+
+
+def test_spacing_exactly_at_twice_tau_is_not_dense():
+    frame = AxisFrame(x_range=(0.0, 100.0), y_range=(0.0, 1.0))
+    gt = [_curve([(0.0, 0.5), (4.0, 0.5)])]  # 0.04 of the x axis apart
+
+    spacing = median_nearest_neighbor_spacing(gt, frame)
+
+    assert spacing == 2 * 0.02
+    assert not is_dense_marker_figure(spacing, tau=0.02)
+
+
+def test_dense_criterion_follows_tau():
+    assert is_dense_marker_figure(0.08, tau=0.05)
+    assert not is_dense_marker_figure(0.08, tau=0.02)
