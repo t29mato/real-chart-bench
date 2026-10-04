@@ -63,7 +63,7 @@ on a laptop (Apple M3 Max 128GB, mlx-vlm, 8bit), one inference per figure, no
 tools, no network (`HF_HUB_OFFLINE=1`) — the same 97 figures, tasks and ground
 truth as the Claude 2026-10-01 run, with a single-shot version of its prompt
 (design §7.69). Local outputs that did not parse (mostly cut off at the
-8192-token limit) are scored as total misses: 2–5 of 97 figures per model and
+8192-token limit) are scored as total misses: 1–5 of 97 figures per model and
 condition, listed in each file's `local_run`. Seconds per figure are recorded
 but not comparable (the three models ran concurrently).
 
