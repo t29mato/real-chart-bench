@@ -69,8 +69,11 @@ CELSIUS = re.compile(r"°\s?C|degC|\(C\)|℃")
 LOG_LABEL = re.compile(r"\s*(lg|log)", re.I)
 
 
-def main() -> None:
-    work = pathlib.Path(sys.argv[1]).resolve()
+def prepare(work: pathlib.Path, *, seed: int, archive: pathlib.Path) -> None:
+    """Build the sealed per-(condition, model, batch) dirs under `work` with
+    figures shuffled by `seed`, and copy the key and task lists to `archive`.
+    Shared by the v2 and v3 runs (v3 differs only in prompt and seed)."""
+    work = work.resolve()
     if REPO in work.parents or work == REPO:
         raise SystemExit("work dir must be outside the repository")
     if work.exists():
@@ -83,7 +86,7 @@ def main() -> None:
         for e in json.loads((REPO / "data/verified_pairs/axis_pixel_candidates.json").read_text())
         if "paper_id" in e
     }
-    random.Random(SEED).shuffle(pairings)
+    random.Random(seed).shuffle(pairings)
 
     key, tasks = {}, {"calibrated": [], "noaxis": []}
     for i, p in enumerate(pairings, 1):
@@ -128,17 +131,21 @@ def main() -> None:
                 (d / "tasks.json").write_text(batch_json + "\n")
 
     (work / "_key.json").write_text(json.dumps(key, indent=2) + "\n")
-    ARCHIVE.mkdir(parents=True, exist_ok=True)
-    (ARCHIVE / "_key.json").write_text(json.dumps(key, indent=2) + "\n")
+    archive.mkdir(parents=True, exist_ok=True)
+    (archive / "_key.json").write_text(json.dumps(key, indent=2) + "\n")
     for cond in CONDITIONS:
-        (ARCHIVE / cond).mkdir(exist_ok=True)
-        (ARCHIVE / cond / "tasks.json").write_text(
+        (archive / cond).mkdir(exist_ok=True)
+        (archive / cond / "tasks.json").write_text(
             json.dumps(tasks[cond], ensure_ascii=False, indent=2) + "\n"
         )
     print(
         f"{len(pairings)} figures x {len(CONDITIONS)} conditions x {len(MODELS)} models "
         f"x {N_BATCHES} batches -> {work}"
     )
+
+
+def main() -> None:
+    prepare(pathlib.Path(sys.argv[1]), seed=SEED, archive=ARCHIVE)
 
 
 if __name__ == "__main__":

@@ -36,8 +36,8 @@ def _count(path: pathlib.Path) -> tuple[int, int, int] | None:
     return len(data), len(series), points
 
 
-def main() -> None:
-    work = pathlib.Path(sys.argv[1])
+def archive(work: pathlib.Path, dest: pathlib.Path) -> None:
+    """Archive every part dir under `work` into `dest`. Shared with v3."""
     for part_dir in sorted(work.glob("*/*/part*")):
         cond, model, part = part_dir.parts[-3:]
         n_tasks = len(json.loads((part_dir / "tasks.json").read_text()))
@@ -50,14 +50,18 @@ def main() -> None:
             if counts is None:
                 print(f"{label} unreadable (mid-write?) -- skipped")
                 continue
-            dest = DEST / cond / model / f"{part}.{name}"
-            old = _count(dest) if dest.exists() else None
+            target = dest / cond / model / f"{part}.{name}"
+            old = _count(target) if target.exists() else None
             if old and old[0] > counts[0]:
                 print(f"{label} {counts[0]}/{n_tasks} < archived {old[0]} -- kept archive")
                 continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(src, dest)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(src, target)
             print(f"{label} {counts[0]:>3}/{n_tasks} figs {counts[1]:>4} series {counts[2]:>6} pts")
+
+
+def main() -> None:
+    archive(pathlib.Path(sys.argv[1]), DEST)
 
 
 if __name__ == "__main__":
