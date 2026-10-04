@@ -139,6 +139,15 @@ input[type=search] { font: inherit; font-size: 13px; background: var(--surface);
 #figtable tbody tr:hover { background: var(--sel); }
 #figtable tbody tr[aria-current="true"] { background: var(--sel); }
 details summary { cursor: pointer; color: var(--ink-2); }
+/* design 7.72: dense-marker figures */
+.dense-tag { font-size: 11px; color: var(--warn-ink); background: var(--warn-bg); border-radius: 3px; padding: 0 5px; margin-left: 6px; font-family: var(--font-body); }
+.refonly { background: var(--warn-bg); color: var(--warn-ink); border-radius: 6px; padding: 10px 14px; font-size: 13px; max-width: 90ch; }
+.refonly strong { font-size: 14px; }
+.ref-label { font-size: 11px; color: var(--warn-ink); margin-left: 4px; }
+#denseBoard tbody tr { cursor: pointer; }
+#denseBoard tbody tr:hover { background: var(--sel); }
+#denseBoard tbody tr[aria-current="true"] { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+.board-gap { margin-top: 22px; }
 </style>
 
 <div class="wrap">
@@ -154,20 +163,27 @@ details summary { cursor: pointer; color: var(--ink-2); }
       <li>正解と出力の点を、軸レンジで 0〜1 に正規化した空間(対数軸は log10 で)に置き、距離が τ = <span class="num" id="tauTxt">0.02</span>(軸幅の 2%)以内の点を一対一で対応づけます。対応の数を最大にし、その中で距離の合計を最小にします。</li>
       <li>系列どうしは F1 が最大になるように一対一で対応づけます。対応先のない正解系列の点はすべて見逃し、対応先のない出力系列の点はすべて余計な点です。</li>
       <li>再現率 = 見つけた正解点 / 正解点、適合率 = 対応した出力点 / 出力点。表の値は図ごとの値の平均(マクロ平均)です。</li>
+      <li><b>マーカーが密な図は点単位では採点しません。</b>正解点を同じ系列の最も近い点との距離(正規化空間)で測り、その中央値が 2τ = <span class="num" id="denseTxt">0.04</span> 未満の図は、点の一対一対応があいまいになり、人のデジタイズもマーカーを取り切れていません。これらの図は点の表から外し、曲線距離(summary_score)の別表で順位をつけます。</li>
     </ul>
   </section>
 
   <section class="panel">
     <div class="condbar">
-      <h2>リーダーボード(点F1 順)</h2>
+      <h2>リーダーボード</h2>
       <div class="seg" role="group" aria-label="条件">
         <button type="button" data-cond="calibrated" aria-pressed="true">軸レンジあり</button>
         <button type="button" data-cond="noaxis" aria-pressed="false">軸レンジなし</button>
       </div>
     </div>
     <p class="sub" id="condNote"></p>
+    <h3 class="board-gap" id="boardTitle">主表: 点単位で採点する図(点F1 順)</h3>
     <div class="tablewrap"><table id="board"><thead><tr>
-      <th>手法</th><th>実行場所</th><th class="num">点F1</th><th class="num">再現率</th><th class="num">適合率</th><th class="num">旧summary_score</th><th class="num">図数</th><th>図ごとの点F1 (0 → 1)</th>
+      <th>手法</th><th>実行場所</th><th class="num">点F1</th><th class="num">再現率</th><th class="num">適合率</th><th class="num">図数</th><th class="num">summary_score(全図・参考)</th><th>図ごとの点F1 (0 → 1)</th>
+    </tr></thead><tbody></tbody></table></div>
+    <h3 class="board-gap" id="denseTitle">副表: マーカーが密な図(曲線距離 summary_score 順)</h3>
+    <p class="note">点の対応をとらず、正解点を曲線上のサンプルとみなして、出力の曲線との距離で採点します(旧来の summary_score)。</p>
+    <div class="tablewrap"><table id="denseBoard"><thead><tr>
+      <th>手法</th><th>実行場所</th><th class="num">summary_score</th><th class="num">系列の対応率</th><th class="num">曲線距離</th><th class="num">被覆率</th><th class="num">図数</th><th>図ごとの summary_score (0 → 1)</th>
     </tr></thead><tbody></tbody></table></div>
     <p class="note">行をクリックすると、その手法を下の図の一覧と詳細で選びます。帯の点をクリックするとその図を開きます。</p>
   </section>
@@ -191,6 +207,13 @@ details summary { cursor: pointer; color: var(--ink-2); }
             <option value="lt08">点F1 &lt; 0.8</option>
             <option value="lt1">点F1 &lt; 1</option>
             <option value="eq1">点F1 = 1</option>
+          </select>
+        </label>
+        <label for="dens">図の種類
+          <select id="dens">
+            <option value="all">すべての図</option>
+            <option value="point">点単位で採点する図</option>
+            <option value="dense">マーカーが密な図</option>
           </select>
         </label>
         <label for="q"><input type="search" id="q" placeholder="図IDで検索" aria-label="図IDで検索"></label>
@@ -241,6 +264,8 @@ const name = m => NAME_JA[m.id] || m.name;
 const badges = m => `<span class="kind">${KIND[m.kind]}</span>${m.local ? '<span class="badge-local">ローカル実行</span>' : ""}`;
 const place = m => m.kind !== "llm" ? "–" : m.local ? "ローカル" : "クラウド";
 const ptOf = (f, id) => res(f, id)?.point;
+const isDense = f => !!f.marker_density?.dense;
+const spacingTxt = f => f.marker_density?.median_nn_spacing == null ? "–" : f.marker_density.median_nn_spacing.toFixed(4);
 
 function setCond(c) {
   COND = c;
@@ -254,34 +279,58 @@ function setCond(c) {
 }
 
 // ---------- leaderboard ----------
+function strip(td, m, figs, value, label) {
+  const W = 240, H = 24;
+  const svg = el("svg:svg", { class: "strip", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name(m)} の図ごとの${label}の分布` }, td);
+  el("svg:line", { x1: 4, x2: W - 4, y1: H - 3, y2: H - 3, stroke: "var(--rule)", "stroke-width": 1 }, svg);
+  for (const { f, i } of figs) {
+    const s = value(f);
+    if (s == null) continue;
+    const jitter = ((i * 7919) % 13) / 13;
+    const c = el("svg:circle", { cx: 4 + s * (W - 8), cy: 4 + jitter * (H - 10), r: 3, fill: "var(--accent)", "fill-opacity": .5, stroke: "var(--surface)", "stroke-width": 1 }, svg);
+    c.addEventListener("mousemove", ev => showTip(ev, `${f.id}  ${label} ${fmt(s)}`));
+    c.addEventListener("mouseleave", hideTip);
+    c.addEventListener("click", ev => { ev.stopPropagation(); modelA = m.id; select(i, true); renderBoard(); renderList(); document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" }); });
+  }
+}
+
+function boardRow(tb, m) {
+  const tr = el("tr", { "aria-current": m.id === modelA ? "true" : "false", tabindex: 0 }, tb);
+  const pick = () => { modelA = m.id; if (modelB === m.id) modelB = ""; renderBoard(); renderList(); renderDetail(); };
+  tr.addEventListener("click", pick);
+  tr.addEventListener("keydown", ev => { if (ev.key === "Enter") pick(); });
+  el("td", { html: `${esc(name(m))}${badges(m)}` }, tr);
+  el("td", { text: place(m) }, tr);
+  return tr;
+}
+
 function renderBoard() {
+  const all = FIGS.map((f, i) => ({ f, i }));
+  const pointFigs = all.filter(x => !isDense(x.f)), denseFigs = all.filter(x => isDense(x.f));
+  document.getElementById("boardTitle").textContent = `主表: 点単位で採点する図 ${pointFigs.length} 枚(点F1 順)`;
+  document.getElementById("denseTitle").textContent = `副表: マーカーが密な図 ${denseFigs.length} 枚(曲線距離 summary_score 順)`;
   const tb = document.querySelector("#board tbody");
   tb.innerHTML = "";
-  const W = 240, H = 24;
   for (const m of models()) {
-    const tr = el("tr", { "aria-current": m.id === modelA ? "true" : "false", tabindex: 0 }, tb);
-    el("td", { html: `${esc(name(m))}${badges(m)}` }, tr);
-    el("td", { text: place(m) }, tr);
+    const tr = boardRow(tb, m);
     el("td", { class: "num big", text: fmt(m.point_f1) }, tr);
     el("td", { class: "num", text: fmt(m.point_recall) }, tr);
     el("td", { class: "num", text: fmt(m.point_precision) }, tr);
+    el("td", { class: "num", text: m.n_point ?? "–" }, tr);
     el("td", { class: "num", text: fmt(m.mean) }, tr);
-    el("td", { class: "num", text: m.n }, tr);
-    const td = el("td", {}, tr);
-    const svg = el("svg:svg", { class: "strip", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name(m)} の図ごとの点F1の分布` }, td);
-    el("svg:line", { x1: 4, x2: W - 4, y1: H - 3, y2: H - 3, stroke: "var(--rule)", "stroke-width": 1 }, svg);
-    FIGS.forEach((f, i) => {
-      const s = ptOf(f, m.id)?.f1;
-      if (s == null) return;
-      const jitter = ((i * 7919) % 13) / 13;
-      const c = el("svg:circle", { cx: 4 + s * (W - 8), cy: 4 + jitter * (H - 10), r: 3, fill: "var(--accent)", "fill-opacity": .5, stroke: "var(--surface)", "stroke-width": 1 }, svg);
-      c.addEventListener("mousemove", ev => showTip(ev, `${f.id}  点F1 ${fmt(s)}`));
-      c.addEventListener("mouseleave", hideTip);
-      c.addEventListener("click", ev => { ev.stopPropagation(); modelA = m.id; select(i, true); renderBoard(); renderList(); document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" }); });
-    });
-    const pick = () => { modelA = m.id; if (modelB === m.id) modelB = ""; renderBoard(); renderList(); renderDetail(); };
-    tr.addEventListener("click", pick);
-    tr.addEventListener("keydown", ev => { if (ev.key === "Enter") pick(); });
+    strip(el("td", {}, tr), m, pointFigs, f => ptOf(f, m.id)?.f1, "点F1");
+  }
+  const db = document.querySelector("#denseBoard tbody");
+  db.innerHTML = "";
+  const dm = [...DATA.conditions[COND].models].filter(m => m.dense?.n).sort((a, b) => (b.dense.mean ?? -1) - (a.dense.mean ?? -1));
+  for (const m of dm) {
+    const tr = boardRow(db, m);
+    el("td", { class: "num big", text: fmt(m.dense.mean) }, tr);
+    el("td", { class: "num", text: fmt(m.dense.match_rate) }, tr);
+    el("td", { class: "num", text: fmt(m.dense.mean_curve_distance, 4) }, tr);
+    el("td", { class: "num", text: fmt(m.dense.mean_coverage_ratio) }, tr);
+    el("td", { class: "num", text: m.dense.n }, tr);
+    strip(el("td", {}, tr), m, denseFigs, f => res(f, m.id)?.score, "summary_score");
   }
 }
 
@@ -292,6 +341,9 @@ function sortedFigs() {
   const f1 = f => ptOf(f, modelA)?.f1 ?? -1;
   let arr = FIGS.map((f, i) => ({ f, i }));
   if (document.getElementById("axisOnly").checked) arr = arr.filter(x => x.f.axis_px);
+  const dens = document.getElementById("dens").value;
+  if (dens === "point") arr = arr.filter(x => !isDense(x.f));
+  if (dens === "dense") arr = arr.filter(x => isDense(x.f));
   if (q) arr = arr.filter(x => x.f.id.includes(q));
   const cut = { lt05: v => v < 0.5, lt08: v => v < 0.8, lt1: v => v < 1, eq1: v => v >= 1 }[filt];
   if (cut) arr = arr.filter(x => cut(f1(x.f)));
@@ -315,7 +367,8 @@ function renderList() {
   const arr = sortedFigs();
   for (const { f, i } of arr) {
     const b = el("button", { class: "row", role: "option", "aria-current": i === cur ? "true" : "false", "data-i": i }, list);
-    el("span", { class: "id", text: f.id + (f.axis_px ? "" : " ·") }, b);
+    const idEl = el("span", { class: "id", text: f.id + (f.axis_px ? "" : " ·") }, b);
+    if (isDense(f)) el("span", { class: "dense-tag", text: "密", title: `マーカーが密な図(間隔の中央値 ${spacingTxt(f)})。点F1 は参考値で採点外` }, idEl);
     el("span", { class: "f1", text: fmt(ptOf(f, modelA)?.f1, 2) }, b);
     const cells = el("span", { class: "cells" }, b);
     for (const m of ms) {
@@ -325,7 +378,7 @@ function renderList() {
     b.addEventListener("click", () => select(i));
   }
   const mA = modelById(modelA);
-  document.getElementById("listHead").innerHTML = `${arr.length} / ${FIGS.length} 図。数値は <b>${esc(name(mA))}</b> の点F1(並び順・絞り込みもこの手法で)。マスは点F1(濃いほど高い)で、並びはリーダーボード順、枠付きが選択中の手法。「·」付きの図は軸目盛のピクセル位置が未確定で、画像には重ねられません。j / k キーで前後の図へ移れます。`;
+  document.getElementById("listHead").innerHTML = `${arr.length} / ${FIGS.length} 図。数値は <b>${esc(name(mA))}</b> の点F1(並び順・絞り込みもこの手法で)。マスは点F1(濃いほど高い)で、並びはリーダーボード順、枠付きが選択中の手法。「·」付きの図は軸目盛のピクセル位置が未確定で、画像には重ねられません。「密」の図はマーカーが密なため点単位では採点しておらず、点F1 は参考値です。j / k キーで前後の図へ移れます。`;
 }
 
 function syncHash() {
@@ -367,7 +420,10 @@ function renderDetail() {
   const head = el("div", { class: "dhead" }, d);
   el("h2", { text: f.id }, head);
   const nGt = f.gt_points.reduce((a, s) => a + s.length, 0);
-  el("span", { class: "meta", text: `${f.figure_kind === "markers" ? "マーカー図" : "線のみの図"} · x ${f.x_range.map(v => +v.toPrecision(6)).join("–")} (${f.x_scale}) · y ${f.y_range.map(v => +v.toPrecision(6)).join("–")} (${f.y_scale}) · 正解 ${f.gt.length} 系列 ${nGt} 点 · ${DATA.conditions[COND].label}` }, head);
+  if (isDense(f)) el("span", { class: "dense-tag", text: "マーカーが密な図" }, head);
+  el("span", { class: "meta", text: `${f.figure_kind === "markers" ? "マーカー図" : "線のみの図"} · マーカー間隔の中央値 ${spacingTxt(f)}(基準 ${DATA.dense_spacing} 未満で密) · x ${f.x_range.map(v => +v.toPrecision(6)).join("–")} (${f.x_scale}) · y ${f.y_range.map(v => +v.toPrecision(6)).join("–")} (${f.y_scale}) · 正解 ${f.gt.length} 系列 ${nGt} 点 · ${DATA.conditions[COND].label}` }, head);
+
+  if (isDense(f)) el("div", { class: "refonly", html: `<strong>この図は点単位では採点していません(参考表示)。</strong><br>正解点の同じ系列内での間隔の中央値が <span class="num">${spacingTxt(f)}</span> で、基準の 2τ = <span class="num">${DATA.dense_spacing}</span> より狭く、点の一対一対応があいまいです。下の点の対応・点F1・再現率・適合率は<b>参考</b>で、主表には入りません。この図の採点は曲線距離(summary_score)で、副表「マーカーが密な図」に入ります。` }, d);
 
   // controls
   const ctl = el("div", { class: "controls" }, d);
@@ -397,9 +453,11 @@ function renderDetail() {
   const tw = el("div", { class: "tablewrap" }, d);
   el("div", { class: "eyebrow", text: "この図の全手法(行をクリックで表示切替)" }, tw);
   const t = el("table", { id: "figtable" }, tw);
-  el("thead", { html: `<tr><th>手法</th><th class="num">点F1</th><th class="num">再現率</th><th class="num">適合率</th><th class="num">見つけた / 正解点</th><th class="num">余計 / 出力点</th><th class="num">旧score</th></tr>` }, t);
+  const refTh = isDense(f) ? '<span class="ref-label">参考</span>' : "";
+  el("thead", { html: `<tr><th>手法</th><th class="num">点F1${refTh}</th><th class="num">再現率</th><th class="num">適合率</th><th class="num">見つけた / 正解点</th><th class="num">余計 / 出力点</th><th class="num">summary_score${isDense(f) ? "(採点値)" : ""}</th></tr>` }, t);
   const tb = el("tbody", {}, t);
-  for (const m of [...ms].sort((a, b) => (ptOf(f, b.id)?.f1 ?? -1) - (ptOf(f, a.id)?.f1 ?? -1))) {
+  const key = isDense(f) ? (m => res(f, m.id)?.score ?? -1) : (m => ptOf(f, m.id)?.f1 ?? -1);
+  for (const m of [...ms].sort((a, b) => key(b) - key(a))) {
     const r = res(f, m.id), p = r?.point;
     if (!p) continue;
     const tr = el("tr", { "aria-current": m.id === modelA ? "true" : "false", html: `<td>${esc(name(m))}${m.local ? '<span class="badge-local">ローカル実行</span>' : ""}</td><td class="num">${fmt(p.f1)}</td><td class="num">${fmt(p.recall)}</td><td class="num">${fmt(p.precision)}</td><td class="num">${p.n_matched} / ${p.n_gt}</td><td class="num">${p.n_pred - p.n_matched} / ${p.n_pred}</td><td class="num">${fmt(r.score)}${r.error ? ` <span class="err">${esc(r.error.split("\n")[0].slice(0, 40))}</span>` : ""}</td>` }, tb);
@@ -414,7 +472,8 @@ function renderModelBlock(f, id, parent) {
   el("h3", { html: `${esc(name(m))}${badges(m)}` }, mh);
   if (!r) { el("div", { class: "err", text: "この図の結果はありません。" }, blk); return; }
   const p = r.point;
-  el("div", { class: "stats", html: `<span>点F1<b>${fmt(p.f1)}</b></span><span>再現率<b>${fmt(p.recall)}</b></span><span>適合率<b>${fmt(p.precision)}</b></span><span>正解点<b>${p.n_gt}</b></span><span>見つけた<b>${p.n_matched}</b></span><span>見逃し<b>${p.n_gt - p.n_matched}</b></span><span>余計な点<b>${p.n_pred - p.n_matched}</b></span><span>(出力点<b>${p.n_pred}</b>)</span><span>旧score<b>${fmt(r.score)}</b></span>` }, mh);
+  const ref = isDense(f) ? '<span class="ref-label">(参考・採点外)</span>' : "";
+  el("div", { class: "stats", html: `<span>点F1${ref}<b>${fmt(p.f1)}</b></span><span>再現率<b>${fmt(p.recall)}</b></span><span>適合率<b>${fmt(p.precision)}</b></span><span>正解点<b>${p.n_gt}</b></span><span>見つけた<b>${p.n_matched}</b></span><span>見逃し<b>${p.n_gt - p.n_matched}</b></span><span>余計な点<b>${p.n_pred - p.n_matched}</b></span><span>(出力点<b>${p.n_pred}</b>)</span><span>summary_score${isDense(f) ? "(この図の採点値)" : ""}<b>${fmt(r.score)}</b></span>` }, mh);
   if (r.error) el("div", { class: "err", text: `回答なし・エラー: ${r.error.split("\n")[0].slice(0, 120)}(何も出力しなかったものとして採点)` }, blk);
   const ul = el("ul", { class: "series" }, blk);
   for (const [i, j, n] of p.series) {
@@ -427,10 +486,10 @@ function renderModelBlock(f, id, parent) {
   }
   const views = el("div", { class: "views" }, blk);
   const v1 = el("div", { class: "view" }, views);
-  el("div", { class: "eyebrow", text: "元画像に重ねる" }, v1);
+  el("div", { class: "eyebrow", text: isDense(f) ? "元画像に重ねる(点の対応は参考)" : "元画像に重ねる" }, v1);
   drawOverlay(f, r, id, v1);
   const v2 = el("div", { class: "view" }, views);
-  el("div", { class: "eyebrow", text: "データ空間" }, v2);
+  el("div", { class: "eyebrow", text: isDense(f) ? "データ空間(点の対応は参考)" : "データ空間" }, v2);
   drawPlot(f, r, v2);
 }
 
@@ -591,7 +650,7 @@ function renderFinding() {
   document.getElementById("finding").innerHTML = `
     <ul>
       <li>採点では LineFormer の出力を「画像全体 = プロット領域」として数値に直しています。軸目盛のピクセル位置がわかる ${ax.length} 図で、同じ検出結果を目盛位置で直すと旧 score は <span class="num">${fmt(mean(ax, "lineformer"))} → ${fmt(mean(ax, "lineformer-axis"))}</span> に上がります(Fable 5.1 は同じ図で <span class="num">${fmt(mean(ax, "claude-fable-5-1"))}</span>)。</li>
-      <li>LineFormer は折れ線の検出用に学習されたモデルで、マーカー(散布点)の列は想定外の入力です。全図での LineFormer の旧 score は <span class="num">${fmt(lf.mean)}</span>、点F1 は <span class="num">${fmt(lf.point_f1)}</span>。</li>
+      <li>LineFormer は折れ線の検出用に学習されたモデルで、マーカー(散布点)の列は想定外の入力です。全図での LineFormer の旧 score は <span class="num">${fmt(lf.mean)}</span>、点F1(マーカーが密でない ${lf.n_point} 図)は <span class="num">${fmt(lf.point_f1)}</span>。</li>
     </ul>`;
 }
 
@@ -604,10 +663,11 @@ async function boot() {
   }
   FIGS = DATA.figures;
   document.getElementById("tauTxt").textContent = DATA.point_tau;
+  document.getElementById("denseTxt").textContent = DATA.dense_spacing;
   document.getElementById("lede").textContent = document.getElementById("lede").textContent.replace("実論文の図", `実論文の図${FIGS.length}枚`);
   modelA = [...DATA.conditions.calibrated.models].sort((a, b) => b.point_f1 - a.point_f1)[0].id;
   document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => setCond(b.dataset.cond)));
-  for (const id of ["sort", "filt", "axisOnly"]) document.getElementById(id).addEventListener("change", renderList);
+  for (const id of ["sort", "filt", "dens", "axisOnly"]) document.getElementById(id).addEventListener("change", renderList);
   document.getElementById("q").addEventListener("input", renderList);
   document.addEventListener("keydown", ev => {
     if (ev.target.closest("input, select, textarea") || !["j", "k"].includes(ev.key)) return;

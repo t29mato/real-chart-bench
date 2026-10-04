@@ -14,6 +14,13 @@ Every model x figure also carries its point evaluation at the primary tau
 predicted points matched or were extra, and the matched pairs -- for both the
 calibrated condition (axis ranges given) and, for the LLMs, noaxis.
 
+Every figure carries its marker density (design §7.72): the median
+within-series nearest-neighbour spacing of its ground-truth points and whether
+it is dense (< 2 tau). Dense figures are left out of the point leaderboard and
+ranked on summary_score in a second one; their point view is reference only.
+Both the per-figure density and both leaderboards' means are checked against
+the results files.
+
 LLM-style runs kept outside the repo (e.g. local VLMs) can be added with
 --extra-llm-archive (same layout as data/llm_run_v2) and --extra-results (their
 scored payloads, <model>-v0-r2.json / -v0-r2-noaxis.json); they are verified
@@ -50,11 +57,15 @@ from real_chart_bench.adapter.verified_pairing_registry import load_registry  # 
 from real_chart_bench.domain.curve import Curve  # noqa: E402
 from real_chart_bench.domain.evaluation import evaluate_figure  # noqa: E402
 from real_chart_bench.domain.pixel_calibration import PixelCalibration  # noqa: E402
-from real_chart_bench.domain.point_metrics import evaluate_points  # noqa: E402
+from real_chart_bench.domain.point_metrics import (  # noqa: E402
+    DENSE_SPACING_TAU_FACTOR,
+    evaluate_points,
+)
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     POINT_NORM,
     PRIMARY_POINT_TAU,
     axis_frame_for_task,
+    marker_density_for,
     matcher_for_task,
 )
 
@@ -218,6 +229,8 @@ def main() -> None:
         (args.out / "images" / f"{fid}.{ext}").write_bytes(task.image_bytes)
 
         gt = item.ground_truth
+        density = marker_density_for(item, PRIMARY_POINT_TAU)
+        spacing = _sig(density.median_nn_spacing)
         fig = {
             "id": fid,
             "image": f"images/{fid}.{ext}",
@@ -227,6 +240,8 @@ def main() -> None:
             "y_scale": task.y_scale.value,
             "figure_kind": getattr(getattr(pairing, "figure_kind", None), "value", None),
             "axis_px": _axis_overlay(axis.get(fid), pairing),
+            # design 7.72: dense figures are not point-scored
+            "marker_density": {"median_nn_spacing": spacing, "dense": density.dense},
             "gt": [
                 {
                     **dict(zip(("x", "y"), _thin(c.x_values, c.y_values), strict=True)),
@@ -255,6 +270,13 @@ def main() -> None:
             out = fig["models"] if cond == "calibrated" else fig["noaxis"]
             for mid, kind in cond_models:
                 pub = pubs[mid].get(fid)
+                pub_density = (pub or {}).get("marker_density")
+                if pub and (
+                    pub_density is None
+                    or pub_density["dense"] != density.dense
+                    or not _close(pub_density["median_nn_spacing"], density.median_nn_spacing)
+                ):
+                    mismatches.append((cond, mid, fid, "marker_density", density, pub_density))
                 try:
                     pred = answers[mid].get(fid) if kind == "llm" else runners[mid].extract(task)
                 except Exception as exc:  # noqa: BLE001 -- shown on the page, same as the scorer
@@ -329,37 +351,51 @@ def main() -> None:
     for mid, name, kind, f in models:
         res = json.loads((results_dir[mid] / f).read_text())
         rows = [published[mid][fig["id"]] for fig in figures if fig["id"] in published[mid]]
-        summary.append(
-            {
-                "id": mid,
-                "name": name,
-                "kind": kind,
-                "local": mid in local_ids,
-                "mean": res["mean_summary_score"],
-                **_primary_macro(res),
-                "n": len(rows),
-                **{
-                    k: sum(r[k] for r in rows) / len(rows)
-                    for k in ("match_rate", "mean_curve_distance", "mean_coverage_ratio")
-                },
-            }
-        )
+        row = {
+            "id": mid,
+            "name": name,
+            "kind": kind,
+            "local": mid in local_ids,
+            "mean": res["mean_summary_score"],
+            **_primary_macro(res),
+            **_dense_block(res),
+            "n": len(rows),
+            **{
+                k: sum(r[k] for r in rows) / len(rows)
+                for k in ("match_rate", "mean_curve_distance", "mean_coverage_ratio")
+            },
+        }
+        mismatches += _check_board(row, figures, "models", mid)
+        summary.append(row)
     axis_figs = [f for f in figures if "lineformer-axis" in f["models"]]
+    axis_point = [f for f in axis_figs if not f["marker_density"]["dense"]]
+    axis_dense = [f for f in axis_figs if f["marker_density"]["dense"]]
+
+    def axis_mean(figs, k):
+        return sum(f["models"]["lineformer-axis"][k] for f in figs) / len(figs) if figs else None
+
     summary.append(
         {
             "id": "lineformer-axis",
             "name": "LineFormer (tick-calibrated, exploratory)",
             "kind": "exploratory",
             "local": False,
-            "mean": sum(f["models"]["lineformer-axis"]["score"] for f in axis_figs)
-            / len(axis_figs),
+            "mean": axis_mean(axis_figs, "score"),
             **{
-                k: sum(f["models"]["lineformer-axis"][k] for f in axis_figs) / len(axis_figs)
+                k: axis_mean(axis_point, k)
                 for k in ("point_f1", "point_recall", "point_precision")
+            },
+            "n_point": len(axis_point),
+            "dense": {
+                "n": len(axis_dense),
+                "mean": axis_mean(axis_dense, "score"),
+                "match_rate": axis_mean(axis_dense, "match_rate"),
+                "mean_curve_distance": axis_mean(axis_dense, "dist"),
+                "mean_coverage_ratio": axis_mean(axis_dense, "cov"),
             },
             "n": len(axis_figs),
             **{
-                k: sum(f["models"]["lineformer-axis"][v] for f in axis_figs) / len(axis_figs)
+                k: axis_mean(axis_figs, v)
                 for k, v in (
                     ("match_rate", "match_rate"),
                     ("mean_curve_distance", "dist"),
@@ -372,21 +408,27 @@ def main() -> None:
     summary_noaxis = []
     for mid, name, f in noaxis_models:
         res = json.loads((results_dir[mid] / _noaxis_file(f)).read_text())
-        summary_noaxis.append(
-            {
-                "id": mid,
-                "name": name,
-                "kind": "llm",
-                "local": mid in local_ids,
-                "mean": res["mean_summary_score"],
-                **_primary_macro(res),
-                "n": res["n_figures"],
-            }
-        )
+        row = {
+            "id": mid,
+            "name": name,
+            "kind": "llm",
+            "local": mid in local_ids,
+            "mean": res["mean_summary_score"],
+            **_primary_macro(res),
+            **_dense_block(res),
+            "n": res["n_figures"],
+        }
+        mismatches += _check_board(row, figures, "noaxis", mid)
+        summary_noaxis.append(row)
+    if mismatches:
+        for m in mismatches[:10]:
+            print("leaderboard mismatch", m, file=sys.stderr)
+        raise SystemExit(f"{len(mismatches)} leaderboard mean(s) differ from results/*.json")
     payload = {
         "dataset_version": dataset_version,
         "point_tau": PRIMARY_POINT_TAU,
         "point_norm": POINT_NORM,
+        "dense_spacing": DENSE_SPACING_TAU_FACTOR * PRIMARY_POINT_TAU,
         # kept for the calibrated view; "conditions" has both leaderboards
         "models": summary,
         "conditions": {
@@ -400,8 +442,10 @@ def main() -> None:
     n_axis = sum(f["axis_px"] is not None for f in figures)
     print(
         f"wrote {args.out}/data.json ({size:.1f} MB): {len(figures)} figures, "
-        f"{n_axis} with usable axis pixel positions; all scores (summary_score and "
-        f"point_f1, both conditions) match the results files; "
+        f"{n_axis} with usable axis pixel positions, "
+        f"{sum(f['marker_density']['dense'] for f in figures)} dense-marker; all scores "
+        f"(summary_score, point_f1, marker density and both leaderboards' means, both "
+        f"conditions) match the results files; "
         f"{len(local_ids)} local model(s) added"
     )
 
@@ -505,6 +549,46 @@ def _primary_macro(res: dict) -> dict:
         return {}
     macro = block["by_tau"][f"{block['primary_tau']:g}"]["macro"]
     return {k: macro[k] for k in ("point_f1", "point_recall", "point_precision")}
+
+
+def _close(a: float | None, b: float) -> bool:
+    """A stored spacing (None for inf) against a recomputed one."""
+    if a is None:
+        return not math.isfinite(b)
+    return math.isfinite(b) and abs(a - b) <= 1e-9 * max(1.0, abs(b))
+
+
+def _dense_block(res: dict) -> dict:
+    """design 7.72: the point table's figure count and the dense-marker block."""
+    out = {"n_point": (res.get("point_metrics") or {}).get("n_figures")}
+    block = res.get("dense_marker_metrics")
+    if block:
+        out["dense"] = {
+            "n": block["n_figures"],
+            "mean": block["mean_summary_score"],
+            "match_rate": block["mean_match_rate"],
+            "mean_curve_distance": block["mean_curve_distance"],
+            "mean_coverage_ratio": block["mean_coverage_ratio"],
+        }
+    return out
+
+
+def _check_board(row: dict, figures: list, key: str, mid: str) -> list:
+    """Both leaderboards' means, recomputed from the per-figure entries the page
+    shows, against the published blocks (design 7.72)."""
+    point = [f[key][mid]["point"]["f1"] for f in figures
+             if mid in f[key] and not f["marker_density"]["dense"]]
+    dense = [f[key][mid]["score"] for f in figures
+             if mid in f[key] and f["marker_density"]["dense"]]
+    out = []
+    if len(point) != row.get("n_point") or (
+        point and abs(sum(point) / len(point) - row["point_f1"]) > 1e-9
+    ):
+        out.append((key, mid, "point table", row.get("n_point"), len(point)))
+    d = row.get("dense") or {}
+    if len(dense) != d.get("n") or (dense and abs(sum(dense) / len(dense) - d["mean"]) > 1e-9):
+        out.append((key, mid, "dense table", d.get("n"), len(dense)))
+    return out
 
 
 def _scores(pub: dict | None) -> dict:
