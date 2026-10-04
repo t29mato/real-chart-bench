@@ -59,6 +59,11 @@ dataset_version by their mean summary_score (curve distance).
 Rows carry ``execution`` ("cloud" / "local", design §7.69) when the result
 records it: the deployment question -- can it run where the data cannot leave --
 is read off the same table. It does not affect ranking.
+
+A result marked ``"diagnostic": true`` is left out of both tables. It is a
+scored, archived side measurement -- e.g. the v3 Sonnet first attempts made
+without image tools (design §7.73 (2)) -- that answers a question about one
+run rather than entering the ranking.
 """
 
 from __future__ import annotations
@@ -112,6 +117,10 @@ class DenseMarkerRow:
 
 def _is_pending(result: dict) -> bool:
     return result.get("status") == _PENDING_STATUS
+
+
+def _is_diagnostic(result: dict) -> bool:
+    return result.get("diagnostic") is True
 
 
 def _primary_point_cell(result: dict) -> dict | None:
@@ -178,6 +187,7 @@ def _ordered_groups(scored: list[dict]) -> list[tuple[str | None, list[dict]]]:
 
 
 def build_leaderboard_rows(results: list[dict]) -> list[LeaderboardRow]:
+    results = [r for r in results if not _is_diagnostic(r)]
     scored = [r for r in results if not _is_pending(r)]
     pending = [r for r in results if _is_pending(r)]
 
@@ -203,7 +213,9 @@ def build_dense_marker_rows(results: list[dict]) -> list[DenseMarkerRow]:
     """The dense-marker table (design §7.72): every result with at least one
     dense figure, grouped by dataset_version like the main table, ranked
     within a group by the dense figures' mean summary_score."""
-    with_dense = [r for r in results if not _is_pending(r) and _dense_block(r)]
+    with_dense = [
+        r for r in results if not _is_pending(r) and not _is_diagnostic(r) and _dense_block(r)
+    ]
     rows: list[DenseMarkerRow] = []
     for _, group in _ordered_groups(with_dense):
         ordered = sorted(

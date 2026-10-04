@@ -26,6 +26,10 @@ from datetime import UTC, datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
+from real_chart_bench.adapter.agent_run_archive import (  # noqa: E402
+    OFFICIAL_PARTS,
+    load_agent_run_parts,
+)
 from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
     ground_truth_revision,
     load_ground_truth,
@@ -260,6 +264,86 @@ CONDITIONS["local-v2-noaxis"] = {
     "name_suffix": "（軸レンジなし、ローカル、2026-10-03）",
     "label": "軸レンジを与えない条件（ローカル VLM、v2 プロンプトの単発版、採点対象全図）",
 }
+# LLM run v3 (design §7.73 (2), §7.74): v2 with one change to the prompt --
+# measured points (markers) only, no fit / trend / guide / theory lines. Same
+# figures, conditions, batch split and contamination guards; new seed. Its
+# tasks were built from the registry of 2026-10-04, so the calibrated ranges
+# the models saw already equal the registry's (checked: no figure differs) and
+# no answer is rescaled. Same dataset_version as v2: the rows rank in the same
+# table, v2 stays there as history, the way the 2026-09 runs did.
+V3_ARCHIVE = REPO / "data/llm_run_v3"
+CONDITIONS["v3-calibrated"] = {
+    "v2": "calibrated",
+    "run_dir": V3_ARCHIVE,
+    "rescale": {},
+    "models": MODELS_V2,
+    "prompt": "v3",
+    "suffix": "-r3",
+    "name_suffix": "（v3 プロンプト、2026-10-04）",
+    "label": "軸レンジを与えた条件（2026-10-04 v3 プロンプト実行、採点対象全図）",
+}
+CONDITIONS["v3-noaxis"] = {
+    "v2": "noaxis",
+    "run_dir": V3_ARCHIVE,
+    "rescale": {},
+    "models": MODELS_V2,
+    "prompt": "v3",
+    "suffix": "-r3-noaxis",
+    "name_suffix": "（軸レンジなし、v3 プロンプト、2026-10-04）",
+    "label": "軸レンジを与えない条件（2026-10-04 v3 プロンプト実行、採点対象全図）",
+}
+# Diagnostic only, never a leaderboard row (design §7.74): the first v3
+# Sonnet attempts, made while the subagent's python3 had no Pillow, so it read
+# every value by eye. Same model, prompt and figures as the official rerun --
+# the difference between the two is what image tools are worth. Flagged
+# `diagnostic` (the leaderboard drops it) and on its own dataset_version.
+V3_NOPILLOW_PARTS = ("part1_nopillow", "part2_nopillow")
+for _c in ("calibrated", "noaxis"):
+    CONDITIONS[f"v3-{_c}-nopillow"] = {
+        **CONDITIONS[f"v3-{_c}"],
+        "models": {"claude-sonnet-5-5": "Claude Sonnet 5.5"},
+        "pred_parts": V3_NOPILLOW_PARTS,
+        "diagnostic": True,
+        "suffix": "-r3-nopillow" + ("-noaxis" if _c == "noaxis" else ""),
+        "name_suffix": " (v3, no image tools)"
+        + ("（軸レンジなし）" if _c == "noaxis" else ""),
+        "label": CONDITIONS[f"v3-{_c}"]["label"]
+        + " — 診断行: 画像ツールなしの初回回答(リーダーボード対象外)",
+    }
+DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
+V3_NOTES = (
+    "Claude Code のサブエージェントとして起動(2026-10-04、"
+    "オーナーの Mac (macOS) で実行。v2 は Linux 機で別マシン)。"
+    "プロンプトは scripts/eval/llm_run_v3_prompt.md: "
+    "v2 (llm_run_v2_prompt.md)との差分は『測定点(マーカー)のみ。"
+    "近似線・回帰線・ガイド線・理論曲線は出さない』の1点だけ(design §7.73 (2))。"
+    "図・条件・バッチ分割(49図/48図)・汚染対策は v2 と同じで、乱数シードのみ変更。"
+    "指示文は起動メッセージに貼らず、"
+    "各封印ディレクトリ内の INSTRUCTIONS.md として置いた。"
+    "Sonnet 5.5 は初回、"
+    "サブエージェントの python3 に Pillow がなく全バッチを目視で回答したため、"
+    "起動メッセージで Pillow 入りインタプリタのパスを明示して再実行した"
+    "(公式行は再実行分 part1/part2 のみ。"
+    "初回分 *_nopillow は診断行として別ファイル)。"
+    "API の利用上限で中断したバッチがいくつかあり、"
+    "上限のリセット後に同じエージェントを文脈ごと再開した。"
+    "自己申告の封印逸脱: Sonnet 再実行(軸あり part2)が"
+    "一時ファイルをディレクトリ外の /private/tmp/w に書いた。"
+    "Opus(軸なし part2)が作業ディレクトリの根を一度一覧し、"
+    "_key.json を含むファイル名を見た(開いてはいない)。"
+    "実行記録は design §7.74。"
+    "calibrated の軸レンジは 2026-10-04 の registry から作ったので、"
+    "回答の単位換算はしていない。生の回答は data/llm_run_v3/。"
+)
+V3_NOPILLOW_NOTES = (
+    "診断行(リーダーボード対象外)。"
+    "v3 の Sonnet 5.5 初回回答: サブエージェントの既定 python3 に Pillow がなく、"
+    "画像処理を使わず目視で値を読んだ。同じモデル・同じプロンプト・同じ図で、"
+    "公式行(claude-sonnet-5-5-v0-r3*.json、"
+    "Pillow ありで再実行)との差が画像ツールの有無の効果。"
+    "生の回答は data/llm_run_v3/<condition>/claude-sonnet-5-5/part{1,2}_nopillow.predictions.json。"
+)
+
 LOCAL_HARDWARE = "Apple M3 Max, 128GB unified memory (laptop)"
 LOCAL_V2_NOTES = (
     "ローカル実行(ノート PC: Apple M3 Max 128GB、mlx-vlm 0.7.4 / mlx 0.32.3、2026-10-03〜04)。"
@@ -363,11 +447,13 @@ def main() -> None:
     # ids repeat across runs (fig_001.png ...), so they are namespaced by run.
     parts = cond.get("parts", [name])
     tasks, key = [], {}
+    # the archived agent run these answers belong to (v2 unless named)
+    run_dir = cond.get("run_dir", V2_ARCHIVE)
     if cond.get("v2"):
-        v2_key = json.loads((V2_ARCHIVE / "_key.json").read_text())
+        v2_key = json.loads((run_dir / "_key.json").read_text())
         tasks = [
             {**t, "id": f"{name}:{t['id']}"}
-            for t in json.loads((V2_ARCHIVE / cond["v2"] / "tasks.json").read_text())
+            for t in json.loads((run_dir / cond["v2"] / "tasks.json").read_text())
         ]
         key = {f"{name}:{k}": v for k, v in v2_key.items()}
     for part in [] if cond.get("v2") else parts:
@@ -433,12 +519,14 @@ def main() -> None:
             )
             raw = {f"{name}:{k}": v for k, v in local_run.answers.items()}
         elif cond.get("v2"):
-            files = sorted((V2_ARCHIVE / cond["v2"] / model_id).glob("part*.predictions.json"))
-            for f in files:
-                raw |= {f"{name}:{k}": v for k, v in json.loads(f.read_text()).items()}
-            if not files:
+            # exactly the named parts, never a glob: a model dir can hold
+            # other attempts (v3 Sonnet's *_nopillow) that are not this row
+            model_dir = run_dir / cond["v2"] / model_id
+            if not model_dir.is_dir():
                 print(f"  {model_id}: 予測ファイルがない → スキップ")
                 continue
+            answers = load_agent_run_parts(model_dir, cond.get("pred_parts", OFFICIAL_PARTS))
+            raw = {f"{name}:{k}": v for k, v in answers.items()}
         for part in [] if cond.get("v2") else parts:
             c = CONDITIONS[part]
             path = _resolve_pred(c["archive"], c["work"], model_id)
@@ -458,7 +546,9 @@ def main() -> None:
             # v2 answers were given in today's unit space; only the 2026-09
             # runs predate the display-unit migration
             rescale = (
-                PREDICTION_RESCALE_V2_CALIBRATED
+                cond["rescale"]
+                if "rescale" in cond
+                else PREDICTION_RESCALE_V2_CALIBRATED
                 if cond.get("v2") == "calibrated"
                 else {}
                 if cond.get("v2")
@@ -485,7 +575,11 @@ def main() -> None:
             # a local row needs no data to leave the machine
             "execution": "local" if cond.get("local") else "cloud",
             "dataset_version": (
-                f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-noaxis"
+                f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}"
+                + ("-noaxis" if cond["v2"] == "noaxis" else "")
+                + DIAGNOSTIC_VERSION_SUFFIX
+                if cond.get("diagnostic")
+                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-noaxis"
                 if cond.get("v2") == "noaxis"
                 # every scoreable figure, same as the CV/LineFormer rows, so all
                 # of them rank in one table (design 7.66)
@@ -505,6 +599,11 @@ def main() -> None:
             "per_figure": per_figure,
             "agent_effort": EFFORT.get(model_id) if name == "calibrated" else None,
             "condition": cond["label"],
+            # which saved prompt the row answered (scripts/eval/llm_run_<v>_prompt.md)
+            **({"prompt": f"scripts/eval/llm_run_{cond['prompt']}_prompt.md"}
+               if cond.get("prompt") else {}),
+            # a side measurement, left out of the leaderboard (build_leaderboard)
+            **({"diagnostic": True} if cond.get("diagnostic") else {}),
             **(
                 {"local_run": _local_run_block(
                     model_id, cond["v2"], local_run, v2_key, scoreable_ids
@@ -512,7 +611,11 @@ def main() -> None:
                 if local_run
                 else {}
             ),
-            "notes": LOCAL_V2_NOTES
+            "notes": V3_NOPILLOW_NOTES
+            if cond.get("diagnostic")
+            else V3_NOTES
+            if cond.get("prompt") == "v3"
+            else LOCAL_V2_NOTES
             if cond.get("local")
             else V2_NOTES
             if cond.get("v2")

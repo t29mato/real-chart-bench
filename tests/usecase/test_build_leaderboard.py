@@ -353,3 +353,31 @@ def test_dense_row_carries_execution_from_the_result():
     }
 
     assert build_dense_marker_rows([result])[0].execution == "local"
+
+
+# A diagnostic result (e.g. the v3 Sonnet first attempts without image tools)
+# is scored and archived but is not a leaderboard entry: it never takes a rank
+# from, or shows up next to, the official rows.
+def test_diagnostic_results_are_left_out_of_the_main_table():
+    official = _with_points(_result("sonnet", 0.9), f1=0.9)
+    diagnostic = {**_with_points(_result("sonnet-no-tools", 0.95), f1=0.95), "diagnostic": True}
+
+    rows = build_leaderboard_rows([diagnostic, official])
+
+    assert [(r.model_id, r.rank) for r in rows] == [("sonnet", 1)]
+
+
+def test_diagnostic_results_are_left_out_of_the_dense_table():
+    def dense(r):
+        return {**r, "dense_marker_metrics": {"n_figures": 2, "mean_summary_score": 0.7}}
+
+    official = dense(_result("sonnet", 0.9))
+    diagnostic = {**dense(_result("sonnet-no-tools", 0.9)), "diagnostic": True}
+
+    assert [r.model_id for r in build_dense_marker_rows([official, diagnostic])] == ["sonnet"]
+
+
+def test_diagnostic_false_is_an_ordinary_row():
+    rows = build_leaderboard_rows([{**_result("a", 0.9), "diagnostic": False}])
+
+    assert [r.model_id for r in rows] == ["a"]
