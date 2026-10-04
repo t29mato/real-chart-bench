@@ -3,8 +3,10 @@ page: ground truth, each model's curves in data space, which ground-truth
 series each predicted curve was matched to, and the per-figure scores.
 
 Curves are rebuilt from what each model actually produced -- LLM answers from
-data/llm_run_v2/calibrated/ (with the same unit rescale the scorer
-applies), LineFormer from its raw pixel output, the CV baselines by re-running
+data/llm_run_v3/ (the current Claude rows, design §7.73 (2)) and
+data/llm_run_v2/ (kept as history, with the same unit rescale the scorer
+applies), each read from exactly the official parts (part1, part2) as the
+scorer reads them, LineFormer from its raw pixel output, the CV baselines by re-running
 them -- and re-scored here. Each recomputed score is checked against the
 published results/*.json, so the page cannot show curves that are not the
 ones that were scored.
@@ -47,10 +49,16 @@ from score_llm_predictions import (  # noqa: E402
     LOCAL_V2_ARCHIVE,
     MODELS_LOCAL_V2,
     PREDICTION_RESCALE_V2_CALIBRATED,
+    V2_ARCHIVE,
+    V3_ARCHIVE,
     parse_curves,
 )
 
 from real_chart_bench.adapter.achromatic_cv_extractor import AchromaticCvModelRunner  # noqa: E402
+from real_chart_bench.adapter.agent_run_archive import (  # noqa: E402
+    OFFICIAL_PARTS,
+    load_agent_run_parts,
+)
 from real_chart_bench.adapter.lineformer_model_runner import (  # noqa: E402
     LineFormerPrediction,
     PrecomputedLineFormerModelRunner,
@@ -76,15 +84,20 @@ from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
 
 MAX_POINTS = 400  # per curve, for display only; scoring uses every point
 
-# the 2026-10-01 run (axis ranges given) -- design 7.66
-LLM_MODELS = {
+_CLAUDE = {
     "claude-fable-5-1": "Claude Fable 5.1",
     "claude-opus-5-5": "Claude Opus 5.5",
     "claude-sonnet-5-5": "Claude Sonnet 5.5",
     "claude-haiku-4-5": "Claude Haiku 4.5",
 }
+# the 2026-10-04 v3 run (markers-only prompt, design 7.73 (2)): the current
+# Claude rows. Explorer ids get a "-v3" suffix so they do not collide with v2.
+LLM_MODELS_V3 = {f"{m}-v3": f"{n}（v3 プロンプト）" for m, n in _CLAUDE.items()}
+# the 2026-10-01 run (v2 prompt) -- design 7.66; kept as history
+LLM_MODELS = {m: f"{n}（v2 プロンプト）" for m, n in _CLAUDE.items()}
 MODELS = [
     # (id, name, kind, published results file)
+    *[(m, n, "llm", f"{m.removesuffix('-v3')}-v0-r3.json") for m, n in LLM_MODELS_V3.items()],
     *[(m, n, "llm", f"{m}-v0-r2.json") for m, n in LLM_MODELS.items()],
     # the current LineFormer run's file is named after its figure count
     (
@@ -100,7 +113,10 @@ MODELS = [
     ("naive-cv", "naive-cv (hue)", "cv", "naive-cv-v0.json"),
     ("achromatic-cv", "achromatic-cv (luminance)", "cv", "achromatic-cv-v0.json"),
     # local VLMs, same tasks as the 2026-10-01 run (design 7.73 (3))
-    *[(m, n, "llm", f"{m}-v0-local-v2.json") for m, n in MODELS_LOCAL_V2.items()],
+    *[
+        (m, f"{n}（v2 プロンプト・単発）", "llm", f"{m}-v0-local-v2.json")
+        for m, n in MODELS_LOCAL_V2.items()
+    ],
 ]
 
 
@@ -110,33 +126,36 @@ def _thin(xs, ys):
 
 
 def _llm_answers(
-    task_by_fid: dict, models, condition: str = "calibrated", local: bool = False
+    task_by_fid: dict,
+    models,
+    condition: str = "calibrated",
+    local: bool = False,
+    run: pathlib.Path = V2_ARCHIVE,
 ) -> dict[str, dict[str, list]]:
     """model -> figure_id ("paper-fig") -> list[Curve], scorer-identical.
 
-    Only the calibrated condition is rescaled, exactly as score_llm_predictions
-    does for v2 (the noaxis models read the printed units themselves). Local
-    VLMs answered the same v2 tasks; their answers are the parsed series in
-    data/local_vlm_run_v2/<model>/<condition>.jsonl."""
-    run = REPO / "data/llm_run_v2"
+    Only the v2 calibrated condition is rescaled, exactly as
+    score_llm_predictions does (the noaxis models read the printed units
+    themselves; the v3 tasks were built from today's registry). Local VLMs
+    answered the same v2 tasks; their answers are the parsed series in
+    data/local_vlm_run_v2/<model>/<condition>.jsonl. A model id may carry a
+    "-v3" suffix (explorer-only); the archive dir is the bare model id."""
     key = json.loads((run / "_key.json").read_text())
+    rescale = PREDICTION_RESCALE_V2_CALIBRATED if run == V2_ARCHIVE else {}
     out = {m: {} for m in models}
     for m in models:
-        raw = {}
         if local:
             raw = load_local_vlm_run(LOCAL_V2_ARCHIVE / m / f"{condition}.jsonl").answers
-        for f in [] if local else sorted((run / condition / m).glob("part*.predictions.json")):
-            raw |= json.loads(f.read_text())
+        else:
+            raw = load_agent_run_parts(
+                run / condition / m.removesuffix("-v3"), OFFICIAL_PARTS
+            )
         for task_id, answer in raw.items():
             k = key[task_id]
             fid = f"{k['paper_id']}-{k['figure_id']}"
             if fid not in task_by_fid:
                 continue  # excluded from scoring since the run
-            factors = (
-                PREDICTION_RESCALE_V2_CALIBRATED.get(k["figure_id"])
-                if condition == "calibrated"
-                else None
-            )
+            factors = rescale.get(k["figure_id"]) if condition == "calibrated" else None
             if factors:
                 answer = [
                     {
@@ -203,8 +222,10 @@ def main() -> None:
         "naive-cv": NaiveCvModelRunner(),
         "achromatic-cv": AchromaticCvModelRunner(),
     }
-    llm = _llm_answers(task_by_fid, LLM_MODELS)
-    llm_noaxis = _llm_answers(task_by_fid, LLM_MODELS, "noaxis")
+    llm = _llm_answers(task_by_fid, LLM_MODELS_V3, run=V3_ARCHIVE)
+    llm_noaxis = _llm_answers(task_by_fid, LLM_MODELS_V3, "noaxis", run=V3_ARCHIVE)
+    llm |= _llm_answers(task_by_fid, LLM_MODELS)
+    llm_noaxis |= _llm_answers(task_by_fid, LLM_MODELS, "noaxis")
     llm |= _llm_answers(task_by_fid, MODELS_LOCAL_V2, "calibrated", local=True)
     llm_noaxis |= _llm_answers(task_by_fid, MODELS_LOCAL_V2, "noaxis", local=True)
     published = {
@@ -280,6 +301,14 @@ def main() -> None:
                     pred, err = None, f"{type(exc).__name__}: {exc}"
                 else:
                     err = None if pred is not None else "no answer"
+                if pred is not None:
+                    # evaluate_model_on_dataset scores a figure whose curve
+                    # comparison raises (e.g. an answer holding Infinity) as
+                    # an empty answer on every metric; mirror that here
+                    try:
+                        entry, ev = _package(pred, gt, matcher_for_task(task))
+                    except Exception as exc:  # noqa: BLE001
+                        pred, err = None, f"{type(exc).__name__}: {exc}"
                 # design 7.67: the primary metric, checked like summary_score;
                 # no answer is scored as nothing predicted, as the scorer does
                 pt = evaluate_points(pred or [], gt, frame, PRIMARY_POINT_TAU, POINT_NORM)
@@ -296,7 +325,6 @@ def main() -> None:
                         "point": _point_detail(pt, [], gt),
                     }
                     continue
-                entry, ev = _package(pred, gt, matcher_for_task(task))
                 if pub and abs(ev.summary_score - pub["summary_score"]) > 1e-6:
                     mismatches.append((cond, mid, fid, ev.summary_score, pub["summary_score"]))
                 out[mid] = {**entry, **_scores(pub), "point": _point_detail(pt, pred, gt)}

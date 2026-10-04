@@ -118,6 +118,15 @@ one inference per figure, no network: <code>HF_HUB_OFFLINE=1</code>) -- nothing 
 the machine. Settings and parse-failure counts are in each local result's
 <code>local_run</code>; raw outputs in <code>data/local_vlm_run_v2/</code>. A dash = not
 an LLM row (CV baselines, LineFormer).</p>
+<p><strong>Prompts (design &sect;7.73 (2), since 2026-10-04):</strong> Claude rows marked
+<em>v3 プロンプト</em> (2026-10-04) are the current Claude rows: markers only, no fit /
+trend / guide / theory lines (<code>scripts/eval/llm_run_v3_prompt.md</code>). Claude rows
+dated 2026-10-01 used the v2 prompt (<code>llm_run_v2_prompt.md</code>, which did not say to
+leave fit lines out) and the 2026-09 rows (<em>採点対象全図</em>) an earlier one; both stay in
+the table as history -- same figures, same scoring. The local rows are still a single-shot
+version of the v2 prompt (a local v3 run is in progress as of 2026-10-04). A diagnostic
+run (Claude Sonnet 5.5, v3, first attempt without image tools) is scored in
+<code>results/</code> (<code>"diagnostic": true</code>) but is not ranked here.</p>
 {sections}
 {dense_sections}
 {pending_section}

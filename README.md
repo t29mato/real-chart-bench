@@ -45,8 +45,8 @@ end-to-end chart-understanding score.
 | **LineFormer** | **n=97, v0 task:** point F1 0.006 on the 80 non-dense figures (recall 0.166, precision 0.003), summary_score 0.7462 over all 97 — [`results/lineformer-pretrained-n97.json`](results/lineformer-pretrained-n97.json). It outputs each line as a dense run of pixels, so it never singles out the markers: precision, and with it F1, is near zero. Tick-calibrated mapping on 45 figures ([`results/lineformer-pretrained-tickcal.json`](results/lineformer-pretrained-tickcal.json)): point recall 0.876 on the 37 non-dense figures (vs. 0.159 standard) but F1 still 0.027; summary_score 0.8725 vs. 0.7289. Local RTX 4090. |
 | **Classic-CV baselines** | **n=97, v0 task:** naive-CV (hue) point F1 0.016 on the 80 non-dense figures (summary_score 0.7430 over all 97) — [`results/naive-cv-v0.json`](results/naive-cv-v0.json); achromatic-CV (luminance) point F1 0.011 (summary_score 0.6634) — [`results/achromatic-cv-v0.json`](results/achromatic-cv-v0.json). Like LineFormer, both trace lines as dense pixels rather than locating markers. |
 | **Human ceiling** | Harness live, awaiting data. Independent re-digitizations of a stratified 25-figure subset get scored with the *same* metric as models, so the ground truth's own error bar sits on the leaderboard next to every model score. Registered as a pending row until real annotations exist — see `data/human_ceiling/FORMAT.md`. |
-| **LLM baselines (Claude)** | **n=97, v0 task**, axis calibration given (2026-10-01 run) and withheld (no-axis), plus the September runs on the same figures: see [Current results](#current-results-n97) for the point table (80 non-dense figures) and the dense-marker table (17 figures) — [`results/claude-*-v0-r2.json`](results/claude-opus-5-5-v0-r2.json), [`results/claude-*-v0-r2-noaxis.json`](results/claude-opus-5-5-v0-r2-noaxis.json), [`results/claude-*-v0-full.json`](results/claude-sonnet-5-v0-full.json). |
-| **Local VLMs** | **n=97, v0 task**, both conditions (2026-10-03): Qwen3.5-9B, Qwen3.8-27B, Gemma 4 31B (all 8bit, mlx-vlm on an M3 Max laptop, offline). Best: Gemma 4 31B, point F1 0.733 (axis given) / 0.745 (withheld) on the 80 non-dense figures — [`results/*-v0-local-v2.json`](results/gemma-4-31b-8bit-v0-local-v2.json), [`results/*-v0-local-v2-noaxis.json`](results/gemma-4-31b-8bit-v0-local-v2-noaxis.json); raw outputs in [`data/local_vlm_run_v2/`](data/local_vlm_run_v2/), inference code in [`scripts/eval/local_vlm/`](scripts/eval/local_vlm/). |
+| **LLM baselines (Claude)** | **n=97, v0 task**, axis calibration given and withheld (no-axis). Current rows: the 2026-10-04 run on the markers-only v3 prompt — [`results/claude-*-v0-r3.json`](results/claude-opus-5-5-v0-r3.json), [`results/claude-*-v0-r3-noaxis.json`](results/claude-opus-5-5-v0-r3-noaxis.json); raw answers in [`data/llm_run_v3/`](data/llm_run_v3/). The 2026-10-01 v2 run ([`results/claude-*-v0-r2*.json`](results/claude-opus-5-5-v0-r2.json)) and the September runs ([`results/claude-*-v0-full.json`](results/claude-sonnet-5-v0-full.json)) are kept as history. See [Current results](#current-results-n97). |
+| **Local VLMs** | **n=97, v0 task**, both conditions (2026-10-03, single-shot v2 prompt; a v3 run is in progress): Qwen3.5-9B, Qwen3.8-27B, Gemma 4 31B (all 8bit, mlx-vlm on an M3 Max laptop, offline). Best: Gemma 4 31B, point F1 0.733 (axis given) / 0.745 (withheld) on the 80 non-dense figures — [`results/*-v0-local-v2.json`](results/gemma-4-31b-8bit-v0-local-v2.json), [`results/*-v0-local-v2-noaxis.json`](results/gemma-4-31b-8bit-v0-local-v2-noaxis.json); raw outputs in [`data/local_vlm_run_v2/`](data/local_vlm_run_v2/), inference code in [`scripts/eval/local_vlm/`](scripts/eval/local_vlm/). |
 | **Results explorer** | [`scripts/viz/`](scripts/viz/) (export_results_explorer.py + results_explorer.html): render every model's predicted curves overlaid on source images. |
 
 ## Current results (n=97)
@@ -67,59 +67,107 @@ truth as the Claude 2026-10-01 run, with a single-shot version of its prompt
 condition, listed in each file's `local_run`. Seconds per figure are recorded
 but not comparable (the three models ran concurrently).
 
+**Prompt** is the instruction version a row answered (design §7.73 (2)). *v3*
+(2026-10-04, [`scripts/eval/llm_run_v3_prompt.md`](scripts/eval/llm_run_v3_prompt.md)):
+measured points (markers) only — no fit, trend, guide or theory lines. *v2*
+(2026-10-01, [`llm_run_v2_prompt.md`](scripts/eval/llm_run_v2_prompt.md)) did not
+say to leave fit lines out. The Claude rows below are the v3 run; the local VLM
+rows are still a single-shot version of v2 (a local v3 run is in progress). The
+earlier Claude runs (v2 and September) are kept as history in the tables further
+down — same figures, same scoring, and they still rank in the same
+`dataset_version` table on the leaderboard site.
+
 **Main table — point-level, 80 non-dense figures** (macro, τ = 0.02).
 `summary_score` (reference) is over all 97 figures.
 
-| Condition | Model | Runs | n | Point F1 | Recall | Precision | summary_score (97) |
-|---|---|---|---:|---:|---:|---:|---:|
-| axis given | Claude Sonnet 5.5 | cloud | 80 | **0.953** | 0.949 | 0.960 | 0.9831 |
-| axis given | Claude Opus 5.5 | cloud | 80 | **0.951** | 0.989 | 0.932 | 0.9691 |
-| axis given | Claude Fable 5 (Sept.) | cloud | 80 | **0.941** | 0.942 | 0.942 | 0.9843 |
-| axis given | Claude Opus 5 (Sept.) | cloud | 80 | **0.918** | 0.917 | 0.920 | 0.9847 |
-| axis given | Claude Fable 5.1 | cloud | 80 | **0.917** | 0.921 | 0.915 | 0.9786 |
-| axis given | Gemma 4 31B (8bit) | local | 80 | **0.733** | 0.737 | 0.732 | 0.9428 |
-| axis given | Claude Sonnet 5 (Sept.) | cloud | 80 | **0.672** | 0.673 | 0.675 | 0.9638 |
-| axis given | Qwen3.8-27B (8bit) | local | 80 | **0.631** | 0.635 | 0.631 | 0.9243 |
-| axis given | Qwen3.5-9B (8bit) | local | 80 | **0.446** | 0.461 | 0.442 | 0.8995 |
-| axis given | Claude Haiku 4.5 (Sept.) | cloud | 80 | **0.039** | 0.075 | 0.030 | 0.5597 |
-| axis given | Claude Haiku 4.5 | cloud | 80 | **0.030** | 0.123 | 0.020 | 0.6031 |
-| axis given | naive-CV | — | 80 | **0.016** | 0.255 | 0.009 | 0.7430 |
-| axis given | achromatic-CV | — | 80 | **0.011** | 0.206 | 0.006 | 0.6634 |
-| axis given | LineFormer (pretrained) | — | 80 | **0.006** | 0.166 | 0.003 | 0.7462 |
-| axis withheld | Claude Opus 5.5 | cloud | 80 | **0.986** | 0.987 | 0.985 | 0.9848 |
-| axis withheld | Claude Sonnet 5.5 | cloud | 80 | **0.973** | 0.970 | 0.978 | 0.9838 |
-| axis withheld | Claude Fable 5.1 | cloud | 80 | **0.934** | 0.939 | 0.931 | 0.9818 |
-| axis withheld | Gemma 4 31B (8bit) | local | 80 | **0.745** | 0.746 | 0.747 | 0.9529 |
-| axis withheld | Qwen3.8-27B (8bit) | local | 80 | **0.658** | 0.658 | 0.662 | 0.9221 |
-| axis withheld | Qwen3.5-9B (8bit) | local | 80 | **0.470** | 0.476 | 0.468 | 0.8729 |
-| axis withheld | Claude Haiku 4.5 | cloud | 80 | **0.031** | 0.030 | 0.034 | 0.2767 |
+| Condition | Model | Runs | Prompt | n | Point F1 | Recall | Precision | summary_score (97) |
+|---|---|---|---|---:|---:|---:|---:|---:|
+| axis given | Claude Opus 5.5 | cloud | v3 | 80 | **0.986** | 0.985 | 0.991 | 0.9793 |
+| axis given | Claude Fable 5.1 | cloud | v3 | 80 | **0.973** | 0.970 | 0.979 | 0.9856 |
+| axis given | Claude Sonnet 5.5 | cloud | v3 | 80 | **0.971** | 0.970 | 0.977 | 0.9831 |
+| axis given | Gemma 4 31B (8bit) | local | v2 (single-shot) | 80 | **0.733** | 0.737 | 0.732 | 0.9428 |
+| axis given | Qwen3.8-27B (8bit) | local | v2 (single-shot) | 80 | **0.631** | 0.635 | 0.631 | 0.9243 |
+| axis given | Qwen3.5-9B (8bit) | local | v2 (single-shot) | 80 | **0.446** | 0.461 | 0.442 | 0.8995 |
+| axis given | Claude Haiku 4.5 | cloud | v3 | 80 | **0.022** | 0.103 | 0.014 | 0.4352 |
+| axis given | naive-CV | — | — | 80 | **0.016** | 0.255 | 0.009 | 0.7430 |
+| axis given | achromatic-CV | — | — | 80 | **0.011** | 0.206 | 0.006 | 0.6634 |
+| axis given | LineFormer (pretrained) | — | — | 80 | **0.006** | 0.166 | 0.003 | 0.7462 |
+| axis withheld | Claude Opus 5.5 | cloud | v3 | 80 | **0.985** | 0.984 | 0.990 | 0.9874 |
+| axis withheld | Claude Fable 5.1 | cloud | v3 | 80 | **0.968** | 0.967 | 0.974 | 0.9857 |
+| axis withheld | Claude Sonnet 5.5 | cloud | v3 | 80 | **0.951** | 0.949 | 0.957 | 0.9857 |
+| axis withheld | Gemma 4 31B (8bit) | local | v2 (single-shot) | 80 | **0.745** | 0.746 | 0.747 | 0.9529 |
+| axis withheld | Qwen3.8-27B (8bit) | local | v2 (single-shot) | 80 | **0.658** | 0.658 | 0.662 | 0.9221 |
+| axis withheld | Qwen3.5-9B (8bit) | local | v2 (single-shot) | 80 | **0.470** | 0.476 | 0.468 | 0.8729 |
+| axis withheld | Claude Haiku 4.5 | cloud | v3 | 80 | **0.033** | 0.033 | 0.036 | 0.2551 |
 
 **Second table — curve distance, 17 dense-marker figures** (mean
 `summary_score`; ground-truth points treated as samples of the curve).
 
-| Condition | Model | Runs | n | summary_score | Match rate | Curve distance | Coverage |
-|---|---|---|---:|---:|---:|---:|---:|
-| axis given | Claude Fable 5 (Sept.) | cloud | 17 | **0.9741** | 1.000 | 0.0550 | 0.977 |
-| axis given | Claude Sonnet 5.5 | cloud | 17 | **0.9645** | 0.971 | 0.0581 | 0.981 |
-| axis given | Claude Opus 5 (Sept.) | cloud | 17 | **0.9640** | 1.000 | 0.0825 | 0.974 |
-| axis given | Claude Sonnet 5 (Sept.) | cloud | 17 | **0.9532** | 1.000 | 0.1175 | 0.977 |
-| axis given | Claude Fable 5.1 | cloud | 17 | **0.9424** | 0.931 | 0.0788 | 0.975 |
-| axis given | Claude Opus 5.5 | cloud | 17 | **0.9417** | 0.902 | 0.0419 | 0.965 |
-| axis given | Qwen3.8-27B (8bit) | local | 17 | **0.9264** | 0.931 | 0.1339 | 0.982 |
-| axis given | Gemma 4 31B (8bit) | local | 17 | **0.8103** | 0.843 | 0.2778 | 0.866 |
-| axis given | Qwen3.5-9B (8bit) | local | 17 | **0.7852** | 0.853 | 0.3521 | 0.855 |
-| axis given | achromatic-CV | — | 17 | **0.7055** | 0.610 | 0.4751 | 0.981 |
-| axis given | naive-CV | — | 17 | **0.6736** | 0.604 | 0.3794 | 0.796 |
-| axis given | LineFormer (pretrained) | — | 17 | **0.6631** | 0.569 | 0.2539 | 0.674 |
-| axis given | Claude Haiku 4.5 | cloud | 17 | **0.6183** | 0.571 | 0.4277 | 0.711 |
-| axis given | Claude Haiku 4.5 (Sept.) | cloud | 17 | **0.5808** | 0.534 | 0.4242 | 0.632 |
-| axis withheld | Claude Sonnet 5.5 | cloud | 17 | **0.9439** | 0.971 | 0.0629 | 0.924 |
-| axis withheld | Claude Fable 5.1 | cloud | 17 | **0.9432** | 0.931 | 0.0492 | 0.948 |
-| axis withheld | Claude Opus 5.5 | cloud | 17 | **0.9431** | 0.902 | 0.0362 | 0.964 |
-| axis withheld | Gemma 4 31B (8bit) | local | 17 | **0.8546** | 0.902 | 0.2086 | 0.870 |
-| axis withheld | Qwen3.8-27B (8bit) | local | 17 | **0.8268** | 0.902 | 0.2722 | 0.851 |
-| axis withheld | Qwen3.5-9B (8bit) | local | 17 | **0.7659** | 0.853 | 0.3543 | 0.799 |
-| axis withheld | Claude Haiku 4.5 | cloud | 17 | **0.2730** | 0.407 | 0.8210 | 0.233 |
+| Condition | Model | Runs | Prompt | n | summary_score | Match rate | Curve distance | Coverage |
+|---|---|---|---|---:|---:|---:|---:|---:|
+| axis given | Claude Sonnet 5.5 | cloud | v3 | 17 | **0.9721** | 0.980 | 0.0499 | 0.986 |
+| axis given | Claude Fable 5.1 | cloud | v3 | 17 | **0.9645** | 0.969 | 0.0382 | 0.963 |
+| axis given | Qwen3.8-27B (8bit) | local | v2 (single-shot) | 17 | **0.9264** | 0.931 | 0.1339 | 0.982 |
+| axis given | Claude Opus 5.5 | cloud | v3 | 17 | **0.9209** | 0.941 | 0.1034 | 0.925 |
+| axis given | Gemma 4 31B (8bit) | local | v2 (single-shot) | 17 | **0.8103** | 0.843 | 0.2778 | 0.866 |
+| axis given | Qwen3.5-9B (8bit) | local | v2 (single-shot) | 17 | **0.7852** | 0.853 | 0.3521 | 0.855 |
+| axis given | achromatic-CV | — | — | 17 | **0.7055** | 0.610 | 0.4751 | 0.981 |
+| axis given | naive-CV | — | — | 17 | **0.6736** | 0.604 | 0.3794 | 0.796 |
+| axis given | LineFormer (pretrained) | — | — | 17 | **0.6631** | 0.569 | 0.2539 | 0.674 |
+| axis given | Claude Haiku 4.5 | cloud | v3 | 17 | **0.3993** | 0.271 | 0.4412 | 0.368 |
+| axis withheld | Claude Sonnet 5.5 | cloud | v3 | 17 | **0.9732** | 0.969 | 0.0406 | 0.992 |
+| axis withheld | Claude Opus 5.5 | cloud | v3 | 17 | **0.9713** | 0.969 | 0.0341 | 0.979 |
+| axis withheld | Claude Fable 5.1 | cloud | v3 | 17 | **0.9666** | 0.969 | 0.0503 | 0.982 |
+| axis withheld | Gemma 4 31B (8bit) | local | v2 (single-shot) | 17 | **0.8546** | 0.902 | 0.2086 | 0.870 |
+| axis withheld | Qwen3.8-27B (8bit) | local | v2 (single-shot) | 17 | **0.8268** | 0.902 | 0.2722 | 0.851 |
+| axis withheld | Qwen3.5-9B (8bit) | local | v2 (single-shot) | 17 | **0.7659** | 0.853 | 0.3543 | 0.799 |
+| axis withheld | Claude Haiku 4.5 | cloud | v3 | 17 | **0.1782** | 0.286 | 0.8915 | 0.140 |
+
+Claude Opus 5.5 (v3, axis given) lost one dense figure (17040-21023) to a
+total miss: its answer ended a series with an `Infinity` point, the curve
+comparison rejects a non-finite value, and a figure that fails to score counts
+as empty — the same rule as an unanswered figure.
+
+**History — earlier Claude runs on the same 97 figures.** Point table (80
+non-dense figures):
+
+| Condition | Model | Runs | Prompt | n | Point F1 | Recall | Precision | summary_score (97) |
+|---|---|---|---|---:|---:|---:|---:|---:|
+| axis given | Claude Sonnet 5.5 (2026-10-01) | cloud | v2 | 80 | **0.953** | 0.949 | 0.960 | 0.9831 |
+| axis given | Claude Opus 5.5 (2026-10-01) | cloud | v2 | 80 | **0.951** | 0.989 | 0.932 | 0.9691 |
+| axis given | Claude Fable 5 (Sept.) | cloud | Sept. | 80 | **0.941** | 0.942 | 0.942 | 0.9843 |
+| axis given | Claude Opus 5 (Sept.) | cloud | Sept. | 80 | **0.918** | 0.917 | 0.920 | 0.9847 |
+| axis given | Claude Fable 5.1 (2026-10-01) | cloud | v2 | 80 | **0.917** | 0.921 | 0.915 | 0.9786 |
+| axis given | Claude Sonnet 5 (Sept.) | cloud | Sept. | 80 | **0.672** | 0.673 | 0.675 | 0.9638 |
+| axis given | Claude Haiku 4.5 (Sept.) | cloud | Sept. | 80 | **0.039** | 0.075 | 0.030 | 0.5597 |
+| axis given | Claude Haiku 4.5 (2026-10-01) | cloud | v2 | 80 | **0.030** | 0.123 | 0.020 | 0.6031 |
+| axis withheld | Claude Opus 5.5 (2026-10-01) | cloud | v2 | 80 | **0.986** | 0.987 | 0.985 | 0.9848 |
+| axis withheld | Claude Sonnet 5.5 (2026-10-01) | cloud | v2 | 80 | **0.973** | 0.970 | 0.978 | 0.9838 |
+| axis withheld | Claude Fable 5.1 (2026-10-01) | cloud | v2 | 80 | **0.934** | 0.939 | 0.931 | 0.9818 |
+| axis withheld | Claude Haiku 4.5 (2026-10-01) | cloud | v2 | 80 | **0.031** | 0.030 | 0.034 | 0.2767 |
+
+Dense-marker table (17 figures):
+
+| Condition | Model | Runs | Prompt | n | summary_score | Match rate | Curve distance | Coverage |
+|---|---|---|---|---:|---:|---:|---:|---:|
+| axis given | Claude Fable 5 (Sept.) | cloud | Sept. | 17 | **0.9741** | 1.000 | 0.0550 | 0.977 |
+| axis given | Claude Sonnet 5.5 (2026-10-01) | cloud | v2 | 17 | **0.9645** | 0.971 | 0.0581 | 0.981 |
+| axis given | Claude Opus 5 (Sept.) | cloud | Sept. | 17 | **0.9640** | 1.000 | 0.0825 | 0.974 |
+| axis given | Claude Sonnet 5 (Sept.) | cloud | Sept. | 17 | **0.9532** | 1.000 | 0.1175 | 0.977 |
+| axis given | Claude Fable 5.1 (2026-10-01) | cloud | v2 | 17 | **0.9424** | 0.931 | 0.0788 | 0.975 |
+| axis given | Claude Opus 5.5 (2026-10-01) | cloud | v2 | 17 | **0.9417** | 0.902 | 0.0419 | 0.965 |
+| axis given | Claude Haiku 4.5 (2026-10-01) | cloud | v2 | 17 | **0.6183** | 0.571 | 0.4277 | 0.711 |
+| axis given | Claude Haiku 4.5 (Sept.) | cloud | Sept. | 17 | **0.5808** | 0.534 | 0.4242 | 0.632 |
+| axis withheld | Claude Sonnet 5.5 (2026-10-01) | cloud | v2 | 17 | **0.9439** | 0.971 | 0.0629 | 0.924 |
+| axis withheld | Claude Fable 5.1 (2026-10-01) | cloud | v2 | 17 | **0.9432** | 0.931 | 0.0492 | 0.948 |
+| axis withheld | Claude Opus 5.5 (2026-10-01) | cloud | v2 | 17 | **0.9431** | 0.902 | 0.0362 | 0.964 |
+| axis withheld | Claude Haiku 4.5 (2026-10-01) | cloud | v2 | 17 | **0.2730** | 0.407 | 0.8210 | 0.233 |
+
+**Diagnostic (not on the leaderboard):** the first v3 attempts of Claude Sonnet
+5.5, made while the subagent's `python3` had no Pillow, so it read every value
+by eye; the official v3 Sonnet rows are the rerun with image tools (design
+§7.74). Scored as `results/claude-sonnet-5-5-v0-r3-nopillow[-noaxis].json`
+(`"diagnostic": true`, own `dataset_version`).
 
 Every results file records the split: `per_figure[].marker_density`
 (`median_nn_spacing`, `dense`), `point_metrics` (non-dense figures only,
