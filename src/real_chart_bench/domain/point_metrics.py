@@ -93,6 +93,9 @@ class PointMatchResult:
     n_predicted: int
     n_ground_truth: int
     matched_distances: tuple[float, ...] = ()
+    # (predicted index, ground-truth index) of each matched point, aligned with
+    # matched_distances; indices are into the Curves' own (x-sorted) points
+    matched_pairs: tuple[tuple[int, int], ...] = ()
 
     @property
     def f1(self) -> float:
@@ -131,17 +134,23 @@ def _distances(pred: np.ndarray, gt: np.ndarray, norm: str) -> np.ndarray:
     return np.where(np.isfinite(d), d, np.inf)
 
 
-def _match_points(pred: np.ndarray, gt: np.ndarray, tau: float, norm: str) -> tuple[float, ...]:
-    """Distances of the matched pairs under a one-to-one assignment that
-    maximizes the number of pairs within tau, then minimizes their total."""
+@dataclass(frozen=True)
+class _PointMatch:
+    distances: tuple[float, ...] = ()
+    pairs: tuple[tuple[int, int], ...] = ()
+
+
+def _match_points(pred: np.ndarray, gt: np.ndarray, tau: float, norm: str) -> _PointMatch:
+    """The matched pairs (and their distances) under a one-to-one assignment
+    that maximizes the number of pairs within tau, then minimizes their total."""
     if len(pred) == 0 or len(gt) == 0:
-        return ()
+        return _PointMatch()
     d = _distances(pred, gt, norm)
     within = d <= tau
     rows = np.flatnonzero(within.any(axis=1))
     cols = np.flatnonzero(within.any(axis=0))
     if len(rows) == 0:
-        return ()
+        return _PointMatch()
     sub = d[np.ix_(rows, cols)]
     sub_within = sub <= tau
     # any non-match must cost more than every possible set of matches
@@ -149,7 +158,10 @@ def _match_points(pred: np.ndarray, gt: np.ndarray, tau: float, norm: str) -> tu
     cost = np.where(sub_within, sub, penalty)
     r, c = linear_sum_assignment(cost)
     keep = sub_within[r, c]
-    return tuple(float(v) for v in sub[r, c][keep])
+    return _PointMatch(
+        distances=tuple(float(v) for v in sub[r, c][keep]),
+        pairs=tuple((int(rows[i]), int(cols[j])) for i, j in zip(r[keep], c[keep], strict=True)),
+    )
 
 
 def evaluate_points(
@@ -186,7 +198,7 @@ def evaluate_points(
         cost = np.array(
             [
                 [
-                    1.0 - _f1(len(pair[i][j]), len(predicted[i]), len(ground_truth[j]))
+                    1.0 - _f1(len(pair[i][j].pairs), len(predicted[i]), len(ground_truth[j]))
                     for j in range(len(ground_truth))
                 ]
                 for i in range(len(predicted))
@@ -198,10 +210,11 @@ def evaluate_points(
                 PointMatchResult(
                     predicted=predicted[i],
                     ground_truth=ground_truth[j],
-                    n_matched=len(pair[i][j]),
+                    n_matched=len(pair[i][j].pairs),
                     n_predicted=len(predicted[i]),
                     n_ground_truth=len(ground_truth[j]),
-                    matched_distances=pair[i][j],
+                    matched_distances=pair[i][j].distances,
+                    matched_pairs=pair[i][j].pairs,
                 )
             )
         assigned_p, assigned_g = set(p_idx.tolist()), set(g_idx.tolist())

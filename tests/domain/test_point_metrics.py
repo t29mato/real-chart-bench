@@ -419,3 +419,68 @@ def test_chebyshev_still_rejects_one_coordinate_beyond_tau():
 def test_unknown_norm_is_rejected():
     with pytest.raises(ValueError):
         evaluate_points([], [], UNIT, tau=0.02, norm="manhattan")
+
+
+# --- matched index pairs (for drawing which point matched which) ----------------
+
+
+def test_matched_pairs_are_consistent_with_counts_and_distances():
+    gt = [_curve([(0.1, 0.1), (0.5, 0.5), (0.9, 0.9)])]
+    pred = [_curve([(0.105, 0.1), (0.9, 0.91), (0.3, 0.7)])]
+
+    result = evaluate_points(pred, gt, UNIT, tau=0.02)
+
+    (s,) = result.series
+    assert len(s.matched_pairs) == s.n_matched == 2
+    assert len(s.matched_distances) == len(s.matched_pairs)
+    p_pts, g_pts = s.predicted, s.ground_truth
+    for (pi, gi), d in zip(s.matched_pairs, s.matched_distances, strict=True):
+        dx = p_pts.x_values[pi] - g_pts.x_values[gi]
+        dy = p_pts.y_values[pi] - g_pts.y_values[gi]
+        assert math.hypot(dx, dy) == pytest.approx(d)
+
+
+def test_matched_pairs_index_the_curves_x_sorted_order():
+    # given out of x order; Curve sorts by x, and the indices follow Curve
+    gt = [_curve([(0.9, 0.9), (0.1, 0.1)])]
+    pred = [_curve([(0.1, 0.1), (0.5, 0.2), (0.9, 0.9)])]
+
+    result = evaluate_points(pred, gt, UNIT, tau=0.02)
+
+    (s,) = result.series
+    assert sorted(s.matched_pairs) == [(0, 0), (2, 1)]
+    assert s.ground_truth.x_values == (0.1, 0.9)
+
+
+def test_matched_pairs_each_index_used_at_most_once():
+    gt = [_curve([(0.5, 0.5), (0.51, 0.5)])]
+    pred = [_curve([(0.505, 0.5)])]
+
+    result = evaluate_points(pred, gt, UNIT, tau=0.02)
+
+    (s,) = result.series
+    assert len(s.matched_pairs) == 1
+    assert len({p for p, _ in s.matched_pairs}) == len({g for _, g in s.matched_pairs}) == 1
+
+
+def test_unmatched_series_have_no_pairs():
+    gt = [_curve([(0.1, 0.1), (0.2, 0.2)])]
+    pred = [_curve([(0.1, 0.1), (0.2, 0.2)]), _curve([(0.7, 0.7), (0.8, 0.8)])]
+
+    result = evaluate_points(pred, gt, UNIT, tau=0.02)
+    extra = [s for s in result.series if s.ground_truth is None]
+    assert len(extra) == 1 and extra[0].matched_pairs == ()
+
+    missed = evaluate_points([], gt, UNIT, tau=0.02).series
+    assert missed[0].matched_pairs == ()
+
+
+def test_matched_pairs_across_two_series_follow_the_series_pairing():
+    a = _curve([(0.1, 0.1), (0.3, 0.3)], "a")
+    b = _curve([(0.1, 0.8), (0.3, 0.9)], "b")
+
+    result = evaluate_points([b, a], [a, b], UNIT, tau=0.02)
+
+    for s in result.series:
+        assert s.predicted.series_label == s.ground_truth.series_label
+        assert sorted(s.matched_pairs) == [(0, 0), (1, 1)]
