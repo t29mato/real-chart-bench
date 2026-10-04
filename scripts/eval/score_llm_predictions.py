@@ -42,6 +42,7 @@ from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
 from real_chart_bench.usecase.result_payload import (  # noqa: E402
     POINT_METRIC_LABEL,
+    aggregate_dense_marker_metrics,
     aggregate_point_metrics,
     figure_result_row,
 )
@@ -405,6 +406,8 @@ def main() -> None:
             "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
             # design 7.67: the primary metric; summary_score is the reference
             "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
+            # design 7.72: the figures too dense for point matching, on curve distance
+            "dense_marker_metrics": aggregate_dense_marker_metrics(per_figure),
             "per_figure": per_figure,
             "agent_effort": EFFORT.get(model_id) if name == "calibrated" else None,
             "condition": cond["label"],

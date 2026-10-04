@@ -179,3 +179,54 @@ def test_point_taus_and_norm_are_configurable():
     )
 
     assert [(p.tau, p.norm) for p in result.points] == [(0.03, "chebyshev")]
+
+
+# --- marker density (design §7.72) ------------------------------------------
+
+
+def _dense_item(figure_id, step, image=b"img1"):
+    # one series on a 0..1 axis, points `step` apart
+    gt = Curve(x_values=tuple(step * i for i in range(5)), y_values=(0.5,) * 5)
+    task = ExtractionTask(image_bytes=image, x_range=(0.0, 1.0), y_range=(0.0, 1.0))
+    return DatasetItem(figure_id=figure_id, task=task, ground_truth=[gt]), gt
+
+
+def test_every_figure_records_its_marker_spacing_and_density():
+    sparse, gt_sparse = _dense_item("sparse", 0.1, b"a")
+    dense, gt_dense = _dense_item("dense", 0.01, b"b")
+
+    results = evaluate_model_on_dataset(
+        _PerfectModel({b"a": [gt_sparse], b"b": [gt_dense]}), [sparse, dense], matcher=_matcher()
+    )
+
+    by_id = {r.figure_id: r for r in results}
+    assert by_id["sparse"].marker_density.median_nn_spacing == pytest.approx(0.1)
+    assert by_id["sparse"].marker_density.dense is False
+    assert by_id["dense"].marker_density.median_nn_spacing == pytest.approx(0.01)
+    assert by_id["dense"].marker_density.dense is True
+    assert by_id["dense"].marker_density.tau == 0.02
+
+
+def test_marker_density_is_recorded_for_a_failed_extraction_too():
+    class _BrokenModel:
+        def extract(self, task):
+            raise RuntimeError("boom")
+
+    item, _ = _dense_item("dense", 0.01)
+
+    (result,) = evaluate_model_on_dataset(_BrokenModel(), [item], matcher=_matcher())
+
+    assert result.error is not None
+    assert result.marker_density.dense is True
+
+
+def test_density_criterion_follows_the_configured_tau():
+    item, gt = _dense_item("f", 0.05)  # dense at tau 0.05 (< 0.1), not at 0.02
+
+    (default,) = evaluate_model_on_dataset(_PerfectModel({b"img1": [gt]}), [item],
+                                           matcher=_matcher())
+    (wide,) = evaluate_model_on_dataset(_PerfectModel({b"img1": [gt]}), [item],
+                                        matcher=_matcher(), density_tau=0.05)
+
+    assert default.marker_density.dense is False
+    assert wide.marker_density.dense is True

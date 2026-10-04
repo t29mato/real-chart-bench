@@ -8,6 +8,8 @@ from real_chart_bench.domain.point_metrics import AxisFrame, evaluate_points
 from real_chart_bench.usecase.evaluate_dataset import DatasetItem, evaluate_model_on_dataset
 from real_chart_bench.usecase.model_runner import ExtractionTask
 from real_chart_bench.usecase.result_payload import (
+    DENSE_MARKER_CRITERION,
+    aggregate_dense_marker_metrics,
     aggregate_point_metrics,
     figure_result_row,
     point_row,
@@ -20,8 +22,17 @@ def _curve(points):
     return Curve(x_values=tuple(p[0] for p in points), y_values=tuple(p[1] for p in points))
 
 
-def _row(points_by_tau):
-    return {"figure_id": "f", "point": point_row(points_by_tau)}
+def _row(points_by_tau, dense=False, spacing=0.1, **curve):
+    return {
+        "figure_id": "f",
+        "summary_score": curve.get("summary_score", 1.0),
+        "match_rate": curve.get("match_rate", 1.0),
+        "mean_curve_distance": curve.get("mean_curve_distance", 0.0),
+        "mean_coverage_ratio": curve.get("mean_coverage_ratio", 1.0),
+        "error": None,
+        "point": point_row(points_by_tau),
+        "marker_density": {"median_nn_spacing": spacing, "dense": dense},
+    }
 
 
 def test_point_row_keys_each_tau_as_a_short_string():
@@ -155,3 +166,97 @@ def _matcher_for(task):
     from real_chart_bench.usecase.evaluate_dataset import matcher_for_task
 
     return matcher_for_task(task)
+
+
+# --- dense-marker figures (design §7.72) ------------------------------------
+
+
+def test_figure_result_row_records_marker_density():
+    gt = [_curve([(0.2, 0.2), (0.21, 0.2), (0.22, 0.2)])]  # 0.01 apart: dense
+    task = ExtractionTask(image_bytes=b"i", x_range=(0.0, 1.0), y_range=(0.0, 1.0))
+    (result,) = evaluate_model_on_dataset(
+        _Replay(gt), [DatasetItem("f1", task, gt)], matcher_for=_matcher_for
+    )
+
+    row = figure_result_row(result)
+
+    assert row["marker_density"]["median_nn_spacing"] == pytest.approx(0.01)
+    assert row["marker_density"]["dense"] is True
+
+
+def test_infinite_spacing_is_stored_as_null_and_not_dense():
+    gt = [_curve([(0.2, 0.2)])]  # a lone point has no neighbour
+    task = ExtractionTask(image_bytes=b"i", x_range=(0.0, 1.0), y_range=(0.0, 1.0))
+    (result,) = evaluate_model_on_dataset(
+        _Replay(gt), [DatasetItem("f1", task, gt)], matcher_for=_matcher_for
+    )
+
+    row = figure_result_row(result)
+
+    # JSON has no infinity
+    assert row["marker_density"] == {"median_nn_spacing": None, "dense": False}
+
+
+def test_point_aggregate_covers_only_the_non_dense_figures():
+    gt = [_curve([(0.1, 0.1), (0.5, 0.5)])]
+    found = evaluate_points(gt, gt, UNIT, tau=0.02)
+    missed = evaluate_points([], gt, UNIT, tau=0.02)
+    rows = [_row([found]), _row([found]), _row([missed], dense=True, spacing=0.01)]
+
+    block = aggregate_point_metrics(rows, primary_tau=0.02)
+
+    assert block["n_figures"] == 2
+    assert block["n_dense_figures_excluded"] == 1
+    assert block["dense_criterion"] == DENSE_MARKER_CRITERION
+    assert block["by_tau"]["0.02"]["macro"]["point_f1"] == 1.0
+    assert block["by_tau"]["0.02"]["micro"]["n_ground_truth"] == 4
+
+
+def test_point_aggregate_is_none_when_every_figure_is_dense():
+    gt = [_curve([(0.1, 0.1), (0.5, 0.5)])]
+    rows = [_row([evaluate_points(gt, gt, UNIT, tau=0.02)], dense=True)]
+
+    assert aggregate_point_metrics(rows, primary_tau=0.02) is None
+
+
+def test_point_aggregate_is_none_when_a_row_lacks_marker_density():
+    gt = [_curve([(0.1, 0.1), (0.5, 0.5)])]
+    row = _row([evaluate_points(gt, gt, UNIT, tau=0.02)])
+    del row["marker_density"]
+
+    assert aggregate_point_metrics([row], primary_tau=0.02) is None
+
+
+def test_dense_marker_metrics_average_the_curve_scores_of_the_dense_figures():
+    gt = [_curve([(0.1, 0.1), (0.5, 0.5)])]
+    p = [evaluate_points(gt, gt, UNIT, tau=0.02)]
+    rows = [
+        _row(p, summary_score=0.1),  # not dense: left out
+        _row(p, dense=True, summary_score=0.8, match_rate=1.0, mean_curve_distance=0.1,
+             mean_coverage_ratio=0.9),
+        _row(p, dense=True, summary_score=0.6, match_rate=0.5, mean_curve_distance=0.3,
+             mean_coverage_ratio=0.7),
+    ]
+
+    block = aggregate_dense_marker_metrics(rows)
+
+    assert block["criterion"] == DENSE_MARKER_CRITERION
+    assert block["n_figures"] == 2
+    assert block["mean_summary_score"] == pytest.approx(0.7)
+    assert block["mean_match_rate"] == pytest.approx(0.75)
+    assert block["mean_curve_distance"] == pytest.approx(0.2)
+    assert block["mean_coverage_ratio"] == pytest.approx(0.8)
+
+
+def test_dense_marker_metrics_with_no_dense_figure_has_zero_figures_and_no_means():
+    gt = [_curve([(0.1, 0.1), (0.5, 0.5)])]
+    rows = [_row([evaluate_points(gt, gt, UNIT, tau=0.02)])]
+
+    block = aggregate_dense_marker_metrics(rows)
+
+    assert block["n_figures"] == 0
+    assert block["mean_summary_score"] is None
+
+
+def test_dense_marker_metrics_is_none_when_a_row_lacks_marker_density():
+    assert aggregate_dense_marker_metrics([{"figure_id": "old", "summary_score": 1.0}]) is None

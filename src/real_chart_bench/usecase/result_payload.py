@@ -4,6 +4,11 @@ Every scorer -- CV baselines, LineFormer, LLM replay, the tick-calibrated
 subsets -- builds its per_figure rows and its point_metrics block here, so a
 row means the same thing in every file.
 
+per_figure[].marker_density (design §7.72) says whether the figure's markers
+are too dense for one-to-one point matching. The point_metrics block covers
+the non-dense figures only; the dense ones are summarized on curve distance
+in dense_marker_metrics.
+
 per_figure[].point keeps the per-figure counts (matched / predicted / ground
 truth) alongside the ratios, so a figure subset's point_metrics block --
 macro and micro -- can be rebuilt from the rows alone, without re-scoring.
@@ -11,6 +16,7 @@ macro and micro -- can be rebuilt from the rows alone, without re-scoring.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 from real_chart_bench.domain.point_metrics import PointEvaluation
@@ -24,6 +30,16 @@ POINT_METRIC_LABEL = (
     "(log axes in log10), one-to-one Hungarian per series pair (count of pairs "
     "within tau maximized), series assigned by 1 - F1_tau; primary: macro "
     "point_f1 at tau 0.02 (design 7.67)"
+)
+
+
+# design 7.72
+DENSE_MARKER_CRITERION = (
+    "dense when the median, over the ground-truth points, of the distance to the "
+    "nearest point of the same series in the axis-normalized space (log axes in "
+    "log10) is below 2*tau, tau = the primary point tau (0.02 -> 0.04); dense "
+    "figures leave point_metrics and are summarized on curve distance in "
+    "dense_marker_metrics (design 7.72)"
 )
 
 
@@ -55,7 +71,9 @@ def point_row(points: Sequence[PointEvaluation]) -> dict:
 
 def figure_result_row(result: FigureResult) -> dict:
     """One per_figure entry. The first six keys are the pre-§7.67 row,
-    unchanged; "point" is added only when the figure was point-scored."""
+    unchanged; "point" is added only when the figure was point-scored, and
+    "marker_density" (design 7.72) when its density was computed. An infinite
+    spacing (no series with two points) is stored as null: JSON has no inf."""
     row = {
         "figure_id": result.figure_id,
         "summary_score": result.evaluation.summary_score,
@@ -66,6 +84,12 @@ def figure_result_row(result: FigureResult) -> dict:
     }
     if result.points:
         row["point"] = point_row(result.points)
+    if result.marker_density is not None:
+        spacing = result.marker_density.median_nn_spacing
+        row["marker_density"] = {
+            "median_nn_spacing": spacing if math.isfinite(spacing) else None,
+            "dense": result.marker_density.dense,
+        }
     return row
 
 
@@ -106,13 +130,23 @@ def _micro(cells: list[dict]) -> dict:
     }
 
 
+def _has_density(per_figure: Sequence[dict]) -> bool:
+    return bool(per_figure) and all("marker_density" in row for row in per_figure)
+
+
 def aggregate_point_metrics(per_figure: Sequence[dict], primary_tau: float) -> dict | None:
     """The payload's point_metrics block from per_figure rows: macro (mean of
-    per-figure values, primary) and micro (pooled points) per tau.
+    per-figure values, primary) and micro (pooled points) per tau, over the
+    figures whose markers are not dense (design 7.72).
 
-    None when any row lacks "point" (a file scored before §7.67, or derived
-    from one): a partial aggregate would silently describe fewer figures."""
-    if not per_figure or any("point" not in row for row in per_figure):
+    None when any row lacks "point" or "marker_density" (a file scored before
+    §7.67 / §7.72, or derived from one): a partial aggregate would silently
+    describe fewer figures. None also when every figure is dense."""
+    if not _has_density(per_figure) or any("point" not in row for row in per_figure):
+        return None
+    n_all = len(per_figure)
+    per_figure = [row for row in per_figure if not row["marker_density"]["dense"]]
+    if not per_figure:
         return None
     norms = {row["point"]["norm"] for row in per_figure}
     if len(norms) != 1:
@@ -129,5 +163,26 @@ def aggregate_point_metrics(per_figure: Sequence[dict], primary_tau: float) -> d
         "norm": norms.pop(),
         "primary": "macro point_f1 at primary_tau (design 7.67)",
         "n_figures": len(per_figure),
+        "n_dense_figures_excluded": n_all - len(per_figure),
+        "dense_criterion": DENSE_MARKER_CRITERION,
         "by_tau": by_tau,
+    }
+
+
+def aggregate_dense_marker_metrics(per_figure: Sequence[dict]) -> dict | None:
+    """The payload's dense_marker_metrics block (design 7.72): the curve-distance
+    means over the figures whose markers are too dense for point matching.
+
+    None when any row lacks "marker_density"; the means are None when no
+    figure is dense."""
+    if not _has_density(per_figure):
+        return None
+    rows = [row for row in per_figure if row["marker_density"]["dense"]]
+    return {
+        "criterion": DENSE_MARKER_CRITERION,
+        "n_figures": len(rows),
+        "mean_summary_score": _mean([r["summary_score"] for r in rows]),
+        "mean_match_rate": _mean([r["match_rate"] for r in rows]),
+        "mean_curve_distance": _mean([r["mean_curve_distance"] for r in rows]),
+        "mean_coverage_ratio": _mean([r["mean_coverage_ratio"] for r in rows]),
     }

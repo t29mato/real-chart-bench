@@ -60,6 +60,7 @@ from real_chart_bench.usecase.model_runner import ExtractionTask  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
 from real_chart_bench.usecase.result_payload import (  # noqa: E402
     POINT_METRIC_LABEL,
+    aggregate_dense_marker_metrics,
     aggregate_point_metrics,
     figure_result_row,
 )
@@ -248,6 +249,8 @@ def run(model_id: str, model_name: str, model) -> dict:
         "mean_summary_score": mean_score,
         # design 7.67: the primary metric; summary_score above is the reference
         "point_metrics": aggregate_point_metrics(real_rows, PRIMARY_POINT_TAU),
+        # design 7.72: the figures too dense for point matching, on curve distance
+        "dense_marker_metrics": aggregate_dense_marker_metrics(real_rows),
         "n_synthetic_fixtures": len(synthetic_rows),
         "mean_synthetic_score": (
             sum(p["summary_score"] for p in synthetic_rows) / len(synthetic_rows)
@@ -336,6 +339,8 @@ def _achromatic_vs_hue_zero_subset(achromatic_payload: dict) -> dict | None:
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
         "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
+        # design 7.72: the figures too dense for point matching, on curve distance
+        "dense_marker_metrics": aggregate_dense_marker_metrics(per_figure),
         "per_figure": per_figure,
         "excluded_figure_ids": missing,
         "comparison_note": (
@@ -421,6 +426,8 @@ def _lineformer_comparable_subset(full_payload: dict) -> dict | None:
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
         "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
+        # design 7.72: the figures too dense for point matching, on curve distance
+        "dense_marker_metrics": aggregate_dense_marker_metrics(per_figure),
         "per_figure": per_figure,
         "excluded_figure_ids": missing,
         "comparison_note": (
@@ -472,6 +479,8 @@ def _lineformer_recomputed_subset(subset_payload: dict) -> dict | None:
         "n_figures": len(per_figure),
         "mean_summary_score": mean_score,
         "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
+        # design 7.72: the figures too dense for point matching, on curve distance
+        "dense_marker_metrics": aggregate_dense_marker_metrics(per_figure),
         "per_figure": per_figure,
         "excluded_figure_ids": subset_payload["excluded_figure_ids"],
         "comparison_note": (

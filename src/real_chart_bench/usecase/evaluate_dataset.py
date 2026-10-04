@@ -16,7 +16,13 @@ from real_chart_bench.domain.curve import Curve, ScaleType
 from real_chart_bench.domain.evaluation import EvaluationResult, evaluate_figure
 from real_chart_bench.domain.matching import CurveMatcher, HungarianCurveMatcher
 from real_chart_bench.domain.metrics import NormalizedYDistanceMetric
-from real_chart_bench.domain.point_metrics import AxisFrame, PointEvaluation, evaluate_points
+from real_chart_bench.domain.point_metrics import (
+    AxisFrame,
+    PointEvaluation,
+    evaluate_points,
+    is_dense_marker_figure,
+    median_nearest_neighbor_spacing,
+)
 from real_chart_bench.usecase.model_runner import ExtractionTask, ModelRunnerPort
 
 
@@ -28,12 +34,28 @@ class DatasetItem:
 
 
 @dataclass(frozen=True)
+class MarkerDensity:
+    """design §7.72: how closely a figure's ground-truth markers sit. ``dense``
+    figures leave the point-level aggregate and are scored on curve distance."""
+
+    # median within-series nearest-neighbour distance, axis-normalized; inf
+    # when no series has two points
+    median_nn_spacing: float
+    dense: bool
+    # the tau the criterion (spacing < 2*tau) was evaluated at
+    tau: float
+
+
+@dataclass(frozen=True)
 class FigureResult:
     figure_id: str
     evaluation: EvaluationResult
     error: str | None = None
     # design §7.67: point-level metrics, one per tau in POINT_TAUS order
     points: tuple[PointEvaluation, ...] = ()
+    # design §7.72: computed from the ground truth alone, so it is the same
+    # for every model scored on the figure
+    marker_density: MarkerDensity | None = None
 
 
 _ZERO_SCORE_EVALUATION = EvaluationResult(
@@ -71,6 +93,14 @@ def _point_evaluations(
     return tuple(evaluate_points(predicted, item.ground_truth, frame, tau, norm) for tau in taus)
 
 
+def marker_density_for(item: DatasetItem, tau: float) -> MarkerDensity:
+    """design §7.72: the figure's marker spacing and whether it is dense at ``tau``."""
+    spacing = median_nearest_neighbor_spacing(item.ground_truth, axis_frame_for_task(item.task))
+    return MarkerDensity(
+        median_nn_spacing=spacing, dense=is_dense_marker_figure(spacing, tau), tau=tau
+    )
+
+
 def matcher_for_task(task: ExtractionTask) -> HungarianCurveMatcher:
     """The benchmark's scoring matcher for one figure."""
     if task.y_scale is ScaleType.LOG:
@@ -88,6 +118,7 @@ def evaluate_model_on_dataset(
     matcher_for: Callable[[ExtractionTask], CurveMatcher] | None = None,
     point_taus: Sequence[float] = POINT_TAUS,
     point_norm: str = POINT_NORM,
+    density_tau: float = PRIMARY_POINT_TAU,
 ) -> list[FigureResult]:
     """Score every item. Pass ``matcher`` for one matcher throughout, or
     ``matcher_for`` to build one per task (the benchmark's own scoring uses
@@ -95,7 +126,10 @@ def evaluate_model_on_dataset(
 
     Every figure also gets the point-level metrics (design §7.67) at each of
     ``point_taus``, normalized by the task's axis range. A failed extraction
-    scores as an empty answer there too: every ground-truth point missed."""
+    scores as an empty answer there too: every ground-truth point missed.
+
+    Every figure also records its marker density (design §7.72) at
+    ``density_tau``: dense figures leave the point-level aggregate."""
     if (matcher is None) == (matcher_for is None):
         raise ValueError("pass exactly one of matcher / matcher_for")
     results: list[FigureResult] = []
@@ -111,6 +145,7 @@ def evaluate_model_on_dataset(
                     evaluation=_ZERO_SCORE_EVALUATION,
                     error=f"{type(exc).__name__}: {exc}",
                     points=_point_evaluations([], item, point_taus, point_norm),
+                    marker_density=marker_density_for(item, density_tau),
                 )
             )
             continue
@@ -119,6 +154,7 @@ def evaluate_model_on_dataset(
                 figure_id=item.figure_id,
                 evaluation=evaluation,
                 points=_point_evaluations(predicted, item, point_taus, point_norm),
+                marker_density=marker_density_for(item, density_tau),
             )
         )
     return results

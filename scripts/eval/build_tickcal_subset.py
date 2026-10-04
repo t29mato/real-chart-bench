@@ -44,6 +44,7 @@ from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
 from real_chart_bench.usecase.result_payload import (  # noqa: E402
     POINT_METRIC_LABEL,
+    aggregate_dense_marker_metrics,
     aggregate_point_metrics,
     figure_result_row,
 )
@@ -82,6 +83,8 @@ def main() -> None:
         "n_figures": len(per_figure),
         "mean_summary_score": sum(p["summary_score"] for p in per_figure) / len(per_figure),
         "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
+        # design 7.72: the figures too dense for point matching, on curve distance
+        "dense_marker_metrics": aggregate_dense_marker_metrics(per_figure),
         "metric": METRIC_LABEL,
         "point_metric": POINT_METRIC_LABEL,
         "raw_predictions": str(raw.relative_to(REPO)),
@@ -119,6 +122,8 @@ def main() -> None:
             "n_figures": len(kept),
             "mean_summary_score": sum(p["summary_score"] for p in kept) / len(kept),
             "point_metrics": aggregate_point_metrics(kept, PRIMARY_POINT_TAU),
+            # design 7.72: the figures too dense for point matching, on curve distance
+            "dense_marker_metrics": aggregate_dense_marker_metrics(kept),
             "metric": row.get("metric"),
             "point_metric": row.get("point_metric"),
             "derived_from": path.name,
