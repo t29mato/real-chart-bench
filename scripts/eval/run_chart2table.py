@@ -41,16 +41,29 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument("--python", required=True, type=pathlib.Path)
     parser.add_argument("--pythonpath", default="", help="extra PYTHONPATH (TinyChart's code)")
+    parser.add_argument(
+        "--dataset",
+        default="real",
+        choices=["real", "plotqa"],
+        help="real: the scored real figures; plotqa: PlotQA dot_line 100 (design 7.75 (B))",
+    )
     args = parser.parse_args()
 
-    items, _ = build_dataset()
-    items = [i for i in items if not i.figure_id.startswith("synthetic-")]
-    (CACHE / "images").mkdir(parents=True, exist_ok=True)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    manifest = CACHE / "manifest.jsonl"
+    if args.dataset == "plotqa":
+        from synthetic_plotqa import load_items
+
+        items = load_items()
+    else:
+        items, _ = build_dataset()
+        items = [i for i in items if not i.figure_id.startswith("synthetic-")]
+    cache = CACHE if args.dataset == "real" else CACHE / args.dataset
+    out_dir = OUT_DIR if args.dataset == "real" else OUT_DIR / f"synthetic-{args.dataset}"
+    (cache / "images").mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    manifest = cache / "manifest.jsonl"
     with manifest.open("w") as f:
         for item in items:
-            path = CACHE / "images" / f"{item.figure_id}.png"
+            path = cache / "images" / f"{item.figure_id}.png"
             path.write_bytes(item.task.image_bytes)
             record = {
                 "figure_id": item.figure_id,
@@ -70,9 +83,9 @@ def main() -> None:
         "--manifest",
         str(manifest),
         "--output",
-        str(OUT_DIR / f"{args.model}.jsonl"),
+        str(out_dir / f"{args.model}.jsonl"),
     ]
-    log_path = CACHE / f"{args.model}.log"
+    log_path = cache / f"{args.model}.log"
     with log_path.open("a") as log:
         proc = subprocess.Popen(
             cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True

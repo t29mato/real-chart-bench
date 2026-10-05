@@ -61,8 +61,7 @@ MODELS = {
     "tinychart": {
         "name": "TinyChart-3B-768",
         "license": (
-            "code Apache-2.0; weights carry no license statement "
-            "(evaluated, not redistributed)"
+            "code Apache-2.0; weights carry no license statement (evaluated, not redistributed)"
         ),
     },
 }
@@ -101,20 +100,28 @@ class _Replay:
         return self._curves.get(k, [])
 
 
-def score(model: str) -> dict:
+def score(model: str, dataset: str = "real") -> dict:
+    """dataset "real": the scored real figures; "plotqa": PlotQA dot_line 100
+    (design 7.75 (B); every axis is printed as-is, so no reporting rule)."""
     spec = MODELS[model]
+    pred_dir = PRED_DIR if dataset == "real" else PRED_DIR / f"synthetic-{dataset}"
     records = [
         json.loads(line)
-        for line in (PRED_DIR / f"{model}.jsonl").read_text().splitlines()
+        for line in (pred_dir / f"{model}.jsonl").read_text().splitlines()
         if line.strip()
     ]
-    items, _ = build_dataset()
-    items = [i for i in items if not i.figure_id.startswith("synthetic-")]
+    if dataset == "plotqa":
+        from synthetic_plotqa import load_items
+
+        items = load_items()
+    else:
+        items, _ = build_dataset()
+        items = [i for i in items if not i.figure_id.startswith("synthetic-")]
     by_fid = {r["figure_id"]: r for r in records}
     missing = [i.figure_id for i in items if i.figure_id not in by_fid]
     if missing:
         raise SystemExit(f"{model}: no record for {len(missing)} figure(s), e.g. {missing[:3]}")
-    rules = _report_rules()
+    rules = _report_rules() if dataset == "real" else {}
 
     curves, errors = {}, {}
     n_unparseable = n_rows_dropped = n_x_rule = n_y_rule = n_overflow = 0
@@ -160,11 +167,14 @@ def score(model: str) -> dict:
     per_figure = [figure_result_row(r) for r in results]
     base = json.loads((RESULTS / "naive-cv-v0.json").read_text())["dataset_version"]
     first = records[0]
+    synthetic = dataset != "real"
     return {
-        "model_id": f"{model}-noaxis",
+        "model_id": f"{model}-plotqa-dot-line" if synthetic else f"{model}-noaxis",
         "model_name": f"{spec['name']}（軸レンジなし、合成図で学習、ローカル）",
         "execution": "local",
-        "dataset_version": f"{base}-noaxis",
+        "dataset_version": (
+            f"synthetic-plotqa-dot-line-n{len(items)}-noaxis" if synthetic else f"{base}-noaxis"
+        ),
         "run_at": datetime.now(UTC).isoformat(),
         "n_figures": len(per_figure),
         "metric": METRIC_LABEL,
@@ -182,7 +192,7 @@ def score(model: str) -> dict:
             "transformers": first["transformers"],
             "torch": first["torch"],
             "license": spec["license"],
-            "raw_predictions": str((PRED_DIR / f"{model}.jsonl").relative_to(REPO)),
+            "raw_predictions": str((pred_dir / f"{model}.jsonl").relative_to(REPO)),
             "n_worker_errors": len(errors),
             "n_unparseable": n_unparseable,
             "n_rows_dropped_numeric": n_rows_dropped,
@@ -203,9 +213,14 @@ def score(model: str) -> dict:
 
 
 def main() -> None:
-    models = sys.argv[1:] or sorted(p.stem for p in PRED_DIR.glob("*.jsonl"))
+    args = sys.argv[1:]
+    dataset = "real"
+    if args and args[0].startswith("--dataset="):
+        dataset = args.pop(0).split("=", 1)[1]
+    pred_dir = PRED_DIR if dataset == "real" else PRED_DIR / f"synthetic-{dataset}"
+    models = args or sorted(p.stem for p in pred_dir.glob("*.jsonl"))
     for model in models:
-        payload = score(model)
+        payload = score(model, dataset)
         out = RESULTS / f"{payload['model_id']}.json"
         out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
         pm = payload["point_metrics"]["by_tau"][str(PRIMARY_POINT_TAU)]["macro"]

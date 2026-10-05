@@ -110,9 +110,14 @@ def main() -> None:
     print(json.dumps(env), flush=True)
     (out / "env.json").write_text(json.dumps(env, indent=2) + "\n")
 
-    key = json.loads((REPO / "data/llm_run_v3/_key.json").read_text())
+    # tasks and key: the v3 run's by default; RCB_RUN_DIR points at another set
+    # in the same layout (e.g. data/synthetic/plotqa_dot_line/run, design 7.75 (B))
+    run_dir = REPO / os.environ.get("RCB_RUN_DIR", "data/llm_run_v3")
+    env["run_dir"] = str(run_dir.relative_to(REPO))
+    (out / "env.json").write_text(json.dumps(env, indent=2) + "\n")
+    key = json.loads((run_dir / "_key.json").read_text())
     for cond in conds:
-        tasks = json.loads((REPO / f"data/llm_run_v3/{cond}/tasks.json").read_text())
+        tasks = json.loads((run_dir / cond / "tasks.json").read_text())
         jl = out / f"{cond}.jsonl"
         done = set()
         if jl.exists():

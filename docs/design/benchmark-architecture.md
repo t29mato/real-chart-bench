@@ -4383,3 +4383,8 @@ UniChart は公開されている基本モデルなので論文の追加学習�
 詳細と途中で直した2点(DePlot のパッチ上限、テスト問題の指示文の取り違え)は
 `docs/experiments/2026-10-05-repro-published-scores.md`。DePlot の実論文97図はパッチ上限 4,096 でやり直し、
 点 F1 0.156(2,048 では 0.147)。
+
+**(B) 結果(2026-10-05).** PlotQA dot_line 100図(マーカー形式の合成図)と実論文97図を同じ点 F1 で比べた
+(`docs/experiments/2026-10-05-synthetic-vs-real.md`)。合成図では DePlot 0.959 / Granite 0.947 / TinyChart 0.932 /
+UniChart 0.884 / ChartGemma 0.497、汎用の Qwen3.5-9B も 0.959。実論文の図では 0.035〜0.485。チャート専用モデルは
+合成図の 5〜30% まで落ち、汎用 VLM(約半分)より落ち方が大きい。
