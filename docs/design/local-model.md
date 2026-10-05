@@ -89,7 +89,7 @@ flowchart LR
 | source | 置き場所 | 画像 | 点 | 容量 | ライセンス |
 |---|---|---|---|---|---|
 | plotqa | `~/.cache/real-chart-bench/train-data/plotqa/` | train 24,521 + val 5,246 | 341,515 + 73,912 | 1.1 GB | CC-BY-4.0(ATTRIBUTION.md 同梱) |
-| synth-materials | `~/.cache/real-chart-bench/train-data/synth-materials/` | 20,000 | 977,319 | 0.68 GB | CC0-1.0(自作、乱数データ) |
+| synth-materials | `~/.cache/real-chart-bench/train-data/synth-materials/` | 20,000 | 977,319 | 0.68 GB | CC-BY-4.0(自作、乱数データ。オーナー指示で CC0 から変更、2026-10-06) |
 
 ### PlotQA(`scripts/train/prepare_plotqa.py`、変換は `adapter/plotqa_training.py`)
 
