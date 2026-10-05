@@ -151,6 +151,28 @@ def _main_condition_rank(group_key: str | None) -> int:
     return len(_MAIN_CONDITION_SUFFIXES)
 
 
+# design 7.82 (owner, 2026-10-06): methods that learn nothing are not
+# benchmarked -- trained models already set the floor
+_UNTRAINED_BASELINE_PREFIXES = ("naive-cv", "achromatic-cv")
+
+
+def select_shown_results(results: list[dict]) -> list[dict]:
+    """The results the leaderboard shows: on the real figures only the two
+    main conditions (noaxis, pixcal) over the full scored set; every
+    synthetic-set table; pending rows. The axis-range condition, subsets and
+    the untrained CV baselines stay in results/ but are not shown."""
+    shown = []
+    for r in results:
+        if str(r.get("model_id", "")).startswith(_UNTRAINED_BASELINE_PREFIXES):
+            continue
+        version = r.get("dataset_version")
+        if version and version.startswith(_REAL_FIGURE_PREFIX):
+            if _main_condition_rank(version) == len(_MAIN_CONDITION_SUFFIXES):
+                continue
+        shown.append(r)
+    return shown
+
+
 def _group_sort_key(group_key: str | None, groups: dict[str | None, list[dict]]):
     group_results = groups[group_key]
     n_figures = max((r.get("n_figures") or 0) for r in group_results)

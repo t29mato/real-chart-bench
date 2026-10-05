@@ -19,6 +19,7 @@ from real_chart_bench.adapter.verified_pairing_registry import load_registry  # 
 from real_chart_bench.usecase.build_leaderboard import (  # noqa: E402
     build_dense_marker_rows,
     build_leaderboard_rows,
+    select_shown_results,
 )
 from real_chart_bench.usecase.build_leaderboard_breakdown import (  # noqa: E402
     build_model_breakdown,
@@ -120,7 +121,7 @@ the machine. Settings and parse-failure counts are in each local result's
 <code>local_run</code>; raw outputs in <code>data/local_vlm_run_v3/</code> (v2 run:
 <code>data/local_vlm_run_v2/</code>). The v3 local run had the machine to itself, one model
 at a time, so its <code>local_run.seconds_per_figure</code> is comparable between models.
-A dash = not an LLM row (CV baselines, LineFormer).</p>
+A dash = not an LLM row (LineFormer, chart-to-table models).</p>
 <p><strong>Prompts (design &sect;7.73 (2), since 2026-10-04):</strong> Claude rows marked
 <em>v3 プロンプト</em> (2026-10-04) are the current Claude rows: markers only, no fit /
 trend / guide / theory lines (<code>scripts/eval/llm_run_v3_prompt.md</code>). Claude rows
@@ -483,7 +484,11 @@ def _render_pending_section_html(pending_rows: list) -> str:
 
 
 def main() -> None:
-    results = [json.loads(p.read_text()) for p in sorted(RESULTS_DIR.glob("*.json"))]
+    # design 7.82: the two main conditions and the synthetic set only; the
+    # axis-range condition, subsets and untrained CV baselines stay in results/
+    results = select_shown_results(
+        [json.loads(p.read_text()) for p in sorted(RESULTS_DIR.glob("*.json"))]
+    )
     rows = build_leaderboard_rows(results)
 
     # design §7.38 (HQ instruction 2026-08-27): join each scored result

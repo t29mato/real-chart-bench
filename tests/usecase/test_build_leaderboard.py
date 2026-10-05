@@ -403,3 +403,26 @@ def test_main_conditions_come_first_noaxis_then_pixcal():
         "synthetic-plotqa-dot-line-n100-noaxis",
         "v0-eval-pilot-n94",
     ]
+
+
+def test_only_the_main_conditions_and_the_synthetic_set_are_shown():
+    # design 7.82 (owner, 2026-10-06): the axis-range condition, its subsets
+    # and the untrained CV baselines (which only run there) leave the page;
+    # their result files stay in the repository
+    from real_chart_bench.usecase.build_leaderboard import select_shown_results
+
+    results = [
+        _result("auto", 0.9, n=94, dataset_version="v0-eval-pilot-n94-noaxis"),
+        _result("pix", 0.9, n=94, dataset_version="v0-eval-pilot-n94-pixcal"),
+        _result("synth", 0.9, n=100, dataset_version="synthetic-plotqa-dot-line-n100-noaxis"),
+        _result("synth-cal", 0.9, n=100, dataset_version="synthetic-plotqa-dot-line-n100"),
+        _result("ranges", 0.9, n=94, dataset_version="v0-eval-pilot-n94"),
+        _result("pilot", 0.9, n=10, dataset_version="v0-eval-pilot-n94-llm-subset-n10-x"),
+        _result("old", 0.9, n=42, dataset_version="v0-eval-pilot-n42"),
+        _result("naive-cv-v0", 0.9, n=94, dataset_version="v0-eval-pilot-n94-pixcal"),
+        _pending("someone"),
+    ]
+
+    shown = {r["model_id"] for r in select_shown_results(results)}
+
+    assert shown == {"auto", "pix", "synth", "synth-cal", "someone"}
