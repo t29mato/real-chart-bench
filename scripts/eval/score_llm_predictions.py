@@ -35,6 +35,10 @@ from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
     load_ground_truth,
 )
 from real_chart_bench.adapter.local_vlm_run import load_local_vlm_run  # noqa: E402
+from real_chart_bench.adapter.printed_space import (  # noqa: E402
+    PRINTED_SPACE_MIGRATION,
+    answer_to_printed,
+)
 from real_chart_bench.adapter.tick_plot_areas import (  # noqa: E402
     load_tick_calibration,
     values_from_pixel_answer,
@@ -417,6 +421,8 @@ for _coords, _tag in (("pixel", "px"), ("norm1000", "norm")):
         "v2": f"pixpts_{_tag}",
         "version_tag": "pixcal",
         "pixel_answer": _coords,
+        # converted through tick_calibration.json, which is in printed space
+        "answers_in_printed_space": True,
         "suffix": f"-local-cuda-pixpts-{_tag}",
         "name_suffix": "（2段階: モデルは"
         + ("画素座標" if _coords == "pixel" else "0〜1000 の相対座標")
@@ -444,6 +450,7 @@ for _coords, _tag in (("pixel", "px"), ("norm1000", "norm")):
 CONDITIONS["codex-pilot10-calibrated"] = {
     "v2": "calibrated",
     "run_dir": REPO / "data/llm_run_codex/pilot10",
+    "pred_root": REPO / "data/llm_run_codex",
     "rescale": {},
     "models": {"gpt-6.1-sol": "GPT-6.1-Sol (Codex CLI)"},
     "pred_parts": ["pilot10"],
@@ -457,9 +464,40 @@ CONDITIONS["codex-pilot10-calibrated"] = {
         "(書き込みは作業ディレクトリのみ、ネットワークなし)。"
         "指示文は Claude v3 と同じ llm_run_v3_prompt.md の軸あり版を INSTRUCTIONS.md として"
         "封印ディレクトリに置いた。図は v3 の採点対象から固定シードで選んだ10図"
-        "(prepare_llm_run_codex.py)。イベントログと最終メッセージは data/llm_run_codex/pilot10/。"
+        "(prepare_llm_run_codex.py)。回答・イベントログ・最終メッセージは "
+        "data/llm_run_codex/calibrated/。"
     ),
 }
+# the full Codex rows: the Claude run's tasks and key (v3 / pixcal), answers
+# from data/llm_run_codex/<condition>/<model>/ -- the calibrated pilot's ten
+# figures plus the batches that covered the rest
+CODEX_MODELS = {"gpt-6.1-sol": "GPT-6.1-Sol (Codex CLI)", "gpt-5.5": "GPT-5.5 (Codex CLI)"}
+CODEX_NOTES = (
+    "OpenAI Codex CLI 0.160.0 を ChatGPT アカウント(Plus)でログインして実行した"
+    "(API キーなし、2026-10-06)。"
+    "codex exec -m <model> -c model_reasoning_effort=medium -s workspace-write"
+    "(書き込みは作業ディレクトリのみ、ネットワークなし)。図・タスク・fig_NNN の名前・指示文は、"
+    "同じ条件の Claude の実行(v3 / pixcal)と同一で、封印ディレクトリに INSTRUCTIONS.md として置いた"
+    "(prepare_llm_run_codex.py)。回答・イベントログ・最終メッセージは data/llm_run_codex/。"
+    "design §7.81。"
+)
+for _c, _src, _label in (
+    ("calibrated", "data/llm_run_v3", "軸レンジあり"),
+    ("noaxis", "data/llm_run_v3", "軸レンジなし"),
+    ("pixcal", "data/llm_run_pixcal", "目盛のピクセル位置あり"),
+):
+    CONDITIONS[f"codex-{_c}"] = {
+        "v2": _c,
+        "run_dir": REPO / _src,
+        "pred_root": REPO / "data/llm_run_codex",
+        "rescale": {},
+        "models": CODEX_MODELS,
+        "pred_parts": ["pilot10", "part1", "part2"] if _c == "calibrated" else ["part1", "part2"],
+        "suffix": "-codex" + ("" if _c == "calibrated" else f"-{_c}"),
+        "name_suffix": f"（Codex CLI、{_label}、2026-10-06）",
+        "label": f"{_label}の条件(GPT、Codex CLI、採点対象全図)",
+        "notes": CODEX_NOTES,
+    }
 DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
 V3_NOTES = (
     "Claude Code のサブエージェントとして起動(2026-10-04、"
@@ -748,7 +786,7 @@ def main() -> None:
         elif cond.get("v2"):
             # exactly the named parts, never a glob: a model dir can hold
             # other attempts (v3 Sonnet's *_nopillow) that are not this row
-            model_dir = run_dir / cond["v2"] / model_id
+            model_dir = cond.get("pred_root", run_dir) / cond["v2"] / model_id
             if not model_dir.is_dir():
                 print(f"  {model_id}: 予測ファイルがない → スキップ")
                 continue
@@ -798,6 +836,12 @@ def main() -> None:
                     }
                     for c in answer
                 ]
+            # design 7.82: the ground truth is now in each figure's printed
+            # space; every answer so far followed the old rules (10^tick on a
+            # log10-printed axis, kelvin on a degC axis) and is mapped back
+            ops = PRINTED_SPACE_MIGRATION.get(key[t["id"]]["figure_id"])
+            if ops and not cond.get("answers_in_printed_space"):
+                answer = answer_to_printed(answer if isinstance(answer, list) else [], ops)
             preds[t["id"]] = parse_curves(answer, reg[key[t["id"]]["figure_id"]].x_scale)
         results = evaluate_model_on_dataset(
             ReplayRunner(preds, order), items, matcher_for=matcher_for_task

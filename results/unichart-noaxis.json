@@ -3,11 +3,11 @@
   "model_name": "UniChart (base-960)（軸レンジなし、合成図で学習、ローカル）",
   "execution": "local",
   "dataset_version": "v0-eval-pilot-n94-noaxis",
-  "run_at": "2026-10-05T15:06:52.467174+00:00",
+  "run_at": "2026-10-05T17:02:22.356251+00:00",
   "n_figures": 94,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
-  "mean_summary_score": 0.4447713174184213,
+  "mean_summary_score": 0.4476263375765725,
   "point_metrics": {
     "primary_tau": 0.02,
     "norm": "euclidean",
@@ -3339,9 +3339,9 @@
     },
     {
       "figure_id": "46278-51437",
-      "summary_score": 0.4444444444444444,
+      "summary_score": 0.692111250555465,
       "match_rate": 0.3333333333333333,
-      "mean_curve_distance": 1.0,
+      "mean_curve_distance": 0.2569995816669386,
       "mean_coverage_ratio": 1.0,
       "error": null,
       "point": {
@@ -3603,10 +3603,10 @@
     },
     {
       "figure_id": "45914-45356",
-      "summary_score": 0.05555555555555555,
+      "summary_score": 0.102504917514857,
       "match_rate": 0.16666666666666666,
-      "mean_curve_distance": 1.0,
-      "mean_coverage_ratio": 0.0,
+      "mean_curve_distance": 0.9434416833433716,
+      "mean_coverage_ratio": 0.08428976922127597,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -3779,9 +3779,9 @@
     },
     {
       "figure_id": "28020-40067",
-      "summary_score": 0.8510460563319935,
+      "summary_score": 0.8248017831278909,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.4468618310040198,
+      "mean_curve_distance": 0.5255946506163273,
       "mean_coverage_ratio": 1.0,
       "error": null,
       "point": {
@@ -4234,12 +4234,14 @@
     "n_worker_errors": 0,
     "n_unparseable": 31,
     "n_rows_dropped_numeric": 205,
-    "report_rule_applied": {
-      "x_celsius_to_kelvin": 1,
-      "y_10_pow": 6
-    },
-    "n_points_dropped_overflow": 0,
     "seconds_per_figure_mean": 1.74
   },
-  "condition": "軸レンジなし。画像だけを入力し、モデル自身の表抽出をそのまま使う。LLM に渡した軸ごとの報告規則(log10 目盛は 10^値、°C 印字は K)は、採点時に同じ規則を決定論的に適用した(design 7.75)。"
+  "condition": "軸レンジなし。画像だけを入力し、モデル自身の表抽出をそのまま使う。正解データは図の印字どおり(log10 印字の軸は log10 値、°C 印字の軸は °C、design 7.82)なので、モデルの出力をそのまま採点した。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/chart2table_predictions/unichart.jsonl",
+    "n_figures": 94,
+    "seconds_total": 159.5,
+    "seconds_per_figure": 1.7
+  }
 }

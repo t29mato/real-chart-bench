@@ -7,6 +7,7 @@ Usage:
 
 from __future__ import annotations
 
+import html
 import itertools
 import json
 import pathlib
@@ -153,6 +154,8 @@ _SECTION_TEMPLATE = """<section class="dataset-section">
 <th>Rank</th><th>Model</th><th>Runs</th><th>Point F1</th><th>Point recall</th>
 <th>Point precision</th><th>Loc. error</th><th>summary_score (ref.)</th>
 <th>#figures (point / all)</th>
+<th title="time per figure as of this run (local: this machine; cloud: that day)">s / figure</th>
+<th title="tokens per figure; the basis differs by provider (cell tooltip)">tokens / figure</th>
 <th>Run at (UTC)</th><th>Breakdown</th>
 </tr></thead>
 <tbody>
@@ -250,12 +253,14 @@ def _render_head_to_head_html(results_by_model_id: dict) -> str:
         head_to_head_rows=head_to_head_rows,
     )
 
+
 _ROW_TEMPLATE = (
     "<tr><td>{rank}</td><td>{model_name}</td><td>{execution}</td>"
     '<td class="score"><strong>{point_f1}</strong></td>'
     '<td class="score">{point_recall}</td><td class="score">{point_precision}</td>'
     '<td class="score">{point_loc_error}</td>'
     '<td class="score">{score:.3f}</td><td>{point_n_figures} / {n_figures}</td>'
+    "{cost_cells}"
     "<td>{run_at}</td><td>{breakdown_html}</td></tr>"
 )
 
@@ -319,9 +324,9 @@ def _execution_label(execution: str | None) -> str:
 def _fmt(value: float | None, digits: int = 3) -> str:
     return "—" if value is None else f"{value:.{digits}f}"
 
+
 _PENDING_ROW_TEMPLATE = (
-    '<tr class="pending"><td>{model_name}</td>'
-    "<td>pending external run — {note}</td></tr>"
+    '<tr class="pending"><td>{model_name}</td><td>pending external run — {note}</td></tr>'
 )
 
 _BREAKDOWN_TEMPLATE = (
@@ -359,6 +364,47 @@ def _render_breakdown_html(breakdown: list) -> str:
     return _BREAKDOWN_TEMPLATE.format(category_rows=category_rows)
 
 
+def _cost_cells(result: dict) -> str:
+    """design 7.82 (3): seconds and tokens per figure, as recorded for this
+    run. The token basis differs by provider (Claude Code reports one number
+    per subagent; Codex counts every input token, cached ones included,
+    over all calls; local runs count prompt + generated tokens), so the
+    cell names it and the numbers are not compared across providers."""
+    cost = result.get("run_cost") or {}
+    if not cost.get("recorded"):
+        return '<td class="na">not recorded</td><td class="na">not recorded</td>'
+    n = result.get("n_figures") or 1
+    sec = cost.get("seconds_per_figure")
+    if "subagent_tokens" in cost:
+        tok, basis = cost["subagent_tokens"], "Claude Code subagent_tokens (summed over batches)"
+    elif cost.get("tokens"):
+        tok, basis = (
+            cost["tokens"].get("total_tokens"),
+            "Codex total_tokens (input incl. cached + output)",
+        )
+    elif "prompt_tokens" in cost or "generation_tokens" in cost:
+        tok = (cost.get("prompt_tokens") or 0) + (cost.get("generation_tokens") or 0)
+        basis = "prompt + generated tokens"
+    else:
+        tok, basis = None, "not logged"
+    note = html.escape(cost.get("note", ""), quote=True)
+    sec_cell = (
+        f'<td class="score" title="{note}">{sec:.1f}</td>' if sec is not None else "<td>—</td>"
+    )
+    tok_cell = (
+        f'<td class="score" title="{html.escape(basis, quote=True)}">{tok / n:,.0f}</td>'
+        if tok
+        else '<td class="na">not logged</td>'
+    )
+    return sec_cell + tok_cell
+
+
+_CONDITION_LABELS = {
+    "-noaxis": "Main condition 1 &mdash; fully automatic (no axis information)",
+    "-pixcal": "Main condition 2 &mdash; a person calibrates the axes (two ticks per axis)",
+}
+
+
 def _section_heading(dataset_version: str | None, group_rows: list) -> str:
     label = (
         f"Dataset: <code>{dataset_version}</code>"
@@ -375,7 +421,18 @@ def _section_heading(dataset_version: str | None, group_rows: list) -> str:
         figures_text = f"{', '.join(str(n) for n in n_figures_values)} figures (mismatched!)"
     else:
         figures_text = "unknown figure count"
-    return f'{label} <span class="figure-count">&mdash; {figures_text}</span>'
+    condition = ""
+    if (
+        dataset_version
+        and dataset_version.startswith("v0-eval-pilot-")
+        and ("-llm-subset-" not in dataset_version)
+    ):
+        for suffix, text in _CONDITION_LABELS.items():
+            if dataset_version.endswith(suffix):
+                condition = f"{text}<br>"
+        if not condition and dataset_version.rsplit("-", 1)[-1].startswith("n"):
+            condition = "Appendix &mdash; axis value ranges given<br>"
+    return f'{condition}{label} <span class="figure-count">&mdash; {figures_text}</span>'
 
 
 def _render_sections_html(
@@ -400,6 +457,7 @@ def _render_sections_html(
                 n_figures=r.n_figures,
                 point_n_figures="—" if r.point_n_figures is None else r.point_n_figures,
                 run_at=r.run_at,
+                cost_cells=_cost_cells(results_by_model_id[r.model_id]),
                 breakdown_html=_render_breakdown_html(
                     build_model_breakdown(results_by_model_id[r.model_id], pairings_by_figure_id)
                 ),

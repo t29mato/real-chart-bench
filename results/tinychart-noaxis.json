@@ -3,11 +3,11 @@
   "model_name": "TinyChart-3B-768（軸レンジなし、合成図で学習、ローカル）",
   "execution": "local",
   "dataset_version": "v0-eval-pilot-n94-noaxis",
-  "run_at": "2026-10-05T15:06:52.131887+00:00",
+  "run_at": "2026-10-05T17:02:22.015750+00:00",
   "n_figures": 94,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
-  "mean_summary_score": 0.4151728995155969,
+  "mean_summary_score": 0.41453125875631364,
   "point_metrics": {
     "primary_tau": 0.02,
     "norm": "euclidean",
@@ -26,11 +26,11 @@
         },
         "micro": {
           "point_recall": 0.023162445954292774,
-          "point_precision": 0.0318606627017842,
-          "point_f1": 0.02682403433476395,
+          "point_precision": 0.03184713375796178,
+          "point_f1": 0.026819238333631326,
           "point_loc_error": 0.0051384383052939875,
           "n_matched": 75,
-          "n_predicted": 2354,
+          "n_predicted": 2355,
           "n_ground_truth": 3238
         }
       },
@@ -44,11 +44,11 @@
         },
         "micro": {
           "point_recall": 0.04076590487955528,
-          "point_precision": 0.056074766355140186,
-          "point_f1": 0.047210300429184546,
+          "point_precision": 0.05605095541401274,
+          "point_f1": 0.04720185946719113,
           "point_loc_error": 0.009567135956200082,
           "n_matched": 132,
-          "n_predicted": 2354,
+          "n_predicted": 2355,
           "n_ground_truth": 3238
         }
       },
@@ -62,11 +62,11 @@
         },
         "micro": {
           "point_recall": 0.12291537986411365,
-          "point_precision": 0.16907391673746813,
-          "point_f1": 0.14234620886981403,
+          "point_precision": 0.16900212314225052,
+          "point_f1": 0.14232075809047023,
           "point_loc_error": 0.02897156117650537,
           "n_matched": 398,
-          "n_predicted": 2354,
+          "n_predicted": 2355,
           "n_ground_truth": 3238
         }
       }
@@ -127,10 +127,10 @@
     },
     {
       "figure_id": "4173-20121",
-      "summary_score": 0.6661595649948836,
+      "summary_score": 0.6661595649948835,
       "match_rate": 1.0,
       "mean_curve_distance": 1.0,
-      "mean_coverage_ratio": 0.9984786949846509,
+      "mean_coverage_ratio": 0.9984786949846505,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -3603,9 +3603,9 @@
     },
     {
       "figure_id": "45914-45356",
-      "summary_score": 0.871692123753518,
+      "summary_score": 0.8113778923808944,
       "match_rate": 0.8333333333333334,
-      "mean_curve_distance": 0.21825696207277917,
+      "mean_curve_distance": 0.39919965619064995,
       "mean_coverage_ratio": 1.0,
       "error": null,
       "point": {
@@ -3793,7 +3793,7 @@
             "point_f1": 0.0,
             "point_loc_error": null,
             "n_matched": 0,
-            "n_predicted": 7,
+            "n_predicted": 8,
             "n_ground_truth": 63
           },
           "0.02": {
@@ -3802,7 +3802,7 @@
             "point_f1": 0.0,
             "point_loc_error": null,
             "n_matched": 0,
-            "n_predicted": 7,
+            "n_predicted": 8,
             "n_ground_truth": 63
           },
           "0.05": {
@@ -3811,7 +3811,7 @@
             "point_f1": 0.0,
             "point_loc_error": null,
             "n_matched": 0,
-            "n_predicted": 7,
+            "n_predicted": 8,
             "n_ground_truth": 63
           }
         }
@@ -4235,12 +4235,14 @@
     "n_worker_errors": 0,
     "n_unparseable": 33,
     "n_rows_dropped_numeric": 281,
-    "report_rule_applied": {
-      "x_celsius_to_kelvin": 1,
-      "y_10_pow": 8
-    },
-    "n_points_dropped_overflow": 1,
     "seconds_per_figure_mean": 2.5
   },
-  "condition": "軸レンジなし。画像だけを入力し、モデル自身の表抽出をそのまま使う。LLM に渡した軸ごとの報告規則(log10 目盛は 10^値、°C 印字は K)は、採点時に同じ規則を決定論的に適用した(design 7.75)。"
+  "condition": "軸レンジなし。画像だけを入力し、モデル自身の表抽出をそのまま使う。正解データは図の印字どおり(log10 印字の軸は log10 値、°C 印字の軸は °C、design 7.82)なので、モデルの出力をそのまま採点した。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/chart2table_predictions/tinychart.jsonl",
+    "n_figures": 94,
+    "seconds_total": 228.1,
+    "seconds_per_figure": 2.43
+  }
 }

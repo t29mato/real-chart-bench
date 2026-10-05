@@ -137,11 +137,25 @@ def _within_group_sort_key(result: dict) -> tuple:
     return (0, -cell["point_f1"], -result["mean_summary_score"], result["model_id"])
 
 
+# design 7.82: the main conditions on the real figures, in this order --
+# fully automatic (no axis information), then a person calibrates the axes
+_MAIN_CONDITION_SUFFIXES = ("-noaxis", "-pixcal")
+_REAL_FIGURE_PREFIX = "v0-eval-pilot-"
+
+
+def _main_condition_rank(group_key: str | None) -> int:
+    if group_key and group_key.startswith(_REAL_FIGURE_PREFIX):
+        for i, suffix in enumerate(_MAIN_CONDITION_SUFFIXES):
+            if group_key.endswith(suffix) and "-llm-subset-" not in group_key:
+                return i
+    return len(_MAIN_CONDITION_SUFFIXES)
+
+
 def _group_sort_key(group_key: str | None, groups: dict[str | None, list[dict]]):
     group_results = groups[group_key]
     n_figures = max((r.get("n_figures") or 0) for r in group_results)
     is_unlabeled = group_key is None
-    return (is_unlabeled, -n_figures, group_key or "")
+    return (is_unlabeled, _main_condition_rank(group_key), -n_figures, group_key or "")
 
 
 def _scored_row(result: dict, rank: int) -> LeaderboardRow:

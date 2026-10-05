@@ -11,7 +11,9 @@ tick-calibrated subsets are cut from every other main-table row.
      whose answers exist
   4. chart-to-table models on the real figures (score_chart2table.py)
   5. tick-calibrated subsets (build_tickcal_subset.py)
-  6. the leaderboard page
+  6. synthetic-figure rows (score_synthetic_vlm.py)
+  7. run time and tokens onto every result (attach_run_costs.py, design 7.82)
+  8. the leaderboard page
 
 Stale result files are not deleted here; a row whose dataset_version no
 longer matches the current one shows as its own (history) section.
@@ -66,8 +68,20 @@ def main() -> None:
     for name in llm.CONDITIONS:
         _run(str(EVAL / "score_llm_predictions.py"), name)
     _run(str(EVAL / "score_chart2table.py"))
+    _run(str(EVAL / "score_chart2table.py"), "--dataset=plotqa")
     _run(str(EVAL / "build_tickcal_subset.py"))
+    _run(
+        str(EVAL / "score_synthetic_vlm.py"),
+        "qwen3.5-9b-bf16",
+        *(m for m in score_synthetic_models() if m.startswith("claude-")),
+    )
+    _run(str(EVAL / "attach_run_costs.py"))
     _run(str(REPO / "scripts/leaderboard/generate.py"))
+
+
+def score_synthetic_models() -> list[str]:
+    archive = REPO / "data/synthetic/plotqa_dot_line/llm_run/noaxis"
+    return sorted(p.name for p in archive.iterdir()) if archive.exists() else []
 
 
 if __name__ == "__main__":

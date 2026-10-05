@@ -3,7 +3,7 @@
   "model_name": "DePlot（軸レンジなし、合成図で学習、ローカル）",
   "execution": "local",
   "dataset_version": "synthetic-plotqa-dot-line-n100-noaxis",
-  "run_at": "2026-10-05T13:29:12.615288+00:00",
+  "run_at": "2026-10-05T17:02:22.816720+00:00",
   "n_figures": 100,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
@@ -4497,12 +4497,14 @@
     "n_worker_errors": 0,
     "n_unparseable": 0,
     "n_rows_dropped_numeric": 0,
-    "report_rule_applied": {
-      "x_celsius_to_kelvin": 0,
-      "y_10_pow": 0
-    },
-    "n_points_dropped_overflow": 0,
     "seconds_per_figure_mean": 1.95
   },
-  "condition": "軸レンジなし。画像だけを入力し、モデル自身の表抽出をそのまま使う。LLM に渡した軸ごとの報告規則(log10 目盛は 10^値、°C 印字は K)は、採点時に同じ規則を決定論的に適用した(design 7.75)。"
+  "condition": "軸レンジなし。画像だけを入力し、モデル自身の表抽出をそのまま使う。正解データは図の印字どおり(log10 印字の軸は log10 値、°C 印字の軸は °C、design 7.82)なので、モデルの出力をそのまま採点した。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/chart2table_predictions/synthetic-plotqa/deplot.jsonl",
+    "n_figures": 100,
+    "seconds_total": 194.7,
+    "seconds_per_figure": 1.95
+  }
 }

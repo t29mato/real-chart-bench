@@ -2,11 +2,11 @@
 raw text: data/chart2table_predictions/<model>.jsonl -> results/<model>-v0-noaxis.json.
 
 These models take an image and nothing else, so they are rows of the
-axis-withheld table (`<base>-noaxis`), next to the LLMs' noaxis rows. The LLMs
-were told, per axis, which numbers to report (as printed / 10^tick for
-log10-labelled axes / kelvin for a degC axis; data/llm_run_v3/noaxis/tasks.json).
-These models cannot be told, so the same rule is applied here, after parsing,
-deterministically -- and counted in the result file.
+axis-withheld table (`<base>-noaxis`), next to the LLMs' noaxis rows. Since
+design 7.82 the ground truth holds what each axis prints (log10 values on a
+log10-printed axis, degC on a degC axis), which is what these models read off
+the figure, so their numbers are scored as given. (Until then the LLMs' old
+reporting rules -- 10^tick, kelvin -- were applied here after parsing.)
 
 Parsing is adapter/chart_table_parser.py: literal rules, no interpolation. An
 unparseable table scores as no answer and is counted (`n_unparseable`).
@@ -67,28 +67,6 @@ MODELS = {
 }
 
 
-def _report_rules() -> dict[str, tuple[bool, bool]]:
-    """figure_id -> (x is degC printed / K stored, y ticks are log10 values)."""
-    run = REPO / "data/llm_run_v3"
-    key = json.loads((run / "_key.json").read_text())
-    rules = {}
-    for t in json.loads((run / "noaxis/tasks.json").read_text()):
-        k = key[t["id"]]
-        rules[f"{k['paper_id']}-{k['figure_id']}"] = (
-            "Celsius" in t["x_report"],
-            "base-10 logarithms" in t["y_report"],
-        )
-    return rules
-
-
-def _pow10(y: float) -> float | None:
-    """10^y, or None when y cannot be a log10 tick value (overflow)."""
-    try:
-        return 10.0**y
-    except OverflowError:
-        return None
-
-
 class _Replay:
     def __init__(self, curves_by_key: dict[str, list[Curve]], errors: dict[str, str]):
         self._curves, self._errors = curves_by_key, errors
@@ -121,10 +99,9 @@ def score(model: str, dataset: str = "real") -> dict:
     missing = [i.figure_id for i in items if i.figure_id not in by_fid]
     if missing:
         raise SystemExit(f"{model}: no record for {len(missing)} figure(s), e.g. {missing[:3]}")
-    rules = _report_rules() if dataset == "real" else {}
 
     curves, errors = {}, {}
-    n_unparseable = n_rows_dropped = n_x_rule = n_y_rule = n_overflow = 0
+    n_unparseable = n_rows_dropped = 0
     for item in items:
         rec = by_fid[item.figure_id]
         k = image_key(item.task.image_bytes)
@@ -137,17 +114,9 @@ def score(model: str, dataset: str = "real") -> dict:
             n_unparseable += 1
             curves[k] = []
             continue
-        x_c, y_log = rules.get(item.figure_id, (False, False))
-        n_x_rule += x_c
-        n_y_rule += y_log
         out = []
         for s in table.series:
-            pts = [
-                (x + 273.15 if x_c else x, _pow10(y) if y_log else y)
-                for x, y in zip(s.x, s.y, strict=True)
-            ]
-            n_overflow += sum(p[1] is None for p in pts)
-            pts = [p for p in pts if p[1] is not None]
+            pts = list(zip(s.x, s.y, strict=True))
             if item.task.x_scale.value == "log":
                 pts = [p for p in pts if p[0] > 0]
             if pts:
@@ -196,18 +165,14 @@ def score(model: str, dataset: str = "real") -> dict:
             "n_worker_errors": len(errors),
             "n_unparseable": n_unparseable,
             "n_rows_dropped_numeric": n_rows_dropped,
-            "report_rule_applied": {"x_celsius_to_kelvin": n_x_rule, "y_10_pow": n_y_rule},
-            # points on a log10-labelled axis whose value cannot be a log10
-            # tick (10^y overflows): dropped, not scored
-            "n_points_dropped_overflow": n_overflow,
             "seconds_per_figure_mean": round(
                 sum(r.get("seconds", 0) for r in records) / len(records), 2
             ),
         },
         "condition": (
             "軸レンジなし。画像だけを入力し、モデル自身の表抽出をそのまま使う。"
-            "LLM に渡した軸ごとの報告規則(log10 目盛は 10^値、°C 印字は K)は、"
-            "採点時に同じ規則を決定論的に適用した(design 7.75)。"
+            "正解データは図の印字どおり(log10 印字の軸は log10 値、°C 印字の軸は °C、"
+            "design 7.82)なので、モデルの出力をそのまま採点した。"
         ),
     }
 

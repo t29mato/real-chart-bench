@@ -381,3 +381,25 @@ def test_diagnostic_false_is_an_ordinary_row():
     rows = build_leaderboard_rows([{**_result("a", 0.9), "diagnostic": False}])
 
     assert [r.model_id for r in rows] == ["a"]
+
+
+def test_main_conditions_come_first_noaxis_then_pixcal():
+    # design 7.82: the two main conditions are "fully automatic" (noaxis) and
+    # "a person calibrates the axes" (pixcal), on the real figures; every
+    # other table (the axis-range condition, the synthetic set, subsets)
+    # follows, still ordered by figure count
+    results = [
+        _result("base", 0.9, n=94, dataset_version="v0-eval-pilot-n94"),
+        _result("synth", 0.9, n=100, dataset_version="synthetic-plotqa-dot-line-n100-noaxis"),
+        _result("pix", 0.9, n=94, dataset_version="v0-eval-pilot-n94-pixcal"),
+        _result("auto", 0.9, n=94, dataset_version="v0-eval-pilot-n94-noaxis"),
+    ]
+
+    rows = build_leaderboard_rows(results)
+
+    assert [r.dataset_version for r in rows] == [
+        "v0-eval-pilot-n94-noaxis",
+        "v0-eval-pilot-n94-pixcal",
+        "synthetic-plotqa-dot-line-n100-noaxis",
+        "v0-eval-pilot-n94",
+    ]
