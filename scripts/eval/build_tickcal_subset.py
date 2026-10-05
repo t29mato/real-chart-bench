@@ -5,7 +5,8 @@ data through the full image frame, which is how the n42 Colab run did it and
 which costs it most of its score (design §7.64 addendum). This row maps the
 same saved pixels through the owner-reviewed tick-mark positions instead --
 "LineFormer, given where the axis ticks are" -- on the figures whose tick
-positions are still valid (adapter/tick_plot_areas.py). It is LineFormer plus
+positions are recorded (data/verified_pairs/tick_calibration.json, 94 of 94
+since design 7.77). It is LineFormer plus
 oracle axis information, so it is labelled as such and ranked only against
 the other main-table rows restricted to the same figures.
 
@@ -34,7 +35,10 @@ from real_chart_bench.adapter.lineformer_model_runner import (  # noqa: E402
     PrecomputedLineFormerModelRunner,
     image_key,
 )
-from real_chart_bench.adapter.tick_plot_areas import load_tick_plot_areas  # noqa: E402
+from real_chart_bench.adapter.tick_plot_areas import (  # noqa: E402
+    load_tick_calibration,
+    plot_area_from_ticks,
+)
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     PRIMARY_POINT_TAU,
@@ -57,12 +61,25 @@ def main() -> None:
     items, _ = build_dataset()
     items = [i for i in items if not i.figure_id.startswith("synthetic-")]
     pairings = select_verified_pairings(load_registry(REPO / "data/verified_pairs/registry.json"))
-    areas = load_tick_plot_areas(REPO / "data/verified_pairs/axis_pixel_candidates.json", pairings)
+    # design 7.77: every scored figure's two (pixel, value) tick pairs per axis,
+    # owner-reviewed or owner-entered; the range ends are placed through them
+    cal = load_tick_calibration(REPO / "data/verified_pairs/tick_calibration.json")
+    areas = {
+        (p.paper_id, p.figure_id): plot_area_from_ticks(
+            cal[(p.paper_id, p.figure_id)], p.x_range, p.y_range, p.x_scale.value, p.y_scale.value
+        )
+        for p in pairings
+        if (p.paper_id, p.figure_id) in cal
+    }
     subset = [i for i in items if tuple(i.figure_id.split("-", 1)) in areas]
     subset_ids = {i.figure_id for i in subset}
 
     base = json.loads((RESULTS / "naive-cv-v0.json").read_text())["dataset_version"]
-    version = f"{base}-tickcal-subset-n{len(subset)}"
+    # Every scored figure calibrated (design 7.77): this is the LineFormer row
+    # of the tick-pixel-positions-given table, next to the LLM runs of that
+    # condition; no subset copies of the other rows are needed.
+    full = len(subset) == len(items)
+    version = f"{base}-pixcal" if full else f"{base}-tickcal-subset-n{len(subset)}"
 
     (lf_file,) = [p for p in RESULTS.glob("lineformer-pretrained-n*.json") if p.stem[23:].isdigit()]
     raw = REPO / json.loads(lf_file.read_text())["raw_predictions"]
@@ -100,13 +117,13 @@ def main() -> None:
     (RESULTS / "lineformer-pretrained-tickcal.json").write_text(
         json.dumps(tickcal, indent=2) + "\n"
     )
-    print(
-        f"tickcal: {tickcal['mean_summary_score']:.4f} on {len(per_figure)} figures ({version})"
-    )
+    print(f"tickcal: {tickcal['mean_summary_score']:.4f} on {len(per_figure)} figures ({version})")
 
     for path in sorted(RESULTS.glob("*.json")):
         if path.stem.endswith(SUFFIX):
             path.unlink()
+    if full:
+        return
     for path in sorted(RESULTS.glob("*.json")):
         row = json.loads(path.read_text())
         if row.get("dataset_version") != base or path.stem.endswith("tickcal"):

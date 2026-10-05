@@ -358,6 +358,51 @@ for _p, _label in LOCAL_CUDA_PRECISIONS.items():
             "label": ("軸レンジを与えない条件" if _c == "noaxis" else "軸レンジを与えた条件")
             + "（Qwen3.5-9B、RTX 4090 + vLLM、精度別、v3 プロンプトの単発版、採点対象全図）",
         }
+# design 7.76/7.77: tick pixel positions given ("pixcal") -- the person
+# calibrates the axes (two ticks per axis, pixel + value), the AI extracts the
+# points. Claude: v3 prompt with a calibration block (llm_run_pixcal_prompt.md),
+# sealed dirs, answers archived to data/llm_run_pixcal/. Local: the same block
+# in the single-shot prompt (local_vlm/prompt_v3/condition_pixcal.md).
+PIXCAL_ARCHIVE = REPO / "data/llm_run_pixcal"
+CONDITIONS["pixcal"] = {
+    "v2": "pixcal",
+    "run_dir": PIXCAL_ARCHIVE,
+    "rescale": {},
+    "models": MODELS_V2,
+    "prompt": "pixcal",
+    "suffix": "-pixcal",
+    "name_suffix": "（目盛のピクセル位置あり、2026-10-05）",
+    "label": "目盛のピクセル位置を与えた条件(人が軸を校正し AI が点を取る、採点対象全図)",
+    "notes": (
+        "Claude Code のサブエージェントとして起動(2026-10-05〜06、Linux 機)。"
+        "プロンプトは scripts/eval/llm_run_pixcal_prompt.md: v3 プロンプトの条件ブロックだけを"
+        "『軸ごとに目盛2本のピクセル位置と値・スケール・画像サイズ』"
+        "(WebPlotDigitizer の軸校正と同じ情報、data/verified_pairs/tick_calibration.json)に"
+        "置き換えた。軸レンジは与えない。図・正解は v3 と同じ採点対象94図、2バッチ(47図/47図)、"
+        "封印ディレクトリと INSTRUCTIONS.md は v3 と同じ運用で、乱数シードのみ変更。"
+        "4モデル8バッチを並列に実行した。実行記録は design §7.78。生の回答は data/llm_run_pixcal/。"
+    ),
+}
+CONDITIONS["local-cuda-bf16-pixcal"] = {
+    "v2": "pixcal",
+    "run_dir": PIXCAL_ARCHIVE,
+    "rescale": {},
+    "local": True,
+    "local_archive": REPO / "data/local_vlm_run_cuda_pixcal",
+    "sequential": True,
+    "cuda": True,
+    "models": {"qwen3.5-9b-bf16": "Qwen3.5-9B (bf16)"},
+    "suffix": "-local-cuda-pixcal",
+    "name_suffix": "（目盛のピクセル位置あり、ローカル RTX 4090、2026-10-05）",
+    "label": "目盛のピクセル位置を与えた条件（Qwen3.5-9B、RTX 4090 + vLLM、採点対象全図）",
+    "notes": (
+        "Qwen3.5-9B (bf16) を RTX 4090 + vLLM で、量子化行(local-cuda-*)と同じ設定"
+        "(単発プロンプト・JSON スキーマ・温度0・thinking 無効・max_tokens 8192)で実行した。"
+        "差分は条件ブロックだけで、Claude の pixcal 行と同じ校正情報"
+        "(scripts/eval/local_vlm/prompt_v3/condition_pixcal.md)を与えた。"
+        "生出力は data/local_vlm_run_cuda_pixcal/。"
+    ),
+}
 DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
 V3_NOTES = (
     "Claude Code のサブエージェントとして起動(2026-10-04、"
@@ -699,8 +744,8 @@ def main() -> None:
                 + ("-noaxis" if cond["v2"] == "noaxis" else "")
                 + DIAGNOSTIC_VERSION_SUFFIX
                 if cond.get("diagnostic")
-                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-noaxis"
-                if cond.get("v2") == "noaxis"
+                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-{cond['v2']}"
+                if cond.get("v2") in ("noaxis", "pixcal")
                 # every scoreable figure, same as the CV/LineFormer rows, so all
                 # of them rank in one table (design 7.66)
                 else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}"
@@ -740,7 +785,9 @@ def main() -> None:
                 if local_run
                 else {}
             ),
-            "notes": V3_NOPILLOW_NOTES
+            "notes": cond["notes"]
+            if "notes" in cond
+            else V3_NOPILLOW_NOTES
             if cond.get("diagnostic")
             else V3_NOTES
             if cond.get("prompt") == "v3"

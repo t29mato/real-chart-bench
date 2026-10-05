@@ -14,6 +14,7 @@ the x_range ticks, y0 the y_range[1] tick (top), y1 the y_range[0] tick.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -53,3 +54,30 @@ def load_tick_plot_areas(
             float(box["y_min_px"]),
         )
     return areas
+
+
+def plot_area_from_ticks(
+    cal: dict, x_range, y_range, x_scale: str, y_scale: str
+) -> tuple[float, float, float, float]:
+    """PixelCalibration.pixel_bbox for the task's ranges, from any two ticks
+    per axis (data/verified_pairs/tick_calibration.json, design 7.77): each
+    range end is placed by the line through the two ticks (log10 on a log
+    axis). Returns (x0, y0, x1, y1) with y0 at y_range[1] (top)."""
+
+    def at(ticks, value, scale):
+        (a, b) = ticks
+        t = math.log10 if scale == "log" else (lambda v: v)
+        frac = (t(value) - t(a["value"])) / (t(b["value"]) - t(a["value"]))
+        return a["px"] + frac * (b["px"] - a["px"])
+
+    return (
+        at(cal["x"], x_range[0], x_scale),
+        at(cal["y"], y_range[1], y_scale),
+        at(cal["x"], x_range[1], x_scale),
+        at(cal["y"], y_range[0], y_scale),
+    )
+
+
+def load_tick_calibration(path: Path) -> dict[tuple[str, str], dict]:
+    """(paper_id, figure_id) -> calibration record of tick_calibration.json."""
+    return {(c["paper_id"], c["figure_id"]): c for c in json.loads(path.read_text())["figures"]}

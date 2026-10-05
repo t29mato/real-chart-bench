@@ -89,3 +89,34 @@ def test_verified_pairing_exposes_the_fields_the_loader_reads():
     names = VerifiedPairing.__dataclass_fields__
     for field in ("paper_id", "figure_id", "image_path", "x_range", "y_range"):
         assert field in names
+
+
+# --- tick_calibration.json (design 7.77): any two ticks, not the range ends ---
+
+
+def test_plot_area_from_two_ticks_extrapolates_to_the_range_ends():
+    from real_chart_bench.adapter.tick_plot_areas import plot_area_from_ticks
+
+    cal = {
+        "x": [{"px": 100.0, "value": 400.0}, {"px": 300.0, "value": 800.0}],
+        "y": [{"px": 500.0, "value": 0.0}, {"px": 100.0, "value": 40.0}],
+    }
+
+    box = plot_area_from_ticks(cal, (300.0, 900.0), (0.0, 50.0), "linear", "linear")
+
+    # x: 0.5 px per unit -> 300 at 50, 900 at 350; y: -10 px per unit -> 50 at 0
+    assert box == (50.0, 0.0, 350.0, 500.0)
+
+
+def test_plot_area_from_ticks_on_a_log_axis_interpolates_in_log10():
+    from real_chart_bench.adapter.tick_plot_areas import plot_area_from_ticks
+
+    cal = {
+        "x": [{"px": 0.0, "value": 0.0}, {"px": 100.0, "value": 10.0}],
+        "y": [{"px": 400.0, "value": 1e-4}, {"px": 100.0, "value": 1e-1}],
+    }
+
+    box = plot_area_from_ticks(cal, (0.0, 10.0), (1e-5, 1.0), "linear", "log")
+
+    # 100 px per decade: 1e-5 one decade below 1e-4 -> 500; 1 one above 1e-1 -> 0
+    assert box[1] == 0.0 and box[3] == 500.0
