@@ -19,8 +19,14 @@ def _label(**overrides):
         "license": "CC-BY-4.0",
         "paper_id": None,
         "axes": {
-            "x": {"scale": "linear", "ticks": [{"px": 100.0, "value": 0}, {"px": 700.0, "value": 10}]},
-            "y": {"scale": "log", "ticks": [{"px": 500.0, "value": 1e-3}, {"px": 50.0, "value": 1}]},
+            "x": {
+                "scale": "linear",
+                "ticks": [{"px": 100.0, "value": 0}, {"px": 700.0, "value": 10}],
+            },
+            "y": {
+                "scale": "log",
+                "ticks": [{"px": 500.0, "value": 1e-3}, {"px": 50.0, "value": 1}],
+            },
         },
         "plot_bbox": [100, 50, 700, 500],
         "series": [
@@ -43,7 +49,12 @@ def test_a_complete_label_has_no_errors():
 
 
 def test_unknown_fields_may_be_null_instead_of_guessed():
-    s = _label()["series"][0] | {"marker": None, "filled": None, "color": None, "points_value": None}
+    s = _label()["series"][0] | {
+        "marker": None,
+        "filled": None,
+        "color": None,
+        "points_value": None,
+    }
     assert validate_label(_label(axes=None, plot_bbox=None, series=[s])) == []
 
 
@@ -68,7 +79,10 @@ def test_a_real_figure_needs_its_paper_id():
 
 
 def test_benchmark_papers_are_refused():
-    labels = [_label(source="starrydata", paper_id="4173"), _label(source="starrydata", paper_id="9")]
+    labels = [
+        _label(source="starrydata", paper_id="4173"),
+        _label(source="starrydata", paper_id="9"),
+    ]
 
     with pytest.raises(BenchmarkLeakError, match="4173"):
         assert_no_benchmark_leak(labels, benchmark_paper_ids={"4173", "28331"})
