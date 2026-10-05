@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from real_chart_bench.domain.curve import Curve
+from real_chart_bench.domain.curve import Curve, curves_for_curve_scoring
 from real_chart_bench.domain.matching import CurveMatcher, SeriesMatchResult
 
 
@@ -30,6 +30,10 @@ def evaluate_figure(
     ground_truth: Sequence[Curve],
     matcher: CurveMatcher,
 ) -> EvaluationResult:
+    # owner decision 2026-10-05: non-finite predicted points are ignored and a
+    # series left with < 2 finite points is not scored (see
+    # curves_for_curve_scoring); the point metric keeps them as misses
+    predicted = curves_for_curve_scoring(predicted)
     matches = tuple(matcher.match(predicted, ground_truth))
 
     if not matches:

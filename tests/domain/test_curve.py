@@ -8,7 +8,7 @@ Boundary cases covered here map to docs/design/benchmark-architecture.md §3.3:
 
 import pytest
 
-from real_chart_bench.domain.curve import Curve, ScaleType
+from real_chart_bench.domain.curve import Curve, ScaleType, curves_for_curve_scoring
 
 
 def test_curve_holds_points_in_construction_order():
@@ -76,3 +76,48 @@ def test_curve_len_returns_point_count():
     curve = Curve(x_values=(1.0, 2.0, 3.0), y_values=(1.0, 2.0, 3.0))
 
     assert len(curve) == 3
+
+
+# --- curves_for_curve_scoring: non-finite points (owner decision 2026-10-05) ---------
+
+
+_INF = float("inf")
+
+
+def test_all_finite_curves_pass_through_as_the_same_objects():
+    a = Curve(x_values=(1.0, 2.0), y_values=(1.0, 2.0))
+    b = Curve(x_values=(5.0,), y_values=(1.0,))
+
+    out = curves_for_curve_scoring([a, b])
+
+    assert out[0] is a and out[1] is b
+
+
+def test_non_finite_points_are_removed_keeping_label_and_scale():
+    c = Curve(
+        x_values=(1.0, 10.0, _INF),
+        y_values=(1.0, 2.0, -_INF),
+        series_label="s",
+        x_scale=ScaleType.LOG,
+    )
+
+    (out,) = curves_for_curve_scoring([c])
+
+    assert out.x_values == (1.0, 10.0)
+    assert out.y_values == (1.0, 2.0)
+    assert out.series_label == "s"
+    assert out.x_scale is ScaleType.LOG
+
+
+def test_a_series_with_fewer_than_two_finite_points_left_is_dropped():
+    one = Curve(x_values=(1.0, _INF), y_values=(1.0, 2.0))
+    none = Curve(x_values=(float("nan"),), y_values=(1.0,))
+    keep = Curve(x_values=(1.0, 2.0), y_values=(1.0, 2.0))
+
+    assert curves_for_curve_scoring([one, none, keep]) == [keep]
+
+
+def test_non_positive_values_are_finite_and_kept():
+    c = Curve(x_values=(-1.0, 0.0, 1.0), y_values=(0.0, -2.0, 1.0), x_scale=ScaleType.LOG)
+
+    assert curves_for_curve_scoring([c]) == [c]

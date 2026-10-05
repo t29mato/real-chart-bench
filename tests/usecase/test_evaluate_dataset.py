@@ -230,3 +230,26 @@ def test_density_criterion_follows_the_configured_tau():
 
     assert default.marker_density.dense is False
     assert wide.marker_density.dense is True
+
+
+def test_an_answer_holding_infinity_is_scored_on_its_finite_points():
+    # owner decision 2026-10-05: curve scoring ignores the non-finite point;
+    # the point metric keeps it as a predicted point that never matches
+    gt = Curve(x_values=(0.0, 1.0, 2.0), y_values=(1.0, 2.0, 3.0))
+    answer = Curve(
+        x_values=(0.0, 1.0, 2.0, float("inf")), y_values=(1.0, 2.0, 3.0, float("-inf"))
+    )
+    task = ExtractionTask(image_bytes=b"img1", x_range=(0, 2), y_range=(1, 3))
+    items = [DatasetItem(figure_id="f1", task=task, ground_truth=[gt])]
+
+    (result,) = evaluate_model_on_dataset(
+        _PerfectModel({b"img1": [answer]}), items, matcher=_matcher()
+    )
+
+    assert result.error is None
+    assert result.evaluation.summary_score == pytest.approx(1.0)
+    primary = next(p for p in result.points if p.tau == 0.02)
+    assert primary.n_predicted == 4
+    assert primary.n_matched == 3
+    assert primary.point_precision == pytest.approx(3 / 4)
+    assert primary.point_recall == pytest.approx(1.0)

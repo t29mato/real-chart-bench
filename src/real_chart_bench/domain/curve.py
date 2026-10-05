@@ -5,6 +5,8 @@ Pure value object — no I/O, no external-layer imports (see domain/__init__.py)
 
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -76,3 +78,38 @@ class Curve:
 
     def __len__(self) -> int:
         return len(self.x_values)
+
+
+def curves_for_curve_scoring(curves: Sequence[Curve]) -> list[Curve]:
+    """The predicted curves as the curve-distance metric sees them (owner
+    decision 2026-10-05): a point whose x or y is non-finite (inf / nan) is
+    ignored, and a series left with fewer than two finite points leaves curve
+    scoring altogether.
+
+    Only series that held a non-finite value are touched: an all-finite curve
+    is passed through as the same object, whatever its length. Finite values
+    that cannot be placed on a log axis (<= 0) are *not* removed here -- the
+    metric still rejects them, as before.
+
+    The point metric does not use this: there a non-finite point stays a
+    predicted point that never matches (domain/point_metrics.py).
+    """
+    out: list[Curve] = []
+    for curve in curves:
+        keep = [
+            i
+            for i, (x, y) in enumerate(zip(curve.x_values, curve.y_values, strict=True))
+            if math.isfinite(x) and math.isfinite(y)
+        ]
+        if len(keep) == len(curve):
+            out.append(curve)
+        elif len(keep) >= 2:
+            out.append(
+                Curve(
+                    x_values=tuple(curve.x_values[i] for i in keep),
+                    y_values=tuple(curve.y_values[i] for i in keep),
+                    series_label=curve.series_label,
+                    x_scale=curve.x_scale,
+                )
+            )
+    return out

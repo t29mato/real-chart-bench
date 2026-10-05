@@ -67,7 +67,7 @@ from real_chart_bench.adapter.lineformer_model_runner import (  # noqa: E402
 from real_chart_bench.adapter.local_vlm_run import load_local_vlm_run  # noqa: E402
 from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
-from real_chart_bench.domain.curve import Curve  # noqa: E402
+from real_chart_bench.domain.curve import Curve, curves_for_curve_scoring  # noqa: E402
 from real_chart_bench.domain.evaluation import evaluate_figure  # noqa: E402
 from real_chart_bench.domain.pixel_calibration import PixelCalibration  # noqa: E402
 from real_chart_bench.domain.point_metrics import (  # noqa: E402
@@ -303,8 +303,10 @@ def main() -> None:
                     err = None if pred is not None else "no answer"
                 if pred is not None:
                     # evaluate_model_on_dataset scores a figure whose curve
-                    # comparison raises (e.g. an answer holding Infinity) as
-                    # an empty answer on every metric; mirror that here
+                    # comparison raises (e.g. x <= 0 on a log axis) as an
+                    # empty answer on every metric; mirror that here.
+                    # Non-finite points no longer raise: curve scoring
+                    # ignores them (owner decision 2026-10-05)
                     try:
                         entry, ev = _package(pred, gt, matcher_for_task(task))
                     except Exception as exc:  # noqa: BLE001
@@ -530,7 +532,14 @@ def _point_detail(pt, pred, gt) -> dict:
 
 
 def _package(pred, gt, matcher):
-    ev = evaluate_figure(pred, gt, matcher)
+    # curve scoring sees each answer without its non-finite points, and not at
+    # all when fewer than two finite points are left (owner decision
+    # 2026-10-05); the page draws what was scored
+    scored_of = {}
+    for c in pred:
+        kept = curves_for_curve_scoring([c])
+        scored_of[id(c)] = kept[0] if kept else None
+    ev = evaluate_figure([s for s in scored_of.values() if s is not None], gt, matcher)
     match_of = {}
     for m in ev.matches:
         if m.predicted is not None and m.ground_truth is not None:
@@ -541,8 +550,9 @@ def _package(pred, gt, matcher):
             )
     curves = []
     for c in pred:
-        xs, ys = _thin(c.x_values, c.y_values)
-        gi, dist, cov = match_of.get(id(c), (None, None, None))
+        s = scored_of[id(c)]
+        xs, ys = _thin(s.x_values, s.y_values) if s is not None else ([], [])
+        gi, dist, cov = match_of.get(id(s), (None, None, None))
         curves.append({"x": xs, "y": ys, "gt": gi, "dist": dist, "cov": cov})
     return {"curves": curves, "error": None}, ev
 
