@@ -72,6 +72,8 @@ def parse_args(argv=None):
     ap.add_argument("--wall-minutes", type=float, default=60)
     ap.add_argument("--limit-per-dir", type=int, default=None)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--init-adapter", type=pathlib.Path, default=None,
+                    help="start from this adapter instead of a fresh LoRA")
     return ap.parse_args(argv)
 
 
@@ -155,6 +157,9 @@ def main(argv=None) -> int:
     adapter_dir = out / "adapter"
     if (adapter_dir / "adapter_config.json").exists():
         model = PeftModel.from_pretrained(model, str(adapter_dir), is_trainable=True)
+    elif args.init_adapter is not None:
+        # continue from another run's adapter (fresh optimizer and schedule)
+        model = PeftModel.from_pretrained(model, str(args.init_adapter), is_trainable=True)
     else:
         model = get_peft_model(model, LoraConfig(
             r=args.rank, lora_alpha=args.alpha, lora_dropout=args.dropout,

@@ -42,6 +42,9 @@ from real_chart_bench.usecase.real_image_gate import benchmark_paper_ids  # noqa
 
 TRAIN_DATA = pathlib.Path.home() / ".cache/real-chart-bench/train-data"
 REGISTRY = REPO / "data/verified_pairs/registry.json"
+# the real figures are few (89 figures, 35 papers on 2026-10-06), so a larger
+# share of their papers is held out to measure anything at all
+VAL_FRACTION_BY_SOURCE = {"starrydata": 0.2}
 
 
 def _unit(key: str, salt: str) -> float:
@@ -95,7 +98,9 @@ def load_examples(
                     "target": format_answer(answer),
                     "answer": answer,
                     "fig_id": fig_id,
-                    "split": split_of(split_key, val_fraction),
+                    "split": split_of(
+                        split_key, VAL_FRACTION_BY_SOURCE.get(lab["source"], val_fraction)
+                    ),
                     "n_points": sum(len(s["x"]) for s in answer[fig_id]),
                 }
             )

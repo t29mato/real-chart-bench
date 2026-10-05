@@ -309,3 +309,45 @@ flowchart LR
 - 上の 1 と 2 は検証分割で直せる。重複抑制の半径を検証で探し、目盛校正から作枠する。
 - Starrydata の実図は 89 枚では足りない。量が増えたら、背景損失の重みと重複倍率を検証で決め直す。
 - 方式C は、この検出器と目盛 OCR を組み合わせて作る。
+
+## 方式B: VLM 追加学習
+
+2026-10-06。ブランチ `worktree-agent-ab49cd549e6f4c94a`。
+
+### 基礎モデルの選択
+
+- **Qwen3.5-9B(Apache-2.0)を QLoRA で追加学習した。** 理由は3つ。
+  - ベンチマークの v3 単発プロンプトで、既に点 F1 0.485(主条件1)/ 0.420(主条件2)の実測がある。追加学習の効果を、同じプロンプト・同じ推論系で比べられる。
+  - 重みはキャッシュ済み(新たなダウンロードなし、ディスク予算を食わない)。
+  - 24GB に収まる。NF4 量子化で重み 8.1 GiB、学習中のピークは 19〜22 GiB(画像 1.6MP 上限、勾配チェックポイント、バッチ1×累積8)。
+- 小さいモデル(Qwen-VL の 2〜4B、Florence-2、PaliGemma-2)は、9B が 24GB に収まったので試していない。
+- 推論は bf16 の公開重み + LoRA を vLLM 0.30 の LoRA 機能で行う(マージした重みをディスクに置かない)。vLLM は Qwen3.5 の GDN 射影(`in_proj_qkv` / `in_proj_z` / `out_proj`)にも LoRA を当てられる。
+  - 学習は NF4 の基礎重み、推論は bf16 の基礎重み、という通常の QLoRA の使い方である。
+
+### 中身
+
+| 部品 | 場所 |
+|---|---|
+| labels.jsonl の1行 → タスク・正解 JSON(純ロジック) | `src/real_chart_bench/domain/vlm_training_example.py`(テスト `tests/domain/test_vlm_training_example.py`) |
+| 学習例の組み立て(検査・ベンチ除外・プロンプト) | `scripts/train/vlm_lora/examples.py` |
+| 学習(QLoRA、再開可能、時間分割) | `scripts/train/vlm_lora/train.py`, `run_train.sh` |
+| 検証分割での点 F1 | `scripts/train/vlm_lora/score_val.py` |
+| 推論(ベンチ / 検証分割) | `scripts/eval/local_vlm/worker_ft.py`, `run_ft.sh` |
+| 採点条件 | `score_llm_predictions.py` の `local-cuda-ft-noaxis` / `local-cuda-ft-pixcal` |
+
+- **プロンプトはベンチマークのものをそのまま使う。** `worker_v3.build_prompt`(v3 単発版)に、学習例のタスクを入れる。出力も同じ形 `{"fig_NNN.png": [{"label", "x", "y"}]}`、値は印字空間(design 7.82)。
+  - 主条件1(noaxis)のタスク: 両軸とも「印字どおりに報告」の文言(ベンチの既定と同じ文)。
+  - 主条件2(pixcal)のタスク: 各軸の外側の目盛2本(画素は 0.1px、値は有効4桁)、スケール、画像サイズ。目盛のある学習例の 30% を pixcal にした。
+  - 正解の数値は有効4桁に丸め、点は x の昇順。ラベルがない系列は "series N"。
+- **損失は回答のトークンだけ**(画像とプロンプトはマスク)。
+- 画像は長辺比を保って 1.6MP 以下に縮小する。推論でも同じ縮小をかける。
+  - 縮小の影響は、追加学習なしの対照行で測った(下の表)。0.485 → 0.483 で、差はない。
+- 検証分割は学習データから切る(画像単位で 3%。Starrydata は論文単位で 20%)。ベンチマークは調整に使わない。
+- 全ラベルは `validate_label` と `assert_no_benchmark_leak`(レジストリの全論文)を通る。
+
+### LoRA と学習の設定
+
+- LoRA: r=16, alpha=32, dropout 0.05。対象は言語側の全線形層(attention の q/k/v/o、GDN の in_proj_qkv / in_proj_z / out_proj、MLP の gate/up/down)。学習パラメータ 40.1M。
+- 視覚塔は凍結し、量子化もしない(`llm_int8_skip_modules` は transformers 5 では先頭一致なので `model.visual` と書く必要がある)。
+- AdamW、lr 1e-4、cosine、warmup 50、勾配クリップ 1.0、バッチ1×累積8。
+- GPU は他のエージェントと共有なので、学習は 60 分ごとに保存して `flock` を手放す(`run_train.sh`)。保存は 50 ステップごと。

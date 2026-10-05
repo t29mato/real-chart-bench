@@ -13,8 +13,9 @@ worker gives the base model under the same cap, the control row.
 Modes:
   bench <adapter|none> <out_dir> [conditions]   real-chart-bench figures;
         noaxis tasks from data/llm_run_v3, pixcal from data/llm_run_pixcal
-  val <adapter|none> <out_dir> <run_dir> [n]    the run's held-out training
-        examples (val_keys.json), for tuning without touching the benchmark
+  val <adapter|none> <out_dir> <run_dir> [n] [source]   the run's held-out
+        training examples (val_keys.json; optionally of one source only), for
+        tuning without touching the benchmark
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ def bench_jobs(cond: str):
         }
 
 
-def val_jobs(run_dir: pathlib.Path, n: int):
+def val_jobs(run_dir: pathlib.Path, n: int, only: str | None = None):
     from examples import load_examples
 
     cfg = json.loads((run_dir / "config.json").read_text())
@@ -70,7 +71,8 @@ def val_jobs(run_dir: pathlib.Path, n: int):
     ex, _ = load_examples([pathlib.Path(d) for d in cfg["data"]],
                           pixcal_fraction=cfg["pixcal_fraction"],
                           val_fraction=cfg["val_fraction"])
-    ex = sorted((e for e in ex if e["key"] in keys), key=lambda e: e["key"])[:n]
+    ex = sorted((e for e in ex if e["key"] in keys and only in (None, e["source"])),
+                key=lambda e: e["key"])[:n]
     for e in ex:
         # fig = the example key, so records are unique; the prompt's id stays fig_NNN
         yield e["key"], pathlib.Path(e["image"]), e["prompt"], {
@@ -161,7 +163,9 @@ def main() -> None:
     elif mode == "val":
         run_dir = pathlib.Path(sys.argv[4])
         n = int(sys.argv[5]) if len(sys.argv) > 5 else 200
-        run(llm, lora, list(val_jobs(run_dir, n)), out / "val.jsonl", "val")
+        only = sys.argv[6] if len(sys.argv) > 6 else None
+        name = f"val-{only}.jsonl" if only else "val.jsonl"
+        run(llm, lora, list(val_jobs(run_dir, n, only)), out / name, "val")
     else:
         raise SystemExit(f"unknown mode {mode}")
 
