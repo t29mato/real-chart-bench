@@ -2,23 +2,27 @@
 
 ## 8.1 現在の状態(2026-10-06)
 
-- データセット: 94図 / 363曲線 / 7,223点 / 30論文 / すべて CC BY / すべてマーカーのある図(`v0-eval-pilot-n94`)
+- データセット: 94図 / 363曲線 / 7,223点 / 30論文 / すべて CC BY / すべてマーカーのある図(主条件1 `v0-eval-pilot-n94-noaxis`、主条件2 `v0-eval-pilot-n94-pixcal`)
   - 線だけの3図を `no_markers` で除外(2026-10-03)
   - x 軸の目盛の数字が写っていない3図を `axis_unreadable` で除外(2026-10-05)
   - マーカーが密な図14図(正解 3,985点)は曲線距離の副表、残る80図(正解 3,238点)が点単位の主表
 - 軸校正: 94図すべてに目盛のピクセル位置と値がある(85図はレビュー済みの記録、9図はオーナーが Web 画面で入力)
-- 単位空間: 印字単位への移行完了
+- 単位空間: 印字単位への移行完了。log10 で印字された y 軸13本と °C で印字された x 軸1本も、正解データを印字どおりに移した(2026-10-06、2.6)
+- 条件: 主条件1「完全自動」と主条件2「人が軸を校正」の2つ。軸の範囲を渡す旧主条件は表に出さない
 - メトリクス: 点単位の F1(τ = 軸レンジの2%、系列は `1 − F1` で1対1、点は対応した系列の中だけで1対1)が主指標。曲線距離の `summary_score` は参考指標(design §7.67、§7.71〜§7.73)
 - 人の精度上限: Starrydata の人手デジタイズを上限とみなし、既存研究を引く(3.3)。独立の再デジタイズは行わない
 - 測定済み(すべて94図、主表80図 + 副表14図):
-  - クラウドの言語モデル: Opus 5.5 / Sonnet 5.5 / Fable 5.1 / Haiku 4.5(v3 プロンプト、軸あり・軸なし・目盛ピクセル位置ありの3条件)。v2 と 2026-09 の Claude 5 系は履歴
+  - クラウドの言語モデル: Claude Opus 5.5 / Sonnet 5.5 / Fable 5.1 / Haiku 4.5(v3 プロンプト、2条件)。v2 と 2026-09 の Claude 5 系は履歴
+  - GPT-6.1-Sol(Codex CLI、ChatGPT Plus でログイン、2条件): 完全自動 0.978、人が軸を校正 0.861
+  - GPT-5.5(同じ条件): 完全自動 0.451、人が軸を校正 0.279(画像処理を使わず目測で回答)
   - ローカル VLM: Gemma 4 31B / Qwen3.8-27B / Qwen3.5-9B(8bit、M3 Max、v3)
   - 量子化: Qwen3.5-9B の bf16 / FP8 / 8bit / 4bit(RTX 4090、v3)
-  - 合成図で学習したチャート専用モデル: DePlot / TinyChart / UniChart / Granite Vision / ChartGemma(軸なし)。TinyChart と DePlot は論文の値を再現
+  - 合成図で学習したチャート専用モデル: DePlot / TinyChart / UniChart / Granite Vision / ChartGemma(主条件1)。TinyChart と DePlot は論文の値を再現
   - 合成図(PlotQA dot_line 100図): チャート専用モデル5種、Qwen3.5-9B、Claude 4モデル
-  - LineFormer: ローカル RTX 4090、点 F1 0.006(目盛位置で値に直した参考値は再現率 0.863、点 F1 0.033)
-  - CV ベースライン2種
-  - 目盛ピクセル位置あり条件の2段階版(Qwen3.5-9B、design §7.79): 画素座標 0.017、0〜1000 座標 0.031
+  - LineFormer: ローカル RTX 4090、人の目盛校正で値に直して点 F1 0.033(再現率 0.863)
+  - 実行時間とトークン量: 各結果ファイルの `run_cost`(Claude の主条件1と LineFormer は記録なし)
+  - 学習を使わない CV は測定対象から外した(design §7.82 追記)
+  - 主条件2(人が軸を校正)の2段階版(Qwen3.5-9B、design §7.79): 画素座標 0.017、0〜1000 座標 0.031
 
 ## 8.2 優先順位
 
@@ -33,8 +37,7 @@ PlotQA dot_line は x が離散(年)で対数軸がない。数値の x を持�
 
 **4. 未決の判断。**
 - 密な図で、人が取っていないマーカーをどう扱うか(7.4)
-- 目盛校正版 LineFormer を参考行として表に残すか(6.3)
-- 軸表記の解釈そのものを測る条件(報告規則を渡さない)を設けるか(7.7)
+- 軸表記の慣習(軸タイトルの倍率)の解釈そのものを測る条件を設けるか(7.7)
 - 人と同等のクリック精度を区別する副指標(τ = 0.5% 程度)を併記するか(3.3)
 - 4bit で使う場合のキャリブレーション付き量子化の比較(6.3)
 
@@ -49,10 +52,11 @@ PlotQA dot_line は x が離散(年)で対数軸がない。数値の x を持�
 ## 8.4 再現性
 
 - リポジトリ: 全スクリプト、レジストリ、正解データ、生のモデル出力を含む
-- 言語モデルの生回答は `data/llm_subset_*/predictions/`(2026-09)、`data/llm_run_v2/`、`data/llm_run_v3/`、`data/llm_run_pixcal/`(実論文の図)、`data/synthetic/plotqa_dot_line/llm_run/`(合成図)に保存されており、メトリクスを変更して再採点できる。プロンプトも保存している(`scripts/eval/llm_run_*_prompt.md`)
+- 言語モデルの生回答は `data/llm_subset_*/predictions/`(2026-09)、`data/llm_run_v2/`、`data/llm_run_v3/`、`data/llm_run_pixcal/`、`data/llm_run_codex/`(GPT、イベントログつき、実論文の図)、`data/synthetic/plotqa_dot_line/llm_run/`(合成図)に保存されており、メトリクスを変更して再採点できる。プロンプトも保存している(`scripts/eval/llm_run_*_prompt.md`)
 - ローカル VLM の生の応答は `data/local_vlm_run_v2/`、`data/local_vlm_run_v3/`(Mac)、`data/local_vlm_run_cuda/`、`data/local_vlm_run_cuda_pixcal/`(RTX 4090)にあり、実行環境(モデルのリビジョン、エンジンの版、生成設定)は各結果ファイルの `local_run` と `scripts/eval/local_vlm/README.md` に記録している
 - チャート専用モデルの生出力は `data/chart2table_predictions/`、論文値の再現の出力は `data/repro_predictions/` にあり、著者の採点コードを `scripts/eval/repro/third_party/` に無改変で置いている
 - LineFormer の生のピクセル出力は `data/lineformer_predictions/` にあり、ピクセル→数値の変換を変えても GPU なしで再採点できる
-- 単位移行後も旧空間の回答を採点できるよう、変換テーブルを採点時に適用する(生ファイルは未改変)
+- 単位移行後も旧空間の回答を採点できるよう、変換テーブルを採点時に適用する(生ファイルは未改変)。印字どおりの表記への移行(log10、°C)も同じく採点時の逆変換で扱う(`adapter/printed_space.py`)
+- 実行時間とトークン量の元データは `data/run_costs/` に保存している
 - 主指標の変更(曲線距離 → 点単位)も、図の除外も、モデルを再実行せず保存済みの回答の再採点だけで行った(`scripts/eval/rescore_all.py`)
 - `dataset_version` は件数から導出され、異なる母集団の混同を防ぐ
