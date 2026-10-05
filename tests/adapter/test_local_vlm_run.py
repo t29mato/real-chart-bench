@@ -104,3 +104,20 @@ def test_seconds_per_figure_are_kept_for_every_record_that_has_them(tmp_path):
 
     # failures took time too; a record without timing is left out
     assert run.seconds == {"fig_001.png": 12.5, "fig_002.png": 200.0}
+
+
+def test_token_counts_per_figure_are_kept_for_every_record_that_has_them(tmp_path):
+    failed = {**_ok("fig_002.png", prompt_tokens=900, generation_tokens=8192), "parsed": None}
+    run = load_local_vlm_run(
+        _write(
+            tmp_path,
+            [
+                _ok("fig_001.png", prompt_tokens=700, generation_tokens=310),
+                failed,
+                _ok("fig_003.png"),
+            ],
+        )
+    )
+
+    assert run.prompt_tokens == {"fig_001.png": 700, "fig_002.png": 900}
+    assert run.generation_tokens == {"fig_001.png": 310, "fig_002.png": 8192}

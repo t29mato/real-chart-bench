@@ -472,6 +472,45 @@ for _env in sorted(LOCAL_MODEL_ARCHIVE.glob("*/env.json")):
             f"生出力は data/local_model_runs/{_run}/。"
         ),
     }
+# docs/design/local-model.md 方式B: Qwen3.5-9B + a QLoRA adapter trained on
+# synthetic / Starrydata charts (scripts/train/vlm_lora/), served by vLLM's LoRA
+# support (scripts/eval/local_vlm/worker_ft.py). Same prompt, schema and
+# decoding as the local-cuda bf16 rows, image capped at the training size; the
+# adapter-free run under the same cap is the control. One row per run that
+# has an archived answer file, so a run that has not happened yet is no row.
+LOCAL_FT_ARCHIVE = REPO / "data/local_vlm_run_ft"
+LOCAL_FT_MODELS = {
+    "qwen3.5-9b-cap1600k": "Qwen3.5-9B (bf16、追加学習なし、画像 1.6MP 上限 = 対照)",
+    "qwen3.5-9b-qlora-synth": "Qwen3.5-9B + QLoRA (合成データ)",
+    "qwen3.5-9b-qlora-synth-real": "Qwen3.5-9B + QLoRA (合成 + Starrydata 実図)",
+}
+LOCAL_FT_NOTES = (
+    "方式B(docs/design/local-model.md「方式B: VLM 追加学習」)。Qwen3.5-9B を QLoRA"
+    "(NF4、視覚塔は凍結・非量子化、言語側の全線形層に LoRA)で追加学習し、"
+    "v3 単発プロンプトに値の表を直接答えさせた。教師はベンチマーク外の合成図・既存データセット・"
+    "Starrydata の人手デジタイズのみ(Claude / GPT の出力は使わない)。"
+    "ベンチマークの論文は論文単位で学習から除外し、調整は学習データの検証分割だけで行った。"
+    "推論は bf16 の公開重み + LoRA を vLLM で(local-cuda の bf16 行と同じ設定)、"
+    "画像は学習と同じ 1.6MP 上限に縮小。生出力・設定(adapter と学習状態)は data/local_vlm_run_ft/。"
+)
+for _c, _base in (("noaxis", "local-cuda-bf16-noaxis"), ("pixcal", "local-cuda-bf16-pixcal")):
+    CONDITIONS[f"local-cuda-ft-{_c}"] = {
+        **CONDITIONS[_base],
+        "local_archive": LOCAL_FT_ARCHIVE,
+        "sequential": True,
+        "models": {
+            m: label
+            for m, label in LOCAL_FT_MODELS.items()
+            if (LOCAL_FT_ARCHIVE / m / f"{_c}.jsonl").exists()
+        },
+        "suffix": "-local-cuda-ft" + ("-v3-noaxis" if _c == "noaxis" else "-pixcal"),
+        "name_suffix": "（"
+        + ("軸レンジなし" if _c == "noaxis" else "目盛のピクセル位置あり")
+        + "、ローカル RTX 4090、方式B 追加学習）",
+        "label": ("軸レンジを与えない条件" if _c == "noaxis" else "目盛のピクセル位置を与えた条件")
+        + "（Qwen3.5-9B + QLoRA、RTX 4090 + vLLM、採点対象全図）",
+        "notes": LOCAL_FT_NOTES,
+    }
 # design 7.81: GPT through the Codex CLI (ChatGPT sign-in, no API key), the
 # same sealed-directory setup and v3 prompt as the Claude agents. A pilot on a
 # seeded subset of the v3 figures first (the subscription's usage is small);
@@ -676,6 +715,19 @@ def _local_run_block(
                 "mlx": env["mlx"],
             }
         ),
+        # 方式B: the adapter and how it was trained, the image cap, and
+        # tokens per figure (docs/design/local-model.md)
+        **(
+            {
+                "adapter": env["adapter"],
+                "lora_rank": env.get("lora_rank"),
+                "adapter_train_state": env.get("adapter_train_state"),
+                "max_pixels": env.get("max_pixels"),
+                "tokens_per_figure": _token_stats(run, key, scoreable),
+            }
+            if "adapter" in env
+            else {}
+        ),
         "transformers": env.get("transformers"),
         "temperature": env["temperature"],
         "enable_thinking": env["enable_thinking"],
@@ -692,6 +744,19 @@ def _local_run_block(
         "runtime_errors": figs(run.errors),
         "accepted_with_parser_warning": figs(run.accepted_with_warning),
     }
+
+
+def _token_stats(run, key: dict, scoreable: set) -> dict:
+    """Prompt (image included) and generated tokens per scored figure."""
+
+    def stats(d):
+        v = sorted(n for f, n in (d or {}).items() if key[f]["figure_id"] in scoreable)
+        if not v:
+            return None
+        return {"n": len(v), "mean": round(sum(v) / len(v), 1),
+                "median": v[(len(v) - 1) // 2], "max": v[-1]}
+
+    return {"prompt": stats(run.prompt_tokens), "generated": stats(run.generation_tokens)}
 
 
 def _seconds_stats(run, key: dict, scoreable: set) -> dict:
