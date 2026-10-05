@@ -27,11 +27,18 @@ def main():
     ap.add_argument("--val-fraction", type=float, default=0.05)
     ap.add_argument("--val-n", type=int, default=400)
     ap.add_argument("--require-marker", action="store_true")
+    ap.add_argument("--real-val-fraction", type=float, default=None)
+    ap.add_argument(
+        "--on", choices=("all", "real", "synthetic"), default="all", help="validation subset"
+    )
     args = ap.parse_args()
 
     labels = load_labels([Path(args.root) / d for d in args.data])
-    _, val = split(labels, args.val_fraction)
+    _, val = split(labels, args.val_fraction, args.real_val_fraction)
     random.Random(0).shuffle(val)
+    if args.on != "all":
+        val = [lab for lab in val if (lab.get("paper_id") is not None) == (args.on == "real")]
+    print(f"検証 {len(val)} 図({args.on})", flush=True)
     model = MarkerNet().cuda()
     model.load_state_dict(torch.load(args.ckpt, map_location="cuda", weights_only=False)["model"])
     grid = {}
@@ -57,6 +64,7 @@ def main():
         "val_series_point_f1": v,
         "val_n": min(args.val_n, len(val)),
         "data": args.data,
+        "tuned_on": args.on,
         "grid": grid,
     }
     out = Path(args.ckpt).parent / "tuned.json"

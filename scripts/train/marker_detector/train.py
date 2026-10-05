@@ -87,6 +87,11 @@ def main():
     ap.add_argument("--max-minutes", type=float, default=None)
     ap.add_argument("--require-marker", action="store_true")
     ap.add_argument("--embed-weight", type=float, default=0.5)
+    ap.add_argument("--real-val-fraction", type=float, default=None)
+    ap.add_argument("--partial-neg-weight", type=float, default=0.25)
+    ap.add_argument(
+        "--oversample", nargs="*", default=[], help="source=N repeats that source N times"
+    )
     ap.add_argument("--init", default=None, help="start from this checkpoint's weights")
     ap.add_argument("--workers", type=int, default=8)
     args = ap.parse_args()
@@ -95,9 +100,17 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     t_start = time.time()
     labels = load_labels([Path(args.root) / d for d in args.data], args.max_per_dir)
-    train, val = split(labels, args.val_fraction)
+    train, val = split(labels, args.val_fraction, args.real_val_fraction)
     random.Random(0).shuffle(val)
-    print(f"学習 {len(train)} / 検証 {len(val)}", flush=True)
+    reps = {k: int(v) for k, v in (o.split("=") for o in args.oversample)}
+    train = [lab for lab in train for _ in range(reps.get(lab["source"], 1))]
+    real_val = [lab for lab in val if lab.get("paper_id") is not None]
+    synth_val = [lab for lab in val if lab.get("paper_id") is None]
+    print(
+        f"学習 {len(train)}(重複込み)/ 検証 合成 {len(synth_val)} 実図 {len(real_val)}"
+        f"(論文 {len({lab['paper_id'] for lab in real_val})})",
+        flush=True,
+    )
 
     model = MarkerNet(pretrained_path=str(WEIGHTS)).cuda()
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -110,6 +123,8 @@ def main():
 
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_at)
     step, best = 0, -1.0
+    prior_seconds = 0.0  # GPU wall time of earlier sessions
+    t_gpu = time.time()
     log = []
     ck = out / "last.pt"
     if ck.exists():
@@ -118,6 +133,7 @@ def main():
         opt.load_state_dict(s["opt"])
         sched.load_state_dict(s["sched"])
         step, best, log = s["step"], s["best"], s.get("log", [])
+        prior_seconds = s.get("train_seconds", 0.0)
         print(f"再開: step {step}, best {best}", flush=True)
     elif args.init:
         model.load_state_dict(
@@ -125,7 +141,12 @@ def main():
         )
         print(f"初期値: {args.init}", flush=True)
 
-    ds = CropDataset(train, crop=args.crop, require_marker=args.require_marker)
+    ds = CropDataset(
+        train,
+        crop=args.crop,
+        require_marker=args.require_marker,
+        partial_neg_weight=args.partial_neg_weight,
+    )
 
     def save(path):
         torch.save(
@@ -137,6 +158,7 @@ def main():
                 "best": best,
                 "log": log,
                 "args": vars(args),
+                "train_seconds": prior_seconds + time.time() - t_gpu,
             },
             path,
         )
@@ -155,12 +177,13 @@ def main():
             persistent_workers=False,
         )
         t0 = time.time()
-        for imgs, heats, pts in dl:
+        for imgs, heats, pts, neg_w in dl:
             imgs, heats, pts = imgs.cuda(non_blocking=True), heats.cuda(), pts.cuda()
+            neg_w = neg_w.cuda()
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 o = model(imgs)
             bi, gy, gx = pts[:, 0].long(), pts[:, 1].long(), pts[:, 2].long()
-            l_heat = focal_loss(o["heat"].float(), heats)
+            l_heat = focal_loss(o["heat"].float(), heats, neg_weight=neg_w)
             if len(bi):
                 off = o["offset"].float()[bi, :, gy, gx]
                 l_off = F.l1_loss(off, pts[:, 3:5])
@@ -192,8 +215,19 @@ def main():
                 )
                 t0 = time.time()
             if step % args.eval_every == 0 or step == args.steps:
-                m = evaluate(model, val, args.val_n, args.require_marker)
-                score = max(v for k, v in m.items() if k.startswith("f1@"))
+                m = evaluate(model, synth_val, args.val_n, args.require_marker)
+                if real_val:  # the real figures decide when there are any
+                    m = {
+                        **m,
+                        **{
+                            f"real_{k}": v
+                            for k, v in evaluate(
+                                model, real_val, args.val_n, args.require_marker
+                            ).items()
+                        },
+                    }
+                pre = "real_f1@" if real_val else "f1@"
+                score = max(v for k, v in m.items() if k.startswith(pre))
                 log.append({"step": step, **m})
                 print(f"検証 step {step}: {json.dumps(m)}", flush=True)
                 if score > best:
@@ -209,7 +243,8 @@ def main():
                 break
     save(ck)
     (out / "train_log.json").write_text(json.dumps(log, indent=1))
-    print(f"完了 step {step} best {best}", flush=True)
+    minutes = (prior_seconds + time.time() - t_gpu) / 60
+    print(f"完了 step {step} best {best} 学習時間 {minutes:.1f} 分", flush=True)
 
 
 if __name__ == "__main__":

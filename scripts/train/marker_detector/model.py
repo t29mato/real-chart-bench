@@ -88,14 +88,17 @@ class MarkerNet(nn.Module):
         }
 
 
-def focal_loss(logits, target, alpha: float = 2.0, beta: float = 4.0):
+def focal_loss(logits, target, alpha: float = 2.0, beta: float = 4.0, neg_weight=None):
     """CenterNet's penalty-reduced focal loss; target is a Gaussian-splatted
-    heatmap with exact 1 at centres."""
+    heatmap with exact 1 at centres. neg_weight (B,) scales each image's
+    background term (partially labelled real figures)."""
     p = logits.sigmoid().clamp(1e-4, 1 - 1e-4)
     pos = target.eq(1).float()
     neg = 1 - pos
     pos_loss = torch.log(p) * (1 - p) ** alpha * pos
     neg_loss = torch.log(1 - p) * p**alpha * (1 - target) ** beta * neg
+    if neg_weight is not None:
+        neg_loss = neg_loss * neg_weight.view(-1, 1, 1, 1)
     n = pos.sum().clamp(min=1)
     return -(pos_loss.sum() + neg_loss.sum()) / n
 

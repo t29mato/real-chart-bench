@@ -60,8 +60,12 @@ def load_labels(dirs: list[Path], max_per_dir: int | None = None) -> list[dict]:
         for line in f.read_text().splitlines():
             if not line.strip():
                 continue
-            lab = json.loads(line)
-            if validate_label(lab):
+            try:  # the producer may still be appending the last line
+                lab = json.loads(line)
+            except json.JSONDecodeError:
+                n_bad += 1
+                continue
+            if validate_label(lab) or not (d / lab["image"]).exists():
                 n_bad += 1
                 continue
             lab["_path"] = str(d / lab["image"])
@@ -74,10 +78,22 @@ def load_labels(dirs: list[Path], max_per_dir: int | None = None) -> list[dict]:
     return out
 
 
-def split(labels: list[dict], val_fraction: float) -> tuple[list[dict], list[dict]]:
+# Starrydata digitizes only some series of a figure: an unlabelled marker
+# there is not evidence of "no marker", so its background loss is down-weighted.
+PARTIAL_SOURCES = {"starrydata"}
+
+
+def split(
+    labels: list[dict], val_fraction: float, real_val_fraction: float | None = None
+) -> tuple[list[dict], list[dict]]:
+    """Deterministic split; real figures (by paper) may use their own fraction,
+    since there are few papers."""
     tr, va = [], []
     for lab in labels:
-        (va if is_validation(split_key(lab), val_fraction) else tr).append(lab)
+        f = val_fraction
+        if real_val_fraction is not None and lab.get("paper_id") is not None:
+            f = real_val_fraction
+        (va if is_validation(split_key(lab), f) else tr).append(lab)
     return tr, va
 
 
@@ -133,11 +149,13 @@ class CropDataset(Dataset):
         require_marker: bool = False,
         seed: int = 0,
         max_points: int = 1024,
+        partial_neg_weight: float = 1.0,
     ):
         self.labels = labels
         self.crop, self.long_side, self.scale_jitter = crop, long_side, scale_jitter
         self.sigma, self.require_marker = sigma, require_marker
         self.seed, self.max_points = seed, max_points
+        self.partial_neg_weight = partial_neg_weight
         self.epoch = 0
 
     def __len__(self):
@@ -180,11 +198,18 @@ class CropDataset(Dataset):
                 pts.append((iy, ix, gx - ix, gy - iy, cls, sid))
         rng.shuffle(pts)
         pts = pts[: self.max_points]
-        return img, torch.from_numpy(heat)[None], torch.tensor(pts, dtype=torch.float32).view(-1, 6)
+        neg_w = self.partial_neg_weight if lab.get("source") in PARTIAL_SOURCES else 1.0
+        return (
+            img,
+            torch.from_numpy(heat)[None],
+            torch.tensor(pts, dtype=torch.float32).view(-1, 6),
+            neg_w,
+        )
 
 
 def collate(batch):
     imgs = torch.stack([b[0] for b in batch])
     heats = torch.stack([b[1] for b in batch])
     pts = [torch.cat([torch.full((len(b[2]), 1), float(i)), b[2]], 1) for i, b in enumerate(batch)]
-    return imgs, heats, torch.cat(pts) if pts else torch.zeros(0, 7)
+    neg_w = torch.tensor([float(b[3]) for b in batch])
+    return imgs, heats, torch.cat(pts) if pts else torch.zeros(0, 7), neg_w
