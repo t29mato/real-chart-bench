@@ -333,6 +333,31 @@ for _c in ("calibrated", "noaxis"):
         "label": ("軸レンジを与えない条件" if _c == "noaxis" else "軸レンジを与えた条件")
         + "（ローカル VLM、v3 プロンプトの単発版、採点対象全図）",
     }
+# design 7.75 (2): how much does quantization cost? Qwen3.5-9B on the RTX 4090
+# with vLLM, the v3 single-shot prompt, one precision per row, all made from
+# the same published weights (bf16 as is, fp8 converted in flight, w8a16 /
+# w4a16 by scripts/eval/local_vlm/quantize_rtn.py).
+LOCAL_CUDA_ARCHIVE = REPO / "data/local_vlm_run_cuda"
+LOCAL_CUDA_PRECISIONS = {
+    "bf16": "bf16",
+    "fp8": "FP8",
+    "w8a16": "8bit RTN",
+    "w4a16": "4bit RTN",
+}
+for _p, _label in LOCAL_CUDA_PRECISIONS.items():
+    for _c in ("calibrated", "noaxis"):
+        CONDITIONS[f"local-cuda-{_p}-{_c}"] = {
+            **CONDITIONS[f"local-v3-{_c}"],
+            "local_archive": LOCAL_CUDA_ARCHIVE,
+            "cuda": True,
+            "models": {f"qwen3.5-9b-{_p}": f"Qwen3.5-9B ({_label})"},
+            "suffix": "-local-cuda-v3" + ("-noaxis" if _c == "noaxis" else ""),
+            "name_suffix": "（"
+            + ("軸レンジなし、" if _c == "noaxis" else "")
+            + "ローカル RTX 4090、v3 プロンプト、2026-10-05）",
+            "label": ("軸レンジを与えない条件" if _c == "noaxis" else "軸レンジを与えた条件")
+            + "（Qwen3.5-9B、RTX 4090 + vLLM、精度別、v3 プロンプトの単発版、採点対象全図）",
+        }
 DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
 V3_NOTES = (
     "Claude Code のサブエージェントとして起動(2026-10-04、"
@@ -402,6 +427,18 @@ LOCAL_V3_NOTES = (
 )
 
 
+LOCAL_CUDA_NOTES = (
+    "量子化の影響を測る行(design 7.75 (2))。Qwen3.5-9B を RTX 4090 + vLLM で、"
+    "Mac の v3 ローカル実行と同じ単発プロンプト・JSON スキーマ・温度0・thinking 無効・"
+    "max_tokens 8192 で"
+    "実行した(プロンプト組み立てとスキーマは worker_v3.py の関数をそのまま使う)。精度だけを変え、"
+    "すべて同じ公開重みから作った: bf16 はそのまま、fp8 は vLLM の変換、w8a16 / w4a16 は "
+    "scripts/eval/local_vlm/quantize_rtn.py の四捨五入量子化(キャリブレーションなし、group 128)。"
+    "16図ずつまとめて推論したので、1図あたりの秒数はこのマシンの精度間でのみ比べられる。"
+    "生出力は data/local_vlm_run_cuda/。"
+)
+
+
 def _local_run_block(
     model_id: str,
     condition: str,
@@ -426,13 +463,30 @@ def _local_run_block(
         ]
 
     return {
-        "hardware": LOCAL_HARDWARE,
         "raw_output": f"{archive.relative_to(REPO)}/{model_id}/{condition}.jsonl",
         "model_repo_id": env["repo_id"],
         "model_revision": env["revision"],
-        "quantization": env.get("quantization") or "8bit (MLX, per repo id)",
-        "mlx_vlm": env["mlx_vlm"],
-        "mlx": env["mlx"],
+        **(
+            {
+                # design 7.75 (2): the RTX 4090 run, one precision per row
+                "hardware": f"{env['gpu']} (24GB), Linux",
+                "engine": f"vLLM {env['vllm']}, torch {env['torch']}",
+                "precision": env["precision"],
+                "quantization": env.get("local_quantization")
+                or {"bf16": "none (published bf16 weights)",
+                    "fp8": "vLLM in-flight FP8 (W8A8 dynamic)"}.get(env["precision"]),
+                "enforce_eager": env.get("enforce_eager"),
+                "VLLM_USE_FLASHINFER_SAMPLER": env.get("VLLM_USE_FLASHINFER_SAMPLER"),
+                "batched_chunk": env.get("chunk"),
+            }
+            if "vllm" in env
+            else {
+                "hardware": LOCAL_HARDWARE,
+                "quantization": env.get("quantization") or "8bit (MLX, per repo id)",
+                "mlx_vlm": env["mlx_vlm"],
+                "mlx": env["mlx"],
+            }
+        ),
         "transformers": env.get("transformers"),
         "temperature": env["temperature"],
         "enable_thinking": env["enable_thinking"],
@@ -690,6 +744,8 @@ def main() -> None:
             if cond.get("diagnostic")
             else V3_NOTES
             if cond.get("prompt") == "v3"
+            else LOCAL_CUDA_NOTES
+            if cond.get("cuda")
             else LOCAL_V3_NOTES
             if cond.get("local_prompt") == "v3"
             else LOCAL_V2_NOTES
