@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -23,6 +24,9 @@ from real_chart_bench.domain.marker_detection import (  # noqa: E402
     suppress_duplicates,
 )
 
+# RCB_DEVICE=cpu runs inference without the GPU (and without the GPU lock)
+DEVICE = os.environ.get("RCB_DEVICE", "cuda")
+
 
 @torch.no_grad()
 def detect(
@@ -31,7 +35,7 @@ def detect(
     long_side: int = 1024,
     threshold: float = 0.3,
     max_dets: int = 2000,
-    device: str = "cuda",
+    device: str = DEVICE,
 ) -> list[Detection]:
     w, h = im.size
     lb = Letterbox.fit(w, h, long_side=long_side, stride=32)

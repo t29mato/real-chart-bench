@@ -641,7 +641,9 @@ def _local_run_block(
             "peak_threshold": env.get("peak_threshold"),
             "group_threshold": env.get("group_threshold"),
             "long_side": env.get("long_side"),
-            "hardware": f"{env['gpu']} (24GB), Linux",
+            "hardware": f"{env['gpu']} (24GB), Linux"
+            if env.get("gpu")
+            else f"CPU ({env.get('cpu_threads')} threads), Linux",
             "engine": f"torch {env['torch']}",
             "concurrent_with_other_models": not sequential,
             **({"seconds_per_figure": _seconds_stats(run, key, scoreable)} if sequential else {}),

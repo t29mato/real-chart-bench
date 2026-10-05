@@ -15,6 +15,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data import load_labels, split  # noqa: E402
+from infer import DEVICE  # noqa: E402
 from model import MarkerNet  # noqa: E402
 from train import TRAIN_ROOT, evaluate  # noqa: E402
 
@@ -28,6 +29,7 @@ def main():
     ap.add_argument("--val-n", type=int, default=400)
     ap.add_argument("--require-marker", action="store_true")
     ap.add_argument("--real-val-fraction", type=float, default=None)
+    ap.add_argument("--out-name", default="tuned.json", help="written next to the checkpoint")
     ap.add_argument(
         "--on", choices=("all", "real", "synthetic"), default="all", help="validation subset"
     )
@@ -39,8 +41,8 @@ def main():
     if args.on != "all":
         val = [lab for lab in val if (lab.get("paper_id") is not None) == (args.on == "real")]
     print(f"検証 {len(val)} 図({args.on})", flush=True)
-    model = MarkerNet().cuda()
-    model.load_state_dict(torch.load(args.ckpt, map_location="cuda", weights_only=False)["model"])
+    model = MarkerNet().to(DEVICE)
+    model.load_state_dict(torch.load(args.ckpt, map_location=DEVICE, weights_only=False)["model"])
     grid = {}
     for ls in (768, 1024, 1280):
         m = evaluate(
@@ -67,7 +69,7 @@ def main():
         "tuned_on": args.on,
         "grid": grid,
     }
-    out = Path(args.ckpt).parent / "tuned.json"
+    out = Path(args.ckpt).parent / args.out_name
     out.write_text(json.dumps(tuned, indent=1))
     print(f"選択: {k} long_side {ls} -> {v}", flush=True)
 

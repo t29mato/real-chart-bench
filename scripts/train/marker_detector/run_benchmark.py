@@ -25,8 +25,13 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data import REPO, open_rgb  # noqa: E402
-from infer import detect, to_answer  # noqa: E402
+from infer import DEVICE, detect, to_answer  # noqa: E402
 from model import MarkerNet  # noqa: E402
+
+
+def sync():
+    if DEVICE == "cuda":
+        torch.cuda.synchronize()
 
 
 def main():
@@ -46,15 +51,15 @@ def main():
     out_dir = REPO / "data/local_model_runs" / args.run
     out_dir.mkdir(parents=True, exist_ok=True)
     t_load = time.time()
-    ck = torch.load(args.ckpt, map_location="cuda", weights_only=False)
-    model = MarkerNet().cuda().eval()
+    ck = torch.load(args.ckpt, map_location=DEVICE, weights_only=False)
+    model = MarkerNet().to(DEVICE).eval()
     model.load_state_dict(ck["model"])
     load_s = time.time() - t_load
     # warm-up so the first figure's time is not cuDNN autotuning
     from PIL import Image
 
     detect(model, Image.new("RGB", (800, 600), "white"), long_side=args.long_side)
-    torch.cuda.synchronize()
+    sync()
 
     recs = []
     for fig, k in sorted(key.items()):
@@ -75,7 +80,7 @@ def main():
         except Exception as e:  # recorded, scored as a total miss
             rec["error"] = repr(e)
             rec["parsed"] = None
-        torch.cuda.synchronize()
+        sync()
         rec["seconds"] = round(time.time() - t0, 3)
         recs.append(rec)
         print(
@@ -89,7 +94,7 @@ def main():
         "display_name": args.name,
         "architecture": "MarkerNet: ResNet-34 (ImageNet) + U-Net decoder to stride 2, "
         "CenterNet heatmap + offset + shape class + associative embedding",
-        "checkpoint": str(args.ckpt),
+        "checkpoint": str(args.ckpt).replace(str(Path.home()), "~"),
         "checkpoint_step": ck.get("step"),
         "train_args": ck.get("args"),
         "validation_best": tuned["val_series_point_f1"],
@@ -99,7 +104,9 @@ def main():
         "group_threshold": args.group_threshold,
         "long_side": args.long_side,
         "torch": torch.__version__,
-        "gpu": torch.cuda.get_device_name(0),
+        "gpu": torch.cuda.get_device_name(0) if DEVICE == "cuda" else None,
+        "device": DEVICE,
+        "cpu_threads": torch.get_num_threads(),
         "python": platform.python_version(),
         "load_seconds": round(load_s, 1),
         "run_dir": "data/llm_run_pixcal",
