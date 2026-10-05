@@ -12,6 +12,7 @@ figure of a paper that real-chart-bench evaluates on may be trained on.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 
 SOURCES_WITH_PAPERS = {"starrydata"}
@@ -80,3 +81,50 @@ def assert_no_benchmark_leak(labels: Iterable[dict], benchmark_paper_ids: set[st
     )
     if leaked:
         raise BenchmarkLeakError(f"benchmark papers in training data: {leaked}")
+
+
+def _axis_coord(value: float, scale: str) -> float:
+    if scale == "log":
+        if value <= 0:
+            raise ValueError(f"log axis cannot place the non-positive value {value}")
+        return math.log10(value)
+    return float(value)
+
+
+def axis_value_to_px(value: float, axis: dict) -> float:
+    """Where a value sits along one axis of a label, from that axis's ticks.
+
+    The ticks are fitted by least squares (pixel against value, or against
+    log10 value on a log axis), so one tick box a pixel off barely moves the
+    axis; values past the outermost ticks extrapolate.
+    """
+    scale = axis["scale"]
+    pts = [(_axis_coord(t["value"], scale), float(t["px"])) for t in axis["ticks"]]
+    n = len(pts)
+    mean_v = sum(v for v, _ in pts) / n if n else 0.0
+    mean_p = sum(p for _, p in pts) / n if n else 0.0
+    var = sum((v - mean_v) ** 2 for v, _ in pts)
+    if n < 2 or var == 0:
+        raise ValueError("an axis needs ticks with at least two distinct values")
+    slope = sum((v - mean_v) * (p - mean_p) for v, p in pts) / var
+    return mean_p + slope * (_axis_coord(value, scale) - mean_v)
+
+
+def max_axis_residual_px(label: dict) -> float | None:
+    """Worst pixel gap between a label's points_px and its points_value
+    projected through its own axis ticks; None when it cannot be checked."""
+    axes = label.get("axes")
+    if not axes:
+        return None
+    worst: float | None = None
+    for s in label.get("series") or []:
+        values = s.get("points_value")
+        if not values:
+            continue
+        for (px, py), (vx, vy) in zip(s["points_px"], values, strict=True):
+            gap = max(
+                abs(axis_value_to_px(vx, axes["x"]) - px),
+                abs(axis_value_to_px(vy, axes["y"]) - py),
+            )
+            worst = gap if worst is None else max(worst, gap)
+    return worst
