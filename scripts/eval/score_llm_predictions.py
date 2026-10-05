@@ -35,6 +35,10 @@ from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
     load_ground_truth,
 )
 from real_chart_bench.adapter.local_vlm_run import load_local_vlm_run  # noqa: E402
+from real_chart_bench.adapter.tick_plot_areas import (  # noqa: E402
+    load_tick_calibration,
+    values_from_pixel_answer,
+)
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
@@ -403,6 +407,36 @@ CONDITIONS["local-cuda-bf16-pixcal"] = {
         "生出力は data/local_vlm_run_cuda_pixcal/。"
     ),
 }
+# design 7.79: two-stage pixcal for single-shot VLMs -- the model gives the
+# markers' image positions only, and the scorer converts them with the same
+# person-measured tick calibration the pixcal row hands to the agents. Same
+# information, same version: the rows rank with pixcal.
+for _coords, _tag in (("pixel", "px"), ("norm1000", "norm")):
+    CONDITIONS[f"local-cuda-bf16-pixpts-{_tag}"] = {
+        **CONDITIONS["local-cuda-bf16-pixcal"],
+        "v2": f"pixpts_{_tag}",
+        "version_tag": "pixcal",
+        "pixel_answer": _coords,
+        "suffix": f"-local-cuda-pixpts-{_tag}",
+        "name_suffix": "（2段階: モデルは"
+        + ("画素座標" if _coords == "pixel" else "0〜1000 の相対座標")
+        + "、値への変換は目盛校正で、ローカル RTX 4090）",
+        "label": "目盛のピクセル位置を与えた条件・2段階(Qwen3.5-9B、RTX 4090 + vLLM、採点対象全図)",
+        "notes": (
+            "pixcal の2段階版(design 7.79)。単発の VLM は校正式で値に換算できないため、"
+            "モデルにはマーカー中心の画像内の位置だけを出させ("
+            + (
+                "画像ファイルの画素座標、原点左上・y 下向き"
+                if _coords == "pixel"
+                else "幅・高さを 0〜1000 とする相対座標、Qwen-VL のグラウンディングの慣習"
+            )
+            + ")、値への変換は採点側で、Claude の pixcal 行に渡したのと同じ目盛校正"
+            "(data/verified_pairs/tick_calibration.json)で行った。"
+            "プロンプトは v3 単発版の条件ブロックを "
+            f"scripts/eval/local_vlm/prompt_v3/condition_pixpts_{_tag}.md に替えたもの。"
+            "生出力は data/local_vlm_run_cuda_pixcal/。"
+        ),
+    }
 DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
 V3_NOTES = (
     "Claude Code のサブエージェントとして起動(2026-10-04、"
@@ -674,6 +708,11 @@ def main() -> None:
         order.append(t["id"])
 
     gt_rev = ground_truth_revision(GROUND_TRUTH_SUPPLEMENT_DIR)
+    if cond.get("pixel_answer"):
+        tick_cal = load_tick_calibration(REPO / "data/verified_pairs/tick_calibration.json")
+        from PIL import Image
+
+        image_sizes = {t["id"]: Image.open(REPO / key[t["id"]]["image_path"]).size for t in tasks}
     written = []
     for model_id, model_name in cond.get("models", MODELS).items():
         raw = {}
@@ -719,6 +758,14 @@ def main() -> None:
                 if cond.get("v2")
                 else PREDICTION_RESCALE
             )
+            if cond.get("pixel_answer"):
+                k = key[t["id"]]
+                answer = values_from_pixel_answer(
+                    answer if isinstance(answer, list) else [],
+                    tick_cal[(k["paper_id"], k["figure_id"])],
+                    image_sizes[t["id"]],
+                    cond["pixel_answer"],
+                )
             factors = rescale.get(key[t["id"]]["figure_id"])
             if factors:
                 answer = [
@@ -744,8 +791,9 @@ def main() -> None:
                 + ("-noaxis" if cond["v2"] == "noaxis" else "")
                 + DIAGNOSTIC_VERSION_SUFFIX
                 if cond.get("diagnostic")
-                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-{cond['v2']}"
-                if cond.get("v2") in ("noaxis", "pixcal")
+                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-"
+                f"{cond.get('version_tag', cond['v2'])}"
+                if cond.get("version_tag", cond.get("v2")) in ("noaxis", "pixcal")
                 # every scoreable figure, same as the CV/LineFormer rows, so all
                 # of them rank in one table (design 7.66)
                 else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}"

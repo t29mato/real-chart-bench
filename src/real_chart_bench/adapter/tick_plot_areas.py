@@ -81,3 +81,48 @@ def plot_area_from_ticks(
 def load_tick_calibration(path: Path) -> dict[tuple[str, str], dict]:
     """(paper_id, figure_id) -> calibration record of tick_calibration.json."""
     return {(c["paper_id"], c["figure_id"]): c for c in json.loads(path.read_text())["figures"]}
+
+
+def pixel_to_value(ticks, px: float, scale: str) -> float:
+    """The value at pixel `px` on an axis calibrated by two ticks
+    ({"px", "value"}), linear in log10 on a log axis (design 7.79)."""
+    (a, b) = ticks
+    if scale == "log":
+        la, lb = math.log10(a["value"]), math.log10(b["value"])
+        return 10 ** (la + (px - a["px"]) / (b["px"] - a["px"]) * (lb - la))
+    return a["value"] + (px - a["px"]) / (b["px"] - a["px"]) * (b["value"] - a["value"])
+
+
+def values_from_pixel_answer(
+    answer: list, cal: dict, image_size: tuple[int, int], coords: str
+) -> list:
+    """A model's answer in image coordinates -> the same answer in data values,
+    through the person's tick calibration (two-stage pixcal, design 7.79).
+
+    coords "pixel": the image file's pixels (origin top-left, y down);
+    "norm1000": 0-1000 of width / height (Qwen-VL's grounding convention).
+    Series that are not dicts are dropped; entries that are not numbers are
+    passed on untouched, for the curve parser to drop as for any answer."""
+    w, h = image_size
+    sx, sy = (w / 1000, h / 1000) if coords == "norm1000" else (1.0, 1.0)
+
+    def conv(vs, ticks, scale, s):
+        return [
+            pixel_to_value(ticks, v * s, scale)
+            if isinstance(v, int | float) and not isinstance(v, bool)
+            else v
+            for v in vs
+        ]
+
+    out = []
+    for c in answer:
+        if not isinstance(c, dict):
+            continue
+        out.append(
+            {
+                **c,
+                "x": conv(c.get("x") or [], cal["x"], cal["x_scale"], sx),
+                "y": conv(c.get("y") or [], cal["y"], cal["y_scale"], sy),
+            }
+        )
+    return out
