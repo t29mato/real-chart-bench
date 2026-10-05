@@ -1,0 +1,21 @@
+--- ../prompt/single_shot_prompt.md	2026-10-03 16:00:43
++++ single_shot_prompt.md	2026-10-04 15:10:35
+@@ -2,13 +2,13 @@
+ compared against hidden ground truth.
+ 
+ The attached image is a chart from a published research paper; the task below
+-describes it. Extract the XY data of every data series plotted in the main
+-chart: each legend entry or distinct marker/line style, including reference or
+-comparison curves drawn in the plot. Ignore insets and other panels.
++describes it. Extract the measured data points plotted in the main chart:
++every marker series (each legend entry with markers, or distinct marker style).
++Ignore insets and other panels.
+ 
+ - Marker series: one point per marker, at the marker centre.
+-- Lines without markers: enough points to follow the shape (at least one per x
+-  tick interval, more where it bends).
++- Do not output fit curves, regression or trend lines, guide-to-the-eye lines,
++  or theoretical/model curves, even when they appear in the legend.
+ - A line joining the markers of one series is part of that series, not a
+   separate one. Error bars are not series.
+ 

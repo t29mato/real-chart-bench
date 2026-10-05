@@ -1,4 +1,4 @@
-"""Reads a local VLM run's raw output (data/local_vlm_run_v2/<model>/<condition>.jsonl,
+"""Reads a local VLM run's raw output (data/local_vlm_run_v<N>/<model>/<condition>.jsonl,
 design §7.69 / §7.73 (3)) into the answers the LLM scorer replays.
 
 Each line is one (condition, figure) inference written by
@@ -33,6 +33,9 @@ class LocalVlmRun:
     accepted_with_warning: tuple[str, ...]
     # largest per-figure peak (mlx, this process only); None if never recorded
     peak_memory_gb_max: float | None = None
+    # wall-clock seconds per figure (task id -> seconds), failures included;
+    # only meaningful across models when the run had the machine to itself
+    seconds: dict[str, float] | None = None
 
 
 def load_local_vlm_run(path: Path) -> LocalVlmRun:
@@ -40,6 +43,7 @@ def load_local_vlm_run(path: Path) -> LocalVlmRun:
     seen: set[str] = set()
     errors, parse_failures, truncated, warned = [], [], [], []
     peaks: list[float] = []
+    seconds: dict[str, float] = {}
     for line in path.read_text().splitlines():
         if not line.strip():
             continue
@@ -50,6 +54,8 @@ def load_local_vlm_run(path: Path) -> LocalVlmRun:
         seen.add(fig)
         if rec.get("peak_memory_gb") is not None:
             peaks.append(float(rec["peak_memory_gb"]))
+        if rec.get("seconds") is not None:
+            seconds[fig] = float(rec["seconds"])
         if rec.get("truncated"):
             truncated.append(fig)
         if rec.get("error"):
@@ -68,4 +74,5 @@ def load_local_vlm_run(path: Path) -> LocalVlmRun:
         truncated=tuple(truncated),
         accepted_with_warning=tuple(warned),
         peak_memory_gb_max=max(peaks) if peaks else None,
+        seconds=seconds,
     )

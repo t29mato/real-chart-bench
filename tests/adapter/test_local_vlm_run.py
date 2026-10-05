@@ -94,3 +94,13 @@ def test_peak_memory_is_the_largest_recorded_and_none_when_absent(tmp_path):
 
     assert load_local_vlm_run(_write(tmp_path, recs)).peak_memory_gb_max == 13.5
     assert load_local_vlm_run(_write(tmp_path, [_ok("fig_001.png")])).peak_memory_gb_max is None
+
+
+def test_seconds_per_figure_are_kept_for_every_record_that_has_them(tmp_path):
+    failed = {**_ok("fig_002.png", seconds=200.0), "parsed": None, "truncated": True}
+    run = load_local_vlm_run(
+        _write(tmp_path, [_ok("fig_001.png", seconds=12.5), failed, _ok("fig_003.png")])
+    )
+
+    # failures took time too; a record without timing is left out
+    assert run.seconds == {"fig_001.png": 12.5, "fig_002.png": 200.0}

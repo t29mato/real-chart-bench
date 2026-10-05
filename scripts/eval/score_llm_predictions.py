@@ -310,6 +310,29 @@ for _c in ("calibrated", "noaxis"):
         "label": CONDITIONS[f"v3-{_c}"]["label"]
         + " — 診断行: 画像ツールなしの初回回答(リーダーボード対象外)",
     }
+# Local VLMs on the v3 prompt (design §7.73 (2)/(3)): the same three models,
+# a single-shot version of the v3 prompt (scripts/eval/local_vlm/prompt_v3/),
+# the v3 run's tasks and key, no rescale (like Claude v3). The models ran one
+# at a time, so seconds per figure are comparable between them. Same
+# dataset_version as the main rows; the local v2 rows stay as history.
+LOCAL_V3_ARCHIVE = REPO / "data/local_vlm_run_v3"
+for _c in ("calibrated", "noaxis"):
+    CONDITIONS[f"local-v3-{_c}"] = {
+        "v2": _c,
+        "run_dir": V3_ARCHIVE,
+        "rescale": {},
+        "local": True,
+        "local_archive": LOCAL_V3_ARCHIVE,
+        "sequential": True,
+        "models": MODELS_LOCAL_V2,
+        "local_prompt": "v3",
+        "suffix": "-local-v3" + ("-noaxis" if _c == "noaxis" else ""),
+        "name_suffix": "（"
+        + ("軸レンジなし、" if _c == "noaxis" else "")
+        + "ローカル、v3 プロンプト、2026-10-04）",
+        "label": ("軸レンジを与えない条件" if _c == "noaxis" else "軸レンジを与えた条件")
+        + "（ローカル VLM、v3 プロンプトの単発版、採点対象全図）",
+    }
 DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
 V3_NOTES = (
     "Claude Code のサブエージェントとして起動(2026-10-04、"
@@ -360,11 +383,38 @@ LOCAL_V2_NOTES = (
     "生出力(raw テキストを含む)は data/local_vlm_run_v2/、推論コードは scripts/eval/local_vlm/。"
 )
 
+LOCAL_V3_NOTES = (
+    "ローカル実行(ノート PC: Apple M3 Max 128GB、mlx-vlm 0.7.4 / mlx 0.32.3、2026-10-04〜05)。"
+    "1図1回の推論で、エージェントではない(ツールなし)。プロンプトは LLM run v3 "
+    "(scripts/eval/llm_run_v3_prompt.md、測定点(マーカー)のみ)からエージェント向けの文を除いた単発版"
+    "(scripts/eval/local_vlm/prompt_v3/、v2 単発版との差分は single_shot_v2_to_v3.diff)。"
+    "図・タスク・軸レンジ・正解は Claude の v3 実行と同一"
+    "(data/llm_run_v3 の tasks/_key、単位換算なし)。"
+    "設定は v2 のローカル実行と同じ: greedy(温度0)、enable_thinking=False、JSON スキーマでの"
+    "制約付きデコード、max_tokens 8192、HF_HUB_OFFLINE=1、画像は元ファイルのまま、"
+    "Gemma 4 は画像トークン予算 1120。"
+    "パースできなかった図・実行時エラーの図は回答なし(全図ミス)として採点する(local_run を参照)。"
+    "今回は3モデルを1つずつ順に実行した(Qwen3.5-9B → Qwen3.8-27B → Gemma 4 31B、"
+    "scripts/eval/local_vlm/run_v3_chain.sh)ので、1図あたりの秒数(local_run.seconds_per_figure)は"
+    "モデル間で比較できる。"
+    "生出力(raw テキストを含む)と実行ログは data/local_vlm_run_v3/、"
+    "推論コードは scripts/eval/local_vlm/。"
+)
 
-def _local_run_block(model_id: str, condition: str, run, key: dict, scoreable: set) -> dict:
+
+def _local_run_block(
+    model_id: str,
+    condition: str,
+    run,
+    key: dict,
+    scoreable: set,
+    archive: pathlib.Path = LOCAL_V2_ARCHIVE,
+    sequential: bool = False,
+) -> dict:
     """What a reader of a local row needs to judge it: the exact model, the
-    settings, and how many figures produced no usable answer and why."""
-    env = json.loads((LOCAL_V2_ARCHIVE / model_id / "env.json").read_text())
+    settings, and how many figures produced no usable answer and why. A
+    sequential run (one model at a time) also gets its seconds per figure."""
+    env = json.loads((archive / model_id / "env.json").read_text())
 
     def figs(ids):
         # paper-figure ids, and only those still scored (4 of the 101 tasks
@@ -377,7 +427,7 @@ def _local_run_block(model_id: str, condition: str, run, key: dict, scoreable: s
 
     return {
         "hardware": LOCAL_HARDWARE,
-        "raw_output": f"data/local_vlm_run_v2/{model_id}/{condition}.jsonl",
+        "raw_output": f"{archive.relative_to(REPO)}/{model_id}/{condition}.jsonl",
         "model_repo_id": env["repo_id"],
         "model_revision": env["revision"],
         "quantization": env.get("quantization") or "8bit (MLX, per repo id)",
@@ -390,13 +440,29 @@ def _local_run_block(model_id: str, condition: str, run, key: dict, scoreable: s
         "max_tokens": env["max_tokens"],
         "hf_hub_offline": env["HF_HUB_OFFLINE"] == "1",
         "image_max_soft_tokens": env.get("image_max_soft_tokens_set"),
-        "concurrent_with_other_models": True,
+        "concurrent_with_other_models": not sequential,
         "peak_memory_gb_max": run.peak_memory_gb_max,
+        **({"seconds_per_figure": _seconds_stats(run, key, scoreable)} if sequential else {}),
         "n_scored_figures_without_answer": len(figs(run.parse_failures)) + len(figs(run.errors)),
         "parse_failures": figs(run.parse_failures),
         "truncated_at_max_tokens": figs(run.truncated),
         "runtime_errors": figs(run.errors),
         "accepted_with_parser_warning": figs(run.accepted_with_warning),
+    }
+
+
+def _seconds_stats(run, key: dict, scoreable: set) -> dict:
+    """Wall-clock seconds per scored figure (failures included: they took the
+    time too). Comparable between models only when they ran one at a time."""
+    secs = sorted(v for f, v in run.seconds.items() if key[f]["figure_id"] in scoreable)
+    n = len(secs)
+    median = (secs[(n - 1) // 2] + secs[n // 2]) / 2
+    return {
+        "n": n,
+        "mean": round(sum(secs) / n, 1),
+        "median": round(median, 1),
+        "max": round(secs[-1], 1),
+        "total": round(sum(secs), 1),
     }
 
 
@@ -515,7 +581,7 @@ def main() -> None:
         local_run = None
         if cond.get("local"):
             local_run = load_local_vlm_run(
-                LOCAL_V2_ARCHIVE / model_id / f"{cond['v2']}.jsonl"
+                cond.get("local_archive", LOCAL_V2_ARCHIVE) / model_id / f"{cond['v2']}.jsonl"
             )
             raw = {f"{name}:{k}": v for k, v in local_run.answers.items()}
         elif cond.get("v2"):
@@ -602,11 +668,20 @@ def main() -> None:
             # which saved prompt the row answered (scripts/eval/llm_run_<v>_prompt.md)
             **({"prompt": f"scripts/eval/llm_run_{cond['prompt']}_prompt.md"}
                if cond.get("prompt") else {}),
+            # a local row's single-shot adaptation of that prompt
+            **({"prompt": "scripts/eval/local_vlm/prompt_v3/single_shot_prompt.md"}
+               if cond.get("local_prompt") == "v3" else {}),
             # a side measurement, left out of the leaderboard (build_leaderboard)
             **({"diagnostic": True} if cond.get("diagnostic") else {}),
             **(
                 {"local_run": _local_run_block(
-                    model_id, cond["v2"], local_run, v2_key, scoreable_ids
+                    model_id,
+                    cond["v2"],
+                    local_run,
+                    v2_key,
+                    scoreable_ids,
+                    archive=cond.get("local_archive", LOCAL_V2_ARCHIVE),
+                    sequential=cond.get("sequential", False),
                 )}
                 if local_run
                 else {}
@@ -615,6 +690,8 @@ def main() -> None:
             if cond.get("diagnostic")
             else V3_NOTES
             if cond.get("prompt") == "v3"
+            else LOCAL_V3_NOTES
+            if cond.get("local_prompt") == "v3"
             else LOCAL_V2_NOTES
             if cond.get("local")
             else V2_NOTES
