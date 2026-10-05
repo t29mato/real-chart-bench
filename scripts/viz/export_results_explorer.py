@@ -24,9 +24,11 @@ Both the per-figure density and both leaderboards' means are checked against
 the results files.
 
 The local VLM runs (design §7.69 / §7.73 (3)) are read from
-data/local_vlm_run_v2/ (the parsed answers in each jsonl, as the scorer reads
-them) and verified against results/<model>-v0-local-v2[-noaxis].json the same
-way. Whether a row ran locally comes from the results file's `execution`.
+data/local_vlm_run_v3/ (current, v3 prompt) and data/local_vlm_run_v2/
+(history) -- the parsed answers in each jsonl, as the scorer reads them -- and
+verified against results/<model>-v0-local-v3[-noaxis].json and
+-local-v2[-noaxis].json the same way. Whether a row ran locally comes from the
+results file's `execution`.
 
 Output: <out>/data.json and <out>/images/<figure_id>.<ext>
 Usage: python scripts/viz/export_results_explorer.py [--out DIR]
@@ -47,6 +49,7 @@ sys.path.insert(0, str(REPO / "scripts/eval"))
 from run_baselines import build_dataset  # noqa: E402
 from score_llm_predictions import (  # noqa: E402
     LOCAL_V2_ARCHIVE,
+    LOCAL_V3_ARCHIVE,
     MODELS_LOCAL_V2,
     PREDICTION_RESCALE_V2_CALIBRATED,
     V2_ARCHIVE,
@@ -112,7 +115,12 @@ MODELS = [
     ),
     ("naive-cv", "naive-cv (hue)", "cv", "naive-cv-v0.json"),
     ("achromatic-cv", "achromatic-cv (luminance)", "cv", "achromatic-cv-v0.json"),
-    # local VLMs, same tasks as the 2026-10-01 run (design 7.73 (3))
+    # local VLMs on the v3 tasks (design 7.73 (2)/(3)): the current local rows
+    *[
+        (f"{m}-v3", f"{n}（v3 プロンプト・単発）", "llm", f"{m}-v0-local-v3.json")
+        for m, n in MODELS_LOCAL_V2.items()
+    ],
+    # local VLMs, same tasks as the 2026-10-01 run -- kept as history
     *[
         (m, f"{n}（v2 プロンプト・単発）", "llm", f"{m}-v0-local-v2.json")
         for m, n in MODELS_LOCAL_V2.items()
@@ -131,21 +139,25 @@ def _llm_answers(
     condition: str = "calibrated",
     local: bool = False,
     run: pathlib.Path = V2_ARCHIVE,
+    local_archive: pathlib.Path = LOCAL_V2_ARCHIVE,
 ) -> dict[str, dict[str, list]]:
     """model -> figure_id ("paper-fig") -> list[Curve], scorer-identical.
 
     Only the v2 calibrated condition is rescaled, exactly as
     score_llm_predictions does (the noaxis models read the printed units
     themselves; the v3 tasks were built from today's registry). Local VLMs
-    answered the same v2 tasks; their answers are the parsed series in
-    data/local_vlm_run_v2/<model>/<condition>.jsonl. A model id may carry a
-    "-v3" suffix (explorer-only); the archive dir is the bare model id."""
+    answered the same tasks (v2, or v3 with ``run=V3_ARCHIVE``); their answers
+    are the parsed series in <local_archive>/<model>/<condition>.jsonl. A model
+    id may carry a "-v3" suffix (explorer-only); the archive dir is the bare
+    model id."""
     key = json.loads((run / "_key.json").read_text())
     rescale = PREDICTION_RESCALE_V2_CALIBRATED if run == V2_ARCHIVE else {}
     out = {m: {} for m in models}
     for m in models:
         if local:
-            raw = load_local_vlm_run(LOCAL_V2_ARCHIVE / m / f"{condition}.jsonl").answers
+            raw = load_local_vlm_run(
+                local_archive / m.removesuffix("-v3") / f"{condition}.jsonl"
+            ).answers
         else:
             raw = load_agent_run_parts(
                 run / condition / m.removesuffix("-v3"), OFFICIAL_PARTS
@@ -226,6 +238,11 @@ def main() -> None:
     llm_noaxis = _llm_answers(task_by_fid, LLM_MODELS_V3, "noaxis", run=V3_ARCHIVE)
     llm |= _llm_answers(task_by_fid, LLM_MODELS)
     llm_noaxis |= _llm_answers(task_by_fid, LLM_MODELS, "noaxis")
+    local_v3 = {f"{m}-v3": n for m, n in MODELS_LOCAL_V2.items()}
+    for cond, answers in (("calibrated", llm), ("noaxis", llm_noaxis)):
+        answers |= _llm_answers(
+            task_by_fid, local_v3, cond, local=True, run=V3_ARCHIVE, local_archive=LOCAL_V3_ARCHIVE
+        )
     llm |= _llm_answers(task_by_fid, MODELS_LOCAL_V2, "calibrated", local=True)
     llm_noaxis |= _llm_answers(task_by_fid, MODELS_LOCAL_V2, "noaxis", local=True)
     published = {

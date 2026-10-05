@@ -116,15 +116,19 @@ ran. <em>Cloud</em> = a hosted model (Claude, run as a Claude Code subagent with
 <em>Local</em> = an open-weight model on a laptop (Apple M3 Max 128GB, mlx-vlm, 8bit,
 one inference per figure, no network: <code>HF_HUB_OFFLINE=1</code>) -- nothing leaves
 the machine. Settings and parse-failure counts are in each local result's
-<code>local_run</code>; raw outputs in <code>data/local_vlm_run_v2/</code>. A dash = not
-an LLM row (CV baselines, LineFormer).</p>
+<code>local_run</code>; raw outputs in <code>data/local_vlm_run_v3/</code> (v2 run:
+<code>data/local_vlm_run_v2/</code>). The v3 local run had the machine to itself, one model
+at a time, so its <code>local_run.seconds_per_figure</code> is comparable between models.
+A dash = not an LLM row (CV baselines, LineFormer).</p>
 <p><strong>Prompts (design &sect;7.73 (2), since 2026-10-04):</strong> Claude rows marked
 <em>v3 プロンプト</em> (2026-10-04) are the current Claude rows: markers only, no fit /
 trend / guide / theory lines (<code>scripts/eval/llm_run_v3_prompt.md</code>). Claude rows
 dated 2026-10-01 used the v2 prompt (<code>llm_run_v2_prompt.md</code>, which did not say to
 leave fit lines out) and the 2026-09 rows (<em>採点対象全図</em>) an earlier one; both stay in
-the table as history -- same figures, same scoring. The local rows are still a single-shot
-version of the v2 prompt (a local v3 run is in progress as of 2026-10-04). A diagnostic
+the table as history -- same figures, same scoring. Local rows marked <em>v3 プロンプト</em>
+(2026-10-04) are the current local rows, a single-shot version of the v3 prompt
+(<code>scripts/eval/local_vlm/prompt_v3/</code>); the local rows dated 2026-10-03 used a
+single-shot version of v2 and stay as history. A diagnostic
 run (Claude Sonnet 5.5, v3, first attempt without image tools) is scored in
 <code>results/</code> (<code>"diagnostic": true</code>) but is not ranked here.</p>
 {sections}
