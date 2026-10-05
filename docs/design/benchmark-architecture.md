@@ -4528,3 +4528,43 @@ flowchart LR
 そのまま出していた。画像サイズを超える y を出した図もある。0〜1000 座標でも位置は合わない。**この 9B の単発 VLM は、マーカーを
 画像内に位置づけられない。** 目盛を読んで値で答えるほうがはるかに良い(0.485)。人が軸を校正する分担(§7.76)が効くのは、画像処理で
 位置を測れるエージェントに対してであり、単発の VLM には効かない。より大きな VLM や、グラウンディングを学習したモデルでの確認は未実施。
+
+### 7.81 GPT を Codex CLI で測る(2026-10-06、オーナー依頼)
+
+GPT を Claude と同じ「ツールを使えるエージェント」として測る。API キーは使わない。OpenAI 公式の Codex CLI(0.160.0)に、オーナーの ChatGPT
+アカウント(Plus)でログインして実行する。ChatGPT のウェブ画面の自動操作は規約違反なので使わない。
+
+```mermaid
+flowchart LR
+  P[prepare_llm_run_codex.py<br/>v3 の図・タスク・指示文] --> D[封印ディレクトリ<br/>images/ tasks.json INSTRUCTIONS.md]
+  D --> C["codex exec -m gpt-6.1-sol<br/>-s workspace-write(書き込みはディレクトリ内のみ、ネットなし)"]
+  C --> R[predictions.json]
+  R --> A[data/llm_run_codex/] --> S[score_llm_predictions.py<br/>codex-* 条件]
+```
+
+- **条件をそろえる:**
+  - 指示文は Claude v3 と同じ `llm_run_v3_prompt.md`。図・タスクの中身・`fig_NNN` の名前も v3 と同じにする。
+  - 推論レベルは medium に固定する(`-c model_reasoning_effort=medium`)。モデルごとの既定値に任せない。
+- **封印:**
+  - Codex のサンドボックスで、書き込みを作業ディレクトリに限り、ネットワークも遮断する。
+  - 読み取りは Claude と同じく指示文だけで制限する(サンドボックスは読み取りを止めない)。
+  - Ubuntu 24.04 の AppArmor 設定(`kernel.apparmor_restrict_unprivileged_userns=1`)が bubblewrap を止めるため、オーナーが一時的に 0 にした(再起動で元に戻る)。
+- **利用量が少ない(Plus)ので、まず10図で試行する。** 図は v3 の採点対象から固定シードで選ぶ。結果は `-llm-subset-n10-codex-pilot10` の版名にして、全図の表とは混ぜない。比較相手は同じ10図での Claude v3 の成績にする。
+- 表示対象のモデルは gpt-6.1-sol / gpt-6-sol / gpt-6-astra / gpt-6-luna / gpt-5.6-{sol,terra,luna} / gpt-5.5 で、いずれも画像入力に対応している(`codex debug models`)。試行は最新の gpt-6.1-sol で行う。
+
+**10図の試行の結果(2026-10-06):** gpt-6.1-sol は10図すべてに回答した(37系列・335点)。
+
+| 同じ10図(すべて密でない図) | 点 F1(τ=2%) | summary_score |
+|---|---|---|
+| GPT-6.1-Sol(Codex CLI) | 0.954 | 0.976 |
+| Claude Opus 5.5(v3) | 0.956 | 0.977 |
+| Claude Sonnet 5.5(v3) | 0.956 | 0.977 |
+| Claude Fable 5.1(v3) | 0.952 | 0.977 |
+| Qwen3.5-9B bf16(単発) | 0.419 | 0.947 |
+| Claude Haiku 4.5(v3) | 0.008 | 0.303 |
+
+- GPT-6.1-Sol は Claude の上位3モデルと同じ水準で、図ごとの点もほぼ一致した。
+- 5166-23909 は4モデルとも 0.571 で、正解データ側の問題の可能性がある(未調査)。
+- 実行は短かった。コマンドは8回で、Python の抽出スクリプト1本を書いた。出力は 3,620 トークン、入力は 219k(うち 200k はキャッシュ)。
+- 作業ディレクトリの外を参照したコマンドはなかった(イベントログで確認)。
+- 保存したものは `data/llm_run_codex/pilot10/calibrated/gpt-6.1-sol/`: 回答、イベントログ、最終メッセージ、抽出スクリプト(lint 対象外にするため `.py.txt`)。いずれもアカウントのメールアドレスを含まないことを確認した。

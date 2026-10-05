@@ -437,6 +437,29 @@ for _coords, _tag in (("pixel", "px"), ("norm1000", "norm")):
             "生出力は data/local_vlm_run_cuda_pixcal/。"
         ),
     }
+# design 7.81: GPT through the Codex CLI (ChatGPT sign-in, no API key), the
+# same sealed-directory setup and v3 prompt as the Claude agents. A pilot on a
+# seeded subset of the v3 figures first (the subscription's usage is small);
+# its rows carry a subset version so they never rank with the full set.
+CONDITIONS["codex-pilot10-calibrated"] = {
+    "v2": "calibrated",
+    "run_dir": REPO / "data/llm_run_codex/pilot10",
+    "rescale": {},
+    "models": {"gpt-6.1-sol": "GPT-6.1-Sol (Codex CLI)"},
+    "pred_parts": ["pilot10"],
+    "subset_tag": "codex-pilot10",
+    "suffix": "-codex-pilot10",
+    "name_suffix": "（Codex CLI、軸レンジあり、10図の試行、2026-10-06）",
+    "label": "Codex CLI の試行(v3 の10図、軸レンジあり)",
+    "notes": (
+        "OpenAI Codex CLI 0.160.0 を ChatGPT アカウント(Plus)でログインして実行した(API キーなし)。"
+        "codex exec -m gpt-6.1-sol -c model_reasoning_effort=medium -s workspace-write"
+        "(書き込みは作業ディレクトリのみ、ネットワークなし)。"
+        "指示文は Claude v3 と同じ llm_run_v3_prompt.md の軸あり版を INSTRUCTIONS.md として"
+        "封印ディレクトリに置いた。図は v3 の採点対象から固定シードで選んだ10図"
+        "(prepare_llm_run_codex.py)。イベントログと最終メッセージは data/llm_run_codex/pilot10/。"
+    ),
+}
 DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
 V3_NOTES = (
     "Claude Code のサブエージェントとして起動(2026-10-04、"
@@ -787,7 +810,10 @@ def main() -> None:
             # a local row needs no data to leave the machine
             "execution": "local" if cond.get("local") else "cloud",
             "dataset_version": (
-                f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}"
+                f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-llm-subset-"
+                f"n{len(items)}-{cond['subset_tag']}"
+                if cond.get("subset_tag")
+                else f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}"
                 + ("-noaxis" if cond["v2"] == "noaxis" else "")
                 + DIAGNOSTIC_VERSION_SUFFIX
                 if cond.get("diagnostic")
