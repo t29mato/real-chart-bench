@@ -75,3 +75,15 @@ def test_is_verified_stays_true_for_a_verified_but_excluded_pairing():
     registry = [_pairing("1", "10", VerificationStatus.VERIFIED, excluded_reason="log-y axis")]
 
     assert is_verified(registry, paper_id="1", figure_id="10") is True
+
+
+def test_benchmark_paper_ids_cover_every_status_not_only_the_scored_set():
+    from real_chart_bench.usecase.real_image_gate import benchmark_paper_ids
+
+    registry = [
+        _pairing("1", "a", VerificationStatus.VERIFIED),
+        _pairing("2", "b", VerificationStatus.VERIFIED, excluded_reason="gt_incomplete"),
+        _pairing("3", "c", VerificationStatus.REJECTED),
+    ]
+
+    assert benchmark_paper_ids(registry) == {"1", "2", "3"}

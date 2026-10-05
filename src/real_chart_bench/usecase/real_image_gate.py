@@ -33,3 +33,10 @@ def is_verified(registry: list[VerifiedPairing], *, paper_id: str, figure_id: st
         and p.status is VerificationStatus.VERIFIED
         for p in registry
     )
+
+
+def benchmark_paper_ids(registry: list[VerifiedPairing]) -> set[str]:
+    """Every paper the benchmark has ever considered -- scored, excluded or
+    unverified alike -- so training data (docs/design/local-model.md) stays
+    clear of them all, not only of today's scored set."""
+    return {p.paper_id for p in registry}
