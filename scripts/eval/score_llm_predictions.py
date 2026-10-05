@@ -443,6 +443,35 @@ for _coords, _tag in (("pixel", "px"), ("norm1000", "norm")):
             "生出力は data/local_vlm_run_cuda_pixcal/。"
         ),
     }
+# docs/design/local-model.md approach A: a trained marker detector gives marker
+# centres in pixels; the scorer converts them through the same person-measured
+# tick calibration as the pixpts rows (condition 2). One condition per run dir
+# in data/local_model_runs/<run>/ (pixpts_px.jsonl + env.json).
+LOCAL_MODEL_ARCHIVE = REPO / "data/local_model_runs"
+for _env in sorted(LOCAL_MODEL_ARCHIVE.glob("*/env.json")):
+    _run = _env.parent.name
+    _meta = json.loads(_env.read_text())
+    CONDITIONS[f"local-cuda-detector-{_run}"] = {
+        **CONDITIONS["local-cuda-bf16-pixcal"],
+        "v2": "pixpts_px",
+        "version_tag": "pixcal",
+        "pixel_answer": "pixel",
+        "answers_in_printed_space": True,
+        "local_archive": LOCAL_MODEL_ARCHIVE,
+        "models": {_run: _meta["display_name"]},
+        "suffix": "-local-cuda-pixcal-detector",
+        "name_suffix": "（マーカー検出器、画素座標を目盛校正で換算、ローカル RTX 4090）",
+        "label": "目盛のピクセル位置を与えた条件・検出器(方式A、RTX 4090、採点対象全図)",
+        "notes": (
+            "方式A(docs/design/local-model.md「方式A: 検出器」)。学習したマーカー検出器"
+            "(" + _meta["architecture"] + ")がマーカー中心の画素位置と系列の振り分けを出し、"
+            "値への変換は採点側で、Claude の pixcal 行と同じ目盛校正"
+            "(data/verified_pairs/tick_calibration.json)で行った。"
+            "学習データ: " + _meta.get("data", "") + "。"
+            "しきい値などの設定は学習データから切り出した検証分割で決め、ベンチマークでは調整していない。"
+            f"生出力は data/local_model_runs/{_run}/。"
+        ),
+    }
 # design 7.81: GPT through the Codex CLI (ChatGPT sign-in, no API key), the
 # same sealed-directory setup and v3 prompt as the Claude agents. A pilot on a
 # seeded subset of the v3 figures first (the subscription's usage is small);
@@ -602,6 +631,26 @@ def _local_run_block(
             if key[i]["figure_id"] in scoreable
         ]
 
+    if env.get("kind") == "detector":
+        return {
+            "raw_output": f"{archive.relative_to(REPO)}/{model_id}/{condition}.jsonl",
+            "architecture": env["architecture"],
+            "training_data": env.get("data"),
+            "checkpoint_step": env.get("checkpoint_step"),
+            "validation_best_pixel_f1": env.get("validation_best"),
+            "peak_threshold": env.get("peak_threshold"),
+            "group_threshold": env.get("group_threshold"),
+            "long_side": env.get("long_side"),
+            "hardware": f"{env['gpu']} (24GB), Linux"
+            if env.get("gpu")
+            else f"CPU ({env.get('cpu_threads')} threads), Linux",
+            "engine": f"torch {env['torch']}",
+            "concurrent_with_other_models": not sequential,
+            **({"seconds_per_figure": _seconds_stats(run, key, scoreable)} if sequential else {}),
+            "n_scored_figures_without_answer": len(figs(run.parse_failures))
+            + len(figs(run.errors)),
+            "runtime_errors": figs(run.errors),
+        }
     return {
         "raw_output": f"{archive.relative_to(REPO)}/{model_id}/{condition}.jsonl",
         "model_repo_id": env["repo_id"],
