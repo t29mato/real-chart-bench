@@ -82,7 +82,7 @@ down — same figures, same scoring, and they still rank in the same
 
 | Condition | Model | Runs | Prompt | n | Point F1 | Recall | Precision | summary_score (97) |
 |---|---|---|---|---:|---:|---:|---:|---:|
-| axis given | Claude Opus 5.5 | cloud | v3 | 80 | **0.986** | 0.985 | 0.991 | 0.9793 |
+| axis given | Claude Opus 5.5 | cloud | v3 | 80 | **0.986** | 0.985 | 0.991 | 0.9882 |
 | axis given | Claude Fable 5.1 | cloud | v3 | 80 | **0.973** | 0.970 | 0.979 | 0.9856 |
 | axis given | Claude Sonnet 5.5 | cloud | v3 | 80 | **0.971** | 0.970 | 0.977 | 0.9831 |
 | axis given | Gemma 4 31B (8bit) | local | v2 (single-shot) | 80 | **0.733** | 0.737 | 0.732 | 0.9428 |
@@ -106,9 +106,9 @@ down — same figures, same scoring, and they still rank in the same
 | Condition | Model | Runs | Prompt | n | summary_score | Match rate | Curve distance | Coverage |
 |---|---|---|---|---:|---:|---:|---:|---:|
 | axis given | Claude Sonnet 5.5 | cloud | v3 | 17 | **0.9721** | 0.980 | 0.0499 | 0.986 |
+| axis given | Claude Opus 5.5 | cloud | v3 | 17 | **0.9718** | 0.980 | 0.0453 | 0.980 |
 | axis given | Claude Fable 5.1 | cloud | v3 | 17 | **0.9645** | 0.969 | 0.0382 | 0.963 |
 | axis given | Qwen3.8-27B (8bit) | local | v2 (single-shot) | 17 | **0.9264** | 0.931 | 0.1339 | 0.982 |
-| axis given | Claude Opus 5.5 | cloud | v3 | 17 | **0.9209** | 0.941 | 0.1034 | 0.925 |
 | axis given | Gemma 4 31B (8bit) | local | v2 (single-shot) | 17 | **0.8103** | 0.843 | 0.2778 | 0.866 |
 | axis given | Qwen3.5-9B (8bit) | local | v2 (single-shot) | 17 | **0.7852** | 0.853 | 0.3521 | 0.855 |
 | axis given | achromatic-CV | — | — | 17 | **0.7055** | 0.610 | 0.4751 | 0.981 |
@@ -123,10 +123,13 @@ down — same figures, same scoring, and they still rank in the same
 | axis withheld | Qwen3.5-9B (8bit) | local | v2 (single-shot) | 17 | **0.7659** | 0.853 | 0.3543 | 0.799 |
 | axis withheld | Claude Haiku 4.5 | cloud | v3 | 17 | **0.1782** | 0.286 | 0.8915 | 0.140 |
 
-Claude Opus 5.5 (v3, axis given) lost one dense figure (17040-21023) to a
-total miss: its answer ended a series with an `Infinity` point, the curve
-comparison rejects a non-finite value, and a figure that fails to score counts
-as empty — the same rule as an unanswered figure.
+Non-finite values in an answer (owner decision 2026-10-05): a predicted point
+whose x or y is `Infinity` / `NaN` is ignored by the curve distance (a series
+left with fewer than two finite points is not curve-scored), and in the point
+metric it counts as a predicted point that never matches. The only such answer
+so far is Claude Opus 5.5's (v3, axis given) on dense figure 17040-21023, one
+series ending in `(Infinity, -Infinity)`; it was a total miss under the earlier
+rule (summary_score 0 → 0.865).
 
 **History — earlier Claude runs on the same 97 figures.** Point table (80
 non-dense figures):
