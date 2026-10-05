@@ -25,7 +25,12 @@ SPECS = {
         "repo": "google/deplot",
         "prompt": "Generate underlying data table of the figure below:",
         "generate": {"max_new_tokens": 512},
-        "source": "model card (google/deplot)",
+        # The HF processor's default is 2048 patches. With 4096 this
+        # environment reproduces the paper's PlotQA numbers (RNSS 97.5 / RMS-F1
+        # 94.3 on 100 test charts vs 97.1 / 94.2 published); with 2048 it gets
+        # 93.4 / 84.0. So 4096 is the setting the paper's numbers come from.
+        "processor": {"max_patches": 4096},
+        "source": "model card prompt (google/deplot); max_patches 4096 (design 7.75)",
     },
     "unichart": {
         "repo": "ahmed-masry/unichart-base-960",
@@ -133,7 +138,9 @@ class Runner:
             )
         image = Image.open(image_path).convert("RGB")
         if self.name == "deplot":
-            inputs = self.processor(images=image, text=prompt, return_tensors="pt").to(self.device)
+            inputs = self.processor(
+                images=image, text=prompt, return_tensors="pt", **self.spec.get("processor", {})
+            ).to(self.device)
             out = self.model.generate(**inputs, **gen)
             return self.processor.decode(out[0], skip_special_tokens=True)
         if self.name == "unichart":
@@ -217,6 +224,7 @@ def main() -> None:
                 "repo": spec["repo"],
                 "prompt": spec["prompt"],
                 "generate": spec["generate"],
+                "processor": spec.get("processor", {}),
                 "prompt_source": spec["source"],
                 "trust_remote_code": spec.get("trust_remote_code", False),
                 "transformers": transformers.__version__,
