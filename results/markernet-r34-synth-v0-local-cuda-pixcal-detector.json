@@ -1,9 +1,9 @@
 {
   "model_id": "markernet-r34-synth-local-cuda-pixcal-detector",
-  "model_name": "MarkerNet R34 (\u5408\u6210\u306e\u307f: PlotQA + synth-materials)\uff08\u30de\u30fc\u30ab\u30fc\u691c\u51fa\u5668\u3001\u753b\u7d20\u5ea7\u6a19\u3092\u76ee\u76db\u6821\u6b63\u3067\u63db\u7b97\u3001\u30ed\u30fc\u30ab\u30eb RTX 4090\uff09",
+  "model_name": "MarkerNet R34 (合成のみ: PlotQA + synth-materials)（マーカー検出器、画素座標を目盛校正で換算、ローカル RTX 4090）",
   "execution": "local",
   "dataset_version": "v0-eval-pilot-n94-pixcal",
-  "run_at": "2026-10-05T21:15:59.645940+00:00",
+  "run_at": "2026-10-05T21:18:20.499962+00:00",
   "n_figures": 94,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
@@ -4219,11 +4219,11 @@
     }
   ],
   "agent_effort": null,
-  "condition": "\u76ee\u76db\u306e\u30d4\u30af\u30bb\u30eb\u4f4d\u7f6e\u3092\u4e0e\u3048\u305f\u6761\u4ef6\u30fb\u691c\u51fa\u5668(\u65b9\u5f0fA\u3001RTX 4090\u3001\u63a1\u70b9\u5bfe\u8c61\u5168\u56f3)",
+  "condition": "目盛のピクセル位置を与えた条件・検出器(方式A、RTX 4090、採点対象全図)",
   "local_run": {
     "raw_output": "data/local_model_runs/markernet-r34-synth/pixpts_px.jsonl",
     "architecture": "MarkerNet: ResNet-34 (ImageNet) + U-Net decoder to stride 2, CenterNet heatmap + offset + shape class + associative embedding",
-    "training_data": "\u5408\u6210\u306e\u307f: PlotQA dot_line 24,521 \u679a(CC-BY-4.0)+ synth-materials 20,000 \u679a(CC-BY-4.0\u3001\u81ea\u4f5c\u751f\u6210\u5668)\u3001\u54045% \u3092\u691c\u8a3c\u5206\u5272",
+    "training_data": "合成のみ: PlotQA dot_line 24,521 枚(CC-BY-4.0)+ synth-materials 20,000 枚(CC-BY-4.0、自作生成器)、各5% を検証分割",
     "checkpoint_step": 20000,
     "validation_best_pixel_f1": 0.9449,
     "peak_threshold": 0.4,
@@ -4242,5 +4242,12 @@
     "n_scored_figures_without_answer": 0,
     "runtime_errors": []
   },
-  "notes": "\u65b9\u5f0fA(docs/design/local-model.md\u300c\u65b9\u5f0fA: \u691c\u51fa\u5668\u300d)\u3002\u5b66\u7fd2\u3057\u305f\u30de\u30fc\u30ab\u30fc\u691c\u51fa\u5668(MarkerNet: ResNet-34 (ImageNet) + U-Net decoder to stride 2, CenterNet heatmap + offset + shape class + associative embedding)\u304c\u30de\u30fc\u30ab\u30fc\u4e2d\u5fc3\u306e\u753b\u7d20\u4f4d\u7f6e\u3068\u7cfb\u5217\u306e\u632f\u308a\u5206\u3051\u3092\u51fa\u3057\u3001\u5024\u3078\u306e\u5909\u63db\u306f\u63a1\u70b9\u5074\u3067\u3001Claude \u306e pixcal \u884c\u3068\u540c\u3058\u76ee\u76db\u6821\u6b63(data/verified_pairs/tick_calibration.json)\u3067\u884c\u3063\u305f\u3002\u5b66\u7fd2\u30c7\u30fc\u30bf: \u5408\u6210\u306e\u307f: PlotQA dot_line 24,521 \u679a(CC-BY-4.0)+ synth-materials 20,000 \u679a(CC-BY-4.0\u3001\u81ea\u4f5c\u751f\u6210\u5668)\u3001\u54045% \u3092\u691c\u8a3c\u5206\u5272\u3002\u3057\u304d\u3044\u5024\u306a\u3069\u306e\u8a2d\u5b9a\u306f\u5b66\u7fd2\u30c7\u30fc\u30bf\u304b\u3089\u5207\u308a\u51fa\u3057\u305f\u691c\u8a3c\u5206\u5272\u3067\u6c7a\u3081\u3001\u30d9\u30f3\u30c1\u30de\u30fc\u30af\u3067\u306f\u8abf\u6574\u3057\u3066\u3044\u306a\u3044\u3002\u751f\u51fa\u529b\u306f data/local_model_runs/markernet-r34-synth/\u3002"
+  "notes": "方式A(docs/design/local-model.md「方式A: 検出器」)。学習したマーカー検出器(MarkerNet: ResNet-34 (ImageNet) + U-Net decoder to stride 2, CenterNet heatmap + offset + shape class + associative embedding)がマーカー中心の画素位置と系列の振り分けを出し、値への変換は採点側で、Claude の pixcal 行と同じ目盛校正(data/verified_pairs/tick_calibration.json)で行った。学習データ: 合成のみ: PlotQA dot_line 24,521 枚(CC-BY-4.0)+ synth-materials 20,000 枚(CC-BY-4.0、自作生成器)、各5% を検証分割。しきい値などの設定は学習データから切り出した検証分割で決め、ベンチマークでは調整していない。生出力は data/local_model_runs/markernet-r34-synth/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_model_runs/markernet-r34-synth/pixpts_px.jsonl",
+    "n_figures": 94,
+    "seconds_total": 2.2,
+    "seconds_per_figure": 0.02
+  }
 }
