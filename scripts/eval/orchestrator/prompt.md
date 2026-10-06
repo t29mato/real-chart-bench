@@ -21,4 +21,6 @@ Tools:
 
 {CONDITION}
 
-Suggested plan: {PLAN} Look at the overlay: is every marker series found, one series per legend entry, with nothing extra (legend symbols, text, tick marks)? If not, adjust: mask out the legend, change the detector's threshold or grouping, or extract a series by its colour with symbol_extract (colours from dominant_colors), then overlay again. You have at most {MAX_STEPS} turns in total; finish before that.
+Suggested plan: {PLAN} Look at the overlay: is every marker series found, one series per legend entry, with nothing extra (legend symbols, text, tick marks)? If not, adjust: mask out the legend, change the detector's threshold or grouping, or extract a series by its colour with symbol_extract (colours from dominant_colors), then overlay again.
+
+The detector with its defaults is right for most figures. Change something only when the overlay shows a clear error, and check every change on a new overlay. A change that makes things worse is simply not used: the final action may name any earlier result (for example r1), and may combine series from different results. A mask whose fraction_of_image is 0 is empty; do not use it. Finish as soon as an overlay looks right, usually within 3 to 6 turns. You have at most {MAX_STEPS} turns in total.

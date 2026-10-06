@@ -491,18 +491,50 @@ def main() -> None:
         **(engine.env() if engine else {}),
     }
     (out_dir / "env.json").write_text(json.dumps(env, indent=2, ensure_ascii=False) + "\n")
-    for cond in args.conditions.split(","):
-        tasks = dev_tasks(cond, args.dev) if args.dev else bench_tasks(cond)
-        if args.limit:
-            tasks = tasks[: args.limit]
-        t0 = time.time()
-        recs = run_condition(cond, tasks, engine, pool, out_dir, args.policy)
-        fin = {k: sum(r["finish"] == k for r in recs) for k in ("final", "fallback")}
-        print(f"[{cond}] {len(recs)} figures in {time.time() - t0:.0f}s, {fin}, "
-              f"answered {sum(r['parsed'] is not None for r in recs)}", flush=True)
-    pool.shutdown()
-    print(f"書き出し: {out_dir}", flush=True)
-    os._exit(0)  # vLLM's engine process can keep the interpreter waiting
+    code = 0
+    try:
+        for cond in args.conditions.split(","):
+            tasks = dev_tasks(cond, args.dev) if args.dev else bench_tasks(cond)
+            if args.limit:
+                tasks = tasks[: args.limit]
+            t0 = time.time()
+            recs = run_condition(cond, tasks, engine, pool, out_dir, args.policy)
+            fin = {k: sum(r["finish"] == k for r in recs) for k in ("final", "fallback")}
+            print(f"[{cond}] {len(recs)} figures in {time.time() - t0:.0f}s, {fin}, "
+                  f"answered {sum(r['parsed'] is not None for r in recs)}", flush=True)
+        print(f"書き出し: {out_dir}", flush=True)
+    except BaseException:  # noqa: BLE001
+        import traceback
+
+        traceback.print_exc()
+        code = 1
+    finally:
+        pool.shutdown(cancel_futures=True)
+        shutdown_engine(engine)
+    os._exit(code)  # vLLM's engine process can keep the interpreter waiting
+
+
+def shutdown_engine(engine) -> None:
+    """Stop vLLM's EngineCore before the hard exit. os._exit alone left the
+    engine process orphaned holding the GPU (2026-10-06, 23 GB, after the
+    GPU lock was released) -- the next lock holder could not start."""
+    if engine is not None:
+        try:
+            engine.llm.llm_engine.engine_core.shutdown()
+        except Exception as exc:  # noqa: BLE001
+            print(f"engine shutdown: {exc}", flush=True)
+    for p in mp.active_children():
+        p.terminate()
+        p.join(10)
+        if p.is_alive():
+            p.kill()
+    try:  # anything else this process started (vLLM may use its own launcher)
+        import psutil
+
+        for c in psutil.Process().children(recursive=True):
+            c.kill()
+    except ImportError:
+        pass
 
 
 if __name__ == "__main__":

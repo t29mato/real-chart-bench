@@ -569,3 +569,118 @@ flowchart LR
 - 新しく足した道具(重なりの分割、検出器の呼び出しなど)を starry-digitizer に戻すときは、このリポジトリでは作業しない。
 - starry-digitizer を別の場所(`~/projects/starry-digitizer`)に clone し、専用のブランチ(`feature/rcb-*`)で作業する。
 - main への取り込みは PR で行い、オーナーの判断を経る。
+
+### 実装(2026-10-06、ブランチ `worktree-agent-a1d414e3e40be56ea`)
+
+```mermaid
+flowchart LR
+  subgraph tools[道具 adapter/orchestrator_tools.py]
+    S[symbol_extract / line_extract<br/>domain/starry_extract.py<br/>starry-digitizer の移植]
+    D[marker_detector<br/>方式A (b) の検出を後処理]
+    T[tick_calibration<br/>auto: 方式C / given: 人 / manual: 司令塔が読む]
+    C[dominant_colors / mask]
+    O[render_overlay]
+    V[to_values]
+  end
+  L[司令塔<br/>JSON の行動を1手ずつ] -->|道具と設定| tools
+  tools -->|結果 r1, r2, ...| L
+  O -->|重ね描き画像| L
+  L -->|final: どの結果のどの系列か + 校正| A[答え<br/>数値はすべて道具から]
+```
+
+| 部品 | 場所 | 中身 |
+|---|---|---|
+| 移植 | `domain/starry_extract.py` | Symbol Extract / Line Extract と基底クラス(matchColor・isOnMask)。docstring に MIT の著作権表示 |
+| 道具の純ロジック | `domain/digitizer_tools.py` | 色の候補(ビン分け + 近い色の統合、背景の除外)、マスク(矩形・枠・除外)、目盛からの当てはめ、画素→値 |
+| 司令塔の純ロジック | `domain/orchestration.py` | 行動の JSON スキーマと検証、final の組み立て、最大 12 手、終わらないときの固定の代替、表示縮尺の変換 |
+| 道具 | `adapter/orchestrator_tools.py` | 上の8道具。検出器は方式A (b) の生の検出(しきい値 0.1、長辺 768/1024/1280)を画像の sha256 で引き、指定の設定で後処理する(既定は方式A (b) の設定) |
+| CLI | `scripts/tools/rcb_tool.py <tool> --image ... --params json` | JSON を出す。`answer` は保存した結果から答えを書く |
+| ローカル司令塔 | `scripts/eval/orchestrator/run_local.py`(`run_local.sh` で GPU ロック) | 全図を同時に1手ずつ進める(1手 = vLLM の一括推論 1回 + CPU の道具 12並列) |
+| Claude 用の封印 | `scripts/eval/prepare_orchestrator_claude.py`、`orchestrator/sealed_tool.py`、`orchestrator/claude_prompt.md` | 画像・タスク・道具の複製(コードと検出結果だけ)・`tool` コマンド・INSTRUCTIONS.md |
+| 採点 | `score_llm_predictions.py` の `local-orch-<run>-{noaxis,pixcal}` と `orch-claude-{noaxis,pixcal}` | 主条件1は値(印字空間)、主条件2は画素を人の校正で換算(検出器の行と同じ経路) |
+| 分類別の比較 | `scripts/eval/orchestrator/category_compare.py` | 2軸・系列の分け方・密集・目盛ごとの点 F1 |
+
+- 司令塔は答えの数値を書かない。最後に「どの結果のどの系列を、どの校正で」と名指しするだけである。
+- 司令塔が数値を読むのは、自動校正が失敗したときの `tick_calibration` の manual(目盛ラベルの値)だけである。
+
+### 移植の一致の確かめ方
+
+- 原典の JavaScript(vendored の `starry-digitizer-2.0.0-dev-a13c927.tgz` の `library-build/dist/core.js`)から、2つの戦略クラスと基底クラスをそのまま切り出して node で動かした(`scripts/tools/starry_extract_crosscheck.mjs`)。starry-digitizer 自体は変更・clone していない。
+- 小さな合成画像 32 件(色の塊・線・ノイズ、マスクあり 11 件、パラメータ違い)で原典の出力を記録し(`tests/fixtures/starry_extract_js_cases.json`、74 点)、Python の出力が**全件で完全一致**することをテストにした(node がなくても回る)。
+- 実図 6 枚(Starrydata の学習用、ベンチ外)× 主な3色 × 2戦略の 36 回でも、**36/36 で完全一致**(計 40,321 点)。
+- 一致させた細部: 色の距離の浮動小数点の順序、`toFixed(1)` の丸め(2.25 → 2.3、Python の round とは違う)、Symbol は行順・Line は列順の走査、Line の ±dx/±dy の窓。
+- 色の判定だけは画素ごとの純関数なので、画像全体で一度にベクトル化した(結果は変わらない)。
+
+### 道具の確認(司令塔なし)
+
+- `marker_detector` の既定設定は、方式A (b) の CPU 再実行(`markernet-r34-hybrid-posta`)の画素出力と 94/94 図で一致した。
+- 固定手順(`--policy scripted`: 自動校正 → 検出器の既定 → 全系列を答える)で採点まで通すと、主条件1 0.718、主条件2 0.840 で、方式C の `-posta` 行と同じ値になった(`results/orch-scripted-*`、diagnostic 扱いで順位表には載らない)。
+
+### ローカル司令塔(Qwen3.5-9B)の開発用の試行(ベンチ外、Starrydata の検証用 13 図)
+
+ベンチマークでは何も決めていない。ループとプロンプトの確認は、方式A の検証分割と同じ Starrydata の論文 20%(13 図、ベンチ外)で行った。指標は主条件2の出力(画素)を全系列まとめた画素の点 F1(半径は枠の長辺の 2%、`scripts/eval/orchestrator/dev_score.py`)。Starrydata は一部の系列しかデジタイズしないので適合率は低めに出る。行どうしの比較にだけ使う。
+
+| 行 | 画素の点 F1 | 手数(平均) | final で終了 |
+|---|---|---|---|
+| 固定手順(検出器の既定のまま) | **0.501** | 2.8 | 12 / 13 |
+| Qwen3.5-9B、プロンプト v1 | 0.420 | 12.0(全図で上限まで) | 13 / 13(上限の手で final) |
+
+- 1図あたり 12 手を使い切り、最初の検出器の結果より悪いものを答えることが多かった。
+- 手順の記録(`~/.cache/real-chart-bench/orchestrator/dev-runs/dev-vlm/transcripts/`)を見ると、次の3つが目立つ。
+  - 凡例を除くマスクの座標を誤り、マスクが空(fraction 0)になる。
+  - symbol_extract で色の許容を変え続ける。
+  - 最後の手で、途中の試行の結果を答える。
+- 速さ: 13 図 × 12 手で1条件 約 150 秒(RTX 4090、1手 = 一括推論1回、5〜27 秒)。94 図でも1条件 20 分程度の見込み。
+- プロンプト v2(「既定で正しいことが多い」「悪くなった変更は使わず、前の結果を名指ししてよい」「空のマスクは使わない」「3〜6 手で終える」を追記)を用意した。開発用の 13 図での確認は、GPU を確保できず未実施である(次節)。
+
+### 状態(2026-10-06 23:40)
+
+- ベンチ 94 図でのローカル司令塔の実行は**未実施**。
+- 開発用の試行のあと、`run_local.py` の終わり方の不具合で vLLM の EngineCore(23GB)が親なしで GPU に残った。
+  - 原因: `os._exit(0)` だけで終えたため。
+  - 修正: 終了時に engine を shutdown し、子プロセスを止める。例外のときも同じ。
+  - 残ったプロセスは自分の権限では止められなかったので、司令塔に停止を依頼した。
+- 次の手順: 開発用 13 図でプロンプト v1 と v2 を比べ、開発用の画素 F1 が高い方をベンチ 94 図に使う(決め方は事前にこう定め、ベンチでは選ばない)。
+
+```bash
+scripts/eval/orchestrator/run_local.sh --run dev-vlm-p2 --dev 13 --conditions pixcal
+.venv/bin/python scripts/eval/orchestrator/dev_score.py ~/.cache/real-chart-bench/orchestrator/dev-runs/dev-vlm{,-p2}
+scripts/eval/orchestrator/run_local.sh --run qwen3.5-9b-orch          # 94 図 × 2条件
+.venv/bin/python scripts/eval/score_llm_predictions.py local-orch-qwen3.5-9b-orch-noaxis   # と -pixcal
+.venv/bin/python scripts/eval/orchestrator/category_compare.py results/qwen3.5-9b-orch-v0-local-orch-*.json \
+    results/markernet-r34-hybrid-v0-local-cuda-noaxis-hybrid.json results/markernet-r34-synth-real-v0-local-cuda-pixcal-detector.json
+```
+
+### 分類ごとの比較(比べる相手の値、密でない 80 図の点 F1)
+
+分類は `scripts/eval/orchestrator/category_compare.py` で一度だけ決め、`data/local_orchestrator_runs/figure_categories.json` に書いた。どの行の点数からも決めていない。
+
+- 2軸: 右に別の目盛の y 軸がある。94 図の一覧を目視して付けた。
+- 系列の分け方: 正解が 5 系列以上。
+- 目盛: 自動校正が人の校正と 1% で合わない。
+
+| 行 | 全体 | 2軸(7) | 2軸以外(73) | 5系列以上(16) | それ以外(64) | 目盛 不一致(15) | 目盛 一致(65) | 密集 14 図(summary_score) |
+|---|---|---|---|---|---|---|---|---|
+| 方式C 主条件1 | 0.698 | 0.502 | 0.717 | 0.698 | 0.698 | 0.144 | 0.826 | 0.517 |
+| 検出器 方式A (b) 主条件2 | 0.841 | 0.695 | 0.855 | 0.802 | 0.850 | 0.801 | 0.850 | 0.720 |
+| 方式D ローカル | (未実施) | | | | | | | |
+| 方式D Claude | (未実施) | | | | | | | |
+
+- 方式C の損失は、ほぼすべて目盛から来ている(不一致の 15 図で 0.144)。
+- 2軸の図は、どちらの行でも低い。
+
+### Claude を司令塔にした上限(封印ディレクトリは用意済み、起動は司令塔)
+
+- 置き場所: `~/.cache/real-chart-bench/orchestrator/claude-sealed/{noaxis,pixcal}/claude-opus-5-5/part{1,2}/`(各 47 図、計 33MB)
+- 中身: `images/`、`tasks.json`、`INSTRUCTIONS.md`、`tool`、`tools/`(道具のコードの複製と、検出器の生の検出。正解は含まない)
+- 道具はシステムの python3(numpy・Pillow)と tesseract で動く。
+- INSTRUCTIONS.md は次を禁じている。
+  - 自分で画像処理のコードを書くこと
+  - 答えの数値を手で打つこと
+- 答えは `./tool answer` が、保存した道具の結果から書く。
+- 回収と採点:
+
+```bash
+.venv/bin/python scripts/eval/archive_orchestrator_claude.py ~/.cache/real-chart-bench/orchestrator/claude-sealed
+.venv/bin/python scripts/eval/score_llm_predictions.py orch-claude-noaxis   # と orch-claude-pixcal
+```
