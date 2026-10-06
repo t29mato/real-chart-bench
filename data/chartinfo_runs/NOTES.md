@@ -33,3 +33,6 @@ separately instead of being prompted away.
 - batch04 / Sonnet 5.5 / fig_22: points generated from a fitted bell curve
   (0-168 step 2) rather than read marker by marker.
 - batch02, batch04 / Sonnet 5.5: values read by eye (no pixel extraction).
+- batch03 / Sonnet 5.5: mostly eyeballed; fig_06/07/12/15/17 interpolated
+  between anchor readings (fig_12's 240 and fig_17's 71 points are not marker
+  counts); a few hidden markers in fig_11/21/26 filled in by guess.
