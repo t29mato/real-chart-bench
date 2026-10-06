@@ -29,6 +29,13 @@ CODEX_RESULTS = {
     ("noaxis", ("part1", "part2")): "-v0-codex-noaxis",
     ("pixcal", ("part1", "part2")): "-v0-codex-pixcal",
 }
+# models served locally (run_codex_local_batch.sh): their rows say so
+CODEX_LOCAL_MODELS = {"qwen3.8-27b"}
+CODEX_LOCAL_RESULTS = {
+    ("pixcal", ("pilot10",)): "-v0-codex-local-pilot10-pixcal",
+    ("noaxis", tuple(f"part{i}" for i in range(1, 9))): "-v0-codex-local-noaxis",
+    ("pixcal", ("pilot10", *(f"part{i}" for i in range(1, 8)))): "-v0-codex-local-pixcal",
+}
 
 
 def _claude() -> dict[str, dict]:
@@ -57,8 +64,10 @@ def _claude() -> dict[str, dict]:
 def _codex() -> dict[str, dict]:
     rows = json.loads((COSTS / "codex.json").read_text())
     out = {}
-    for (cond, batches), suffix in CODEX_RESULTS.items():
-        for model in {r["model"] for r in rows}:
+    plans = [(k, v, False) for k, v in CODEX_RESULTS.items()]
+    plans += [(k, v, True) for k, v in CODEX_LOCAL_RESULTS.items()]
+    for (cond, batches), suffix, local in plans:
+        for model in {r["model"] for r in rows if (r["model"] in CODEX_LOCAL_MODELS) == local}:
             sel = [
                 r
                 for r in rows
