@@ -39,3 +39,7 @@ separately instead of being prompted away.
 - batch03 / Opus 5.5: fig_15 ~30 hidden markers interpolated; fig_21 ~23 hidden
   points estimated; fig_26 hidden markers at y=0 assumed 0; fig_17 dense curve
   sampled (85 points).
+- batch04 / Opus 5.5: fig_10, fig_11 crowded regions read/sampled rather than
+  detected; fig_22 101 points fitted on an even grid; hidden points added in
+  fig_14, fig_16, fig_30; fig_18 y reported in absolute units (ticks print x10^9,
+  against the "as printed" rule).
