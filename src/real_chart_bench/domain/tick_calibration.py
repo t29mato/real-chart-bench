@@ -294,14 +294,14 @@ def _join_words(words):
     return out
 
 
-def readings_for_axis(
+def _axis_labels(
     words: Sequence[tuple[str, float, float, float, float]],
     frame: Sequence[float],
     axis: str,
     *,
     ticks: Sequence[float],
-) -> list[tuple[float, list[TickReading]]]:
-    """(px, readings) for the numeric labels of one axis of `frame`.
+) -> list[tuple[float, str, list[TickReading]]]:
+    """(px, text, readings) for the numeric labels of one axis of `frame`.
 
     x: labels in a band under the x axis, at their horizontal centre.
     y: labels in the column hugging the y axis on its left, at their
@@ -339,8 +339,35 @@ def readings_for_axis(
             near = min(ticks, key=lambda t: abs(t - c))
             if abs(near - c) <= snap:
                 c = near
-        out.append((float(c), rs))
+        out.append((float(c), text, rs))
     return out
+
+
+def readings_for_axis(
+    words: Sequence[tuple[str, float, float, float, float]],
+    frame: Sequence[float],
+    axis: str,
+    *,
+    ticks: Sequence[float],
+) -> list[tuple[float, list[TickReading]]]:
+    """(px, readings) for the numeric labels of one axis of `frame`.
+
+    x: labels in a band under the x axis, at their horizontal centre.
+    y: labels in the column hugging the y axis on its left, at their
+    vertical centre. A label within snapping distance of a detected tick
+    mark takes the tick's pixel."""
+    return [(c, rs) for c, _, rs in _axis_labels(words, frame, axis, ticks=ticks)]
+
+
+def labels_for_axis(
+    words: Sequence[tuple[str, float, float, float, float]],
+    frame: Sequence[float],
+    axis: str,
+    *,
+    ticks: Sequence[float],
+) -> list[tuple[float, str]]:
+    """The same labels as readings_for_axis, as (px, OCR text)."""
+    return [(c, t) for c, t, _ in _axis_labels(words, frame, axis, ticks=ticks)]
 
 
 # Gate constants for one axis's transform (see local-model.md for how they
@@ -495,3 +522,125 @@ def best_projection(
                              if xpx[k] is not None and ypx[k] is not None])
         i += n
     return Projection(tx, ty, points_px, points_value, inside, hit, null)
+
+
+# --- 方式C: automatic calibration of a benchmark figure ----------------------
+
+
+def axis_agreement(fit: AxisFit | None, person_ticks: Sequence[dict], scale: str) -> float:
+    """How far an automatic axis fit is from the person's calibration: at each
+    of the person's two ticks, |auto value - person value| as a fraction of
+    the person's tick span (in decades on a log axis); the worse tick counts.
+    inf when there is no fit or the scales differ."""
+    if fit is None or fit.scale != scale:
+        return math.inf
+    (a, b) = person_ticks[:2]
+
+    def t(v: float) -> float:
+        return math.log10(v) if scale == "log" else v
+
+    span = abs(t(b["value"]) - t(a["value"]))
+    if span == 0:
+        return math.inf
+    err = 0.0
+    for p in (a, b):
+        auto = (p["px"] - fit.intercept) / fit.slope  # already in t-space
+        err = max(err, abs(auto - t(p["value"])) / span)
+    return err
+
+
+_PIECE = re.compile(r"-?(0|[1-9]\d*)(\.\d+)?")
+
+
+def split_merged_labels(text: str, *, min_pieces: int = 3) -> list[str] | None:
+    """Tesseract reads tightly spaced tick labels as one word
+    ("300320340360"). Split such a word into at least `min_pieces` numbers
+    that form one arithmetic progression, or None when it does not split
+    that way (a single label, or digits that are no tick run). Words shorter
+    than 5 characters are never split ("123" is more likely a label)."""
+    s = text.strip().translate(_MINUS)
+    if len(s) < 5:
+        return None
+
+    def pieces_at(i: int):
+        for m_end in range(len(s), i, -1):
+            m = _PIECE.fullmatch(s, i, m_end)
+            if m:
+                yield s[i:m_end]
+
+    def walk(i: int, got: list[str], step: float | None):
+        if i == len(s):
+            return list(got) if len(got) >= min_pieces else None
+        for p in pieces_at(i):
+            v = float(p)
+            if got:
+                d = v - float(got[-1])
+                if d == 0:
+                    continue
+                if step is not None and abs(d - step) > 1e-9 * max(1.0, abs(step)):
+                    continue
+                res = walk(i + len(p), [*got, p], d)
+            else:
+                res = walk(i + len(p), [p], None)
+            if res:
+                return res
+        return None
+
+    return walk(0, [], None)
+
+
+_DECADE = re.compile(r"^10(\^?(-?\d{1,2}))?$")
+
+
+def decade_readings(
+    labels: Sequence[tuple[float, str]], *, direction: int
+) -> list[tuple[float, list[TickReading]]]:
+    """Log-axis labels printed 10^n, whose small raised exponents OCR mostly
+    drops ("10") or garbles ("109" for 10^3). Labels that start with "10"
+    and sit on one even spacing (a label may be missing) are consecutive
+    decades; every exponent that was read votes for the offset (an explicit
+    "10^n" counts twice, a merged "10n" once) and the winner numbers them
+    all. [] unless at least three such labels, even spacing and a clear
+    winner. direction as in fit_axis."""
+    cands = []
+    for px, text in labels:
+        s = text.strip().translate(_MINUS).translate(_SUPERSCRIPT)
+        m = _DECADE.match(s)
+        if not m:
+            continue
+        vote = None
+        if m.group(2) is not None:
+            vote = (int(m.group(2)), 2 if m.group(1).startswith("^") else 1)
+        cands.append((float(px), vote))
+    if len(cands) < 3:
+        return []
+    cands.sort(key=lambda c: c[0] * direction)
+    pos = [c[0] for c in cands]
+    diffs = [abs(b - a) for a, b in zip(pos, pos[1:], strict=False)]
+    base = min(diffs)
+    if base <= 0:
+        return []
+    ranks = [0]
+    for d in diffs:
+        k = d / base
+        if abs(k - round(k)) > 0.1:
+            return []
+        ranks.append(ranks[-1] + round(k))
+    votes: dict[int, float] = {}
+    for r, (_, v) in zip(ranks, cands, strict=True):
+        if v is None:
+            continue
+        votes[v[0] - r] = votes.get(v[0] - r, 0) + v[1]
+        # an unsigned exponent may have lost its minus sign: half a vote for
+        # that reading too; it wins only where the signed votes disagree
+        if v[0] > 0:
+            votes[-v[0] - r] = votes.get(-v[0] - r, 0) + v[1] / 2
+    if not votes:
+        return []
+    top = sorted(votes.values(), reverse=True)
+    if len(top) > 1 and top[0] == top[1]:
+        return []
+    offset = max(votes, key=lambda o: votes[o])
+    out = [(px, [TickReading("pow10", 10.0 ** (r + offset))])
+           for r, (px, _) in zip(ranks, cands, strict=True)]
+    return sorted(out)

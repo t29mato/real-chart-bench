@@ -472,6 +472,32 @@ for _env in sorted(LOCAL_MODEL_ARCHIVE.glob("*/env.json")):
             f"生出力は data/local_model_runs/{_run}/。"
         ),
     }
+# docs/design/local-model.md 方式C: the detector's pixels converted by an
+# automatic axis calibration (frame rules + Tesseract tick OCR) -- no person
+# in the loop, so condition 1 (noaxis). Values are in the printed space (the
+# OCR reads the printed labels). One condition per run dir with noaxis.jsonl.
+for _env in sorted(LOCAL_MODEL_ARCHIVE.glob("*/noaxis.jsonl")):
+    _run = _env.parent.name
+    _meta = json.loads((_env.parent / "env.json").read_text())
+    CONDITIONS[f"local-cuda-hybrid-{_run}"] = {
+        **CONDITIONS["local-cuda-bf16-noaxis"],
+        "answers_in_printed_space": True,
+        "local_archive": LOCAL_MODEL_ARCHIVE,
+        "models": {_run: _meta["display_name"]},
+        "suffix": "-local-cuda-noaxis-hybrid",
+        "name_suffix": "（分業型: 検出器 + 目盛 OCR の自動校正、軸レンジなし、ローカル）",
+        "label": "軸レンジを与えない条件・分業型(方式C、検出器 + 自動校正、採点対象全図)",
+        "notes": (
+            "方式C(docs/design/local-model.md「方式C: 分業型」)。学習したマーカー検出器"
+            "(" + _meta["architecture"] + ")の画素位置と系列の振り分けを、"
+            "規則による枠・目盛の検出と Tesseract 5.3.4 による目盛ラベルの OCR で求めた"
+            "軸の当てはめ(adapter/auto_axis_calibration.py)で値に直した。人の校正も"
+            "Claude / GPT も使わない。自動校正に失敗した図は回答なし(全点ミス)。"
+            "検出の後処理は学習データの検証分割と合成のストレス検証セットで決め、"
+            "ベンチマークでは調整していない。値は印字空間。"
+            f"生出力は data/local_model_runs/{_run}/noaxis.jsonl。"
+        ),
+    }
 # docs/design/local-model.md 方式B: Qwen3.5-9B + a QLoRA adapter trained on
 # synthetic / Starrydata charts (scripts/train/vlm_lora/), served by vLLM's LoRA
 # support (scripts/eval/local_vlm/worker_ft.py). Same prompt, schema and

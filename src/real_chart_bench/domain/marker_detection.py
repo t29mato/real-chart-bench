@@ -158,3 +158,108 @@ def pixel_point_f1(
         return 0.0
     prec, rec = tp / len(pred), tp / len(truth)
     return 2 * prec * rec / (prec + rec)
+
+
+# --- 方式C: post-processing tuned on the validation split ---------------------
+
+
+def inside_frame(
+    dets: list[Detection],
+    frame: tuple[float, float, float, float] | None,
+    margin_fraction: float,
+) -> list[Detection]:
+    """Detections inside the plot frame (x0, y0, x1, y1) widened on every side
+    by `margin_fraction` of its width / height (markers straddle the frame
+    edge). Tick labels, axis titles and arrows outside it go. No frame: all."""
+    if frame is None:
+        return list(dets)
+    x0, y0, x1, y1 = frame
+    mx, my = margin_fraction * (x1 - x0), margin_fraction * (y1 - y0)
+    return [d for d in dets if x0 - mx <= d.x <= x1 + mx and y0 - my <= d.y <= y1 + my]
+
+
+def away_from_frame_edges(
+    dets: list[Detection],
+    frame: tuple[float, float, float, float] | None,
+    band_fraction: float,
+) -> list[Detection]:
+    """Drop detections within band_fraction x the frame's shorter side of any
+    of its four lines -- the inward tick marks of a boxed frame fire weak
+    peaks there. No frame: all kept."""
+    if frame is None:
+        return list(dets)
+    x0, y0, x1, y1 = frame
+    band = band_fraction * min(x1 - x0, y1 - y0)
+    return [
+        d for d in dets
+        if min(abs(d.x - x0), abs(d.x - x1), abs(d.y - y0), abs(d.y - y1)) > band
+    ]
+
+
+def duplicate_radius(
+    image_size: tuple[int, int], marker_px: float | None, frac: float, size_factor: float
+) -> float:
+    """Duplicate-suppression radius: the old floor (frac of the long side,
+    at least 1.5 px), raised to size_factor x the figure's marker size when
+    that is known -- a large patterned marker fires several peaks."""
+    base = max(1.5, frac * max(image_size))
+    if marker_px is None:
+        return base
+    return max(base, size_factor * marker_px)
+
+
+def suppress_same_series_duplicates(
+    dets: list[Detection], radius: float, embed_threshold: float
+) -> list[Detection]:
+    """Strongest-first: drop a detection closer than `radius` to a kept one
+    whose embedding is within `embed_threshold` (the same series) -- the
+    extra peaks of one large or patterned marker. A close detection of
+    another series (coincident markers) stays. Input order is kept."""
+    kept: list[Detection] = []
+    for d in sorted(dets, key=lambda d: -d.score):
+        if all(
+            math.hypot(d.x - k.x, d.y - k.y) >= radius
+            or _dist(d.embedding, k.embedding) > embed_threshold
+            for k in kept
+        ):
+            kept.append(d)
+    keep = {id(d) for d in kept}
+    return [d for d in dets if id(d) in keep]
+
+
+@dataclass(frozen=True)
+class PostConfig:
+    """Detector post-processing. With same_series_frac and frame_margin left
+    None it is method A's pipeline."""
+
+    threshold: float
+    group_threshold: float
+    dup_frac: float = 0.004
+    same_series_frac: float | None = None
+    embed_gate: float = 0.5
+    frame_margin: float | None = None
+    edge_band: float | None = None
+    min_points: int = 2
+
+
+def postprocess(
+    dets: list[Detection],
+    image_size: tuple[int, int],
+    frame: tuple[float, float, float, float] | None,
+    cfg: PostConfig,
+) -> list[dict]:
+    """Detections -> series of pixel points: peak threshold, frame
+    restriction (when a margin is set), frame-edge band (when set), duplicate
+    suppression, same-series suppression at a wider radius (when set),
+    embedding grouping."""
+    kept = [d for d in dets if d.score >= cfg.threshold]
+    if cfg.frame_margin is not None:
+        kept = inside_frame(kept, frame, cfg.frame_margin)
+    if cfg.edge_band is not None:
+        kept = away_from_frame_edges(kept, frame, cfg.edge_band)
+    kept = suppress_duplicates(kept, duplicate_radius(image_size, None, cfg.dup_frac, 0.0))
+    if cfg.same_series_frac is not None:
+        kept = suppress_same_series_duplicates(
+            kept, cfg.same_series_frac * max(image_size), cfg.embed_gate
+        )
+    return pixel_answer(group_into_series(kept, cfg.group_threshold), min_points=cfg.min_points)

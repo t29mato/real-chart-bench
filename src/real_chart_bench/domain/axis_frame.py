@@ -191,3 +191,69 @@ def outward_tick_extent(dark: np.ndarray, frame: Frame) -> tuple[int, int]:
     w = dark.shape[1]
     left = _outward(flipped, w - 1 - x0, int(round(y0)), int(round(y1)), max_len)
     return below, left
+
+
+# --- 方式C: right-hand y axes, merged labels, raised exponents ------------------------------
+
+
+def mirror_frame(frame: Frame, width: int) -> Frame:
+    """The frame in the left-right mirrored image (and back: an involution)."""
+    x0, y0, x1, y1 = frame
+    return (width - 1 - x1, y0, width - 1 - x0, y1)
+
+
+def detect_right_axis_frames(dark: np.ndarray) -> list[Frame]:
+    """Frames whose only y axis is drawn on the right (a bottom-right L), in
+    image coordinates: x1 is the y axis. Found as bottom-left frames of the
+    mirrored image."""
+    w = dark.shape[1]
+    return [mirror_frame(f, w) for f in detect_axis_frames(dark[:, ::-1])]
+
+
+def split_at_widest_gaps(
+    ink: np.ndarray, k: int, min_ratio: float | None = None
+) -> list[tuple[int, int]] | None:
+    """Column spans (x0, x1 exclusive) of k labels run together in one OCR
+    word: cut at the k-1 widest blank gaps between inked columns. None when
+    there are fewer than k-1 gaps, or (min_ratio) when the narrowest cut gap
+    is not min_ratio times wider than the widest gap left uncut -- then the
+    ink holds a different number of labels."""
+    cols = np.flatnonzero(ink.any(axis=0))
+    if cols.size == 0 or k < 1:
+        return None
+    gaps = [(int(b - a - 1), int(a), int(b)) for a, b in zip(cols[:-1], cols[1:], strict=True)
+            if b - a > 1]
+    if len(gaps) < k - 1:
+        return None
+    ranked = sorted(gaps, key=lambda g: -g[0])
+    if min_ratio is not None and k >= 2 and len(ranked) >= k:
+        if ranked[k - 2][0] < min_ratio * ranked[k - 1][0]:
+            return None
+    cuts = ranked[: k - 1]
+    cuts.sort(key=lambda g: g[1])
+    spans, start = [], int(cols[0])
+    for _, a, b in cuts:
+        spans.append((start, a + 1))
+        start = b
+    spans.append((start, int(cols[-1]) + 1))
+    return spans
+
+
+def exponent_span(ink: np.ndarray) -> tuple[int, int, int, int] | None:
+    """Box (x0, y0, x1, y1; ends exclusive) of the raised exponent in the ink
+    of a "10^n" label: the columns right of the base whose ink stops well
+    above the base's baseline. None when nothing is raised."""
+    cols = np.flatnonzero(ink.any(axis=0))
+    if cols.size == 0:
+        return None
+    rows = np.flatnonzero(ink.any(axis=1))
+    lowest = {int(c): int(np.flatnonzero(ink[:, c])[-1]) for c in cols}
+    baseline = max(lowest.values())
+    height = baseline - int(rows[0]) + 1
+    base = [c for c in lowest if lowest[c] >= baseline - 0.15 * height]
+    raised = [c for c in lowest if c > max(base) and lowest[c] < baseline - 0.25 * height]
+    if not raised:
+        return None
+    x0, x1 = min(raised), max(raised) + 1
+    r = np.flatnonzero(ink[:, x0:x1].any(axis=1))
+    return (x0, int(r[0]), x1, int(r[-1]) + 1)
