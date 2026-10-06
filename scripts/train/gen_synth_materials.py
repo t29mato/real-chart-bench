@@ -198,7 +198,10 @@ def bbox_image(bb, height, scale):
 def render(i: int, force: dict | None = None):
     """Draw image i. `force` pins some random choices (style, errorbars, grid,
     inset) after they are drawn, so the rest of image i is unchanged; the
-    tests use it to get isolated plain markers."""
+    tests use it to get isolated plain markers. The stress keys (marker_scale,
+    fillstyle, overlay, dpi_scale, max_px) draw nothing from the random
+    stream, so leaving them out gives the training images unchanged; the
+    detector's stress validation set uses them (marker_detector/gen_stress_val.py)."""
     force = force or {}
     rng = np.random.default_rng(SEED + i)
     font = str(rng.choice(FONTS))
@@ -215,9 +218,11 @@ def render(i: int, force: dict | None = None):
         "axes.formatter.limits": (-5, 6),
     }
     dpi = int(rng.choice([72, 96, 100, 120, 150, 200]))
+    dpi = int(dpi * force.get("dpi_scale", 1.0))
+    max_w, max_h = force.get("max_px", (1280, 1024))
     w_in = float(rng.uniform(3.0, 6.5))
     h_in = float(w_in * rng.uniform(0.6, 1.0))
-    while w_in * dpi > 1280 or h_in * dpi > 1024:
+    while w_in * dpi > max_w or h_in * dpi > max_h:
         dpi = int(dpi * 0.8)
     W, H = round(w_in * dpi), round(h_in * dpi)  # the image size
     w_in, h_in = W / dpi, H / dpi
@@ -235,6 +240,7 @@ def render(i: int, force: dict | None = None):
     errbars = force.get("errorbars", rng.random() < 0.2)
     open_mode = rng.choice(["filled", "open", "mixed"], p=[0.45, 0.3, 0.25])
     ms = float(rng.uniform(3, 11)) * (0.6 if dense else 1.0)
+    ms *= force.get("marker_scale", 1.0)
 
     with plt.rc_context(rc):
         fig = plt.figure(figsize=(w_in, h_in), dpi=dpi * SS)
@@ -257,6 +263,9 @@ def render(i: int, force: dict | None = None):
                       if rng.random() < 0.7 else f"Sample {chr(65 + s)}")
             if filled is False:
                 kw["markerfacecolor"] = "none" if rng.random() < 0.7 else "white"
+            if force.get("fillstyle") and filled is not None:
+                kw["fillstyle"] = force["fillstyle"]
+                kw.pop("markerfacecolor", None)
             if errbars:
                 err = np.abs(y) * rng.uniform(0.02, 0.15) if y_mode == "log" else \
                     np.full(len(y), np.ptp(y) * rng.uniform(0.02, 0.1) + 1e-9)
@@ -265,6 +274,14 @@ def render(i: int, force: dict | None = None):
                 ax.errorbar(x, y, yerr=err, capsize=float(rng.uniform(0, 4)), **kw)
             else:
                 ax.plot(x, y, **kw)
+            if force.get("overlay") and mk not in ("x", "+"):
+                # a cross drawn inside the marker (a patterned marker)
+                # (in white it splits the marker into quarters: "four squares")
+                ax.plot(x, y, marker=force["overlay"], markersize=ms, linestyle="none",
+                        color=force.get("overlay_color", cols[s]),
+                        markeredgewidth=ms * force.get("overlay_width_frac", 0)
+                        or kw["markeredgewidth"],
+                        label="_nolegend_")
             series_meta.append((kw["label"], mk, filled, cols[s], x, y))
 
         # view limits: all data inside, with margins
