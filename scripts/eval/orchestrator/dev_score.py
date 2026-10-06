@@ -37,6 +37,7 @@ def main() -> None:
         print(f"{run}: {len(recs)} figures, pooled pixel F1 {sum(f1s) / len(f1s):.3f}, "
               f"steps {steps:.1f}, finish "
               f"{sum(r['finish'] == 'final' for r in recs)} final / "
+              f"{sum(r['finish'] == 'final-best' for r in recs)} final-best / "
               f"{sum(r['finish'] == 'fallback' for r in recs)} fallback")
 
 

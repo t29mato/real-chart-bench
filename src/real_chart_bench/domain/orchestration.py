@@ -22,6 +22,7 @@ import json
 from dataclasses import dataclass, field
 
 MAX_STEPS = 12
+MAX_RETRIES = 2  # verify-driven redos per figure (検証とやり直し)
 
 
 def action_schema(tools: list[str]) -> dict:
@@ -208,6 +209,18 @@ def result_to_view(result: dict, view_scale: float, max_items: int = 20) -> dict
                             "achromatic": c["achromatic"]} for c in result["colors"]]}
     if kind == "mask":
         return {"fraction_of_image": result["fraction"]}
+    if kind == "verify":
+        v = result.get("verdict") or {}
+        out = {"accept": v.get("accept"), "reasons": v.get("reasons", [])[:8],
+               "score": v.get("score"),
+               "series": [{"index": x["index"], "n": x["n"], "hit": x["hit"],
+                           "shifted": x["null"], "duplicates": x["duplicates"]}
+                          for x in result.get("series", [])[:max_items]],
+               "missed_places": [[round(p[0] * s), round(p[1] * s)] for p in (
+                   [(b["x"], b["y"]) for b in result.get("unexplained", {}).get("blobs", [])]
+                   + [(b["x"], b["y"]) for b in result.get("lookalikes", {}).get("points", [])]
+               )[:max_items]]}
+        return out
     if kind == "overlay":
         return {"series_drawn": [{"id": f"{x['result']}:{x['index']}", "drawn_in":
                                   x["overlay_color"], "n": x["n"]} for x in result["series"]]}
@@ -231,3 +244,49 @@ def fallback_final(results: dict[str, dict], order: list[str], need_calibration:
     series = [{"label": s.get("label") or f"series_{i + 1}", "x": list(s["x"]), "y": list(s["y"])}
               for i, s in enumerate(results[pts[-1]]["series"]) if s["x"]]
     return series, cal
+
+
+# --- 検証とやり直し: the redo loop. verify (domain/verification.py) gives each
+# attempted answer a verdict and a score; these rules -- not the
+# orchestrator's judgement -- decide whether to answer or redo.
+
+
+def answer_key(series_items, calibration: str) -> str:
+    """Which answer an attempt is: the (result, index) pairs named, in any
+    order, labels ignored, and the calibration named."""
+    pairs = sorted({(str(s["from"]), int(s.get("index", -1))) for s in series_items})
+    return json.dumps({"series": pairs, "calibration": calibration or ""})
+
+
+def retry_decision(attempts: list[dict], max_retries: int = MAX_RETRIES) -> dict:
+    """After the latest verified attempt ({"key", "accept", "score"}, in order):
+    accept it when verify accepted it; redo while retries are left; else
+    answer the best-scoring attempt (ties: the earlier)."""
+    left = max(0, max_retries - (len(attempts) - 1))
+    if attempts[-1]["accept"]:
+        return {"action": "accept", "pick": len(attempts) - 1, "retries_left": left}
+    if left > 0:
+        return {"action": "redo", "pick": None, "retries_left": left - 1}
+    best = max(range(len(attempts)), key=lambda i: (attempts[i]["score"], -i))
+    return {"action": "best", "pick": best, "retries_left": 0}
+
+
+def may_answer(attempts: list[dict], key: str, max_retries: int = MAX_RETRIES
+               ) -> tuple[bool, str]:
+    """Whether the answer `key` may be given after these verified attempts:
+    it was verified and accepted, or the retries are used up and it is the
+    best-scoring attempt."""
+    mine = [i for i, a in enumerate(attempts) if a["key"] == key]
+    if not mine:
+        return False, ("run verify on exactly these series (and calibration) before "
+                       "answering")
+    if any(attempts[i]["accept"] for i in mine):
+        return True, "accepted by verify"
+    if len(attempts) <= max_retries:
+        return False, (f"verify said redo; try a different tool or setting and verify again "
+                       f"({max_retries + 1 - len(attempts)} of {max_retries} retries left)")
+    best = max(range(len(attempts)), key=lambda i: (attempts[i]["score"], -i))
+    if attempts[best]["key"] == key:
+        return True, "retries used up; the best-scoring attempt"
+    return False, (f"retries used up; answer the best-scoring attempt (verify #{best + 1}, "
+                   f"score {attempts[best]['score']})")

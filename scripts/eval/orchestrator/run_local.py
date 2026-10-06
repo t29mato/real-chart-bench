@@ -60,14 +60,18 @@ from real_chart_bench.domain.digitizer_tools import (  # noqa: E402
     series_to_values,
 )
 from real_chart_bench.domain.orchestration import (  # noqa: E402
+    MAX_RETRIES,
     MAX_STEPS,
     action_schema,
+    answer_key,
     assemble_final,
     fallback_final,
     params_to_image,
     parse_action,
     result_to_view,
+    retry_decision,
 )
+from real_chart_bench.domain.verification import Thresholds  # noqa: E402
 
 DETS = Path.home() / ".cache/real-chart-bench/orchestrator/dets"
 CACHE = Path.home() / ".cache/real-chart-bench/orchestrator"
@@ -105,6 +109,15 @@ CONDITION_TEXT = {
         'calibration, so the final action\'s calibration can be "".'
     ),
 }
+# scripted policy with --verify: what a redo tries next (fixed in advance)
+SCRIPT_LADDER = [{}, {"long_side": 1280}, {"threshold": 0.25}]
+VERIFY_TEXT = (
+    "Your final action is checked by verify: are the points on markers, are there "
+    "marker-like places with no point, do the detector's peaks agree, and (condition 1) do "
+    "the tick labels fit the calibration. If verify says redo, you get its reasons: fix "
+    "them with a different tool, setting or mask and give a new final action. After {R} "
+    "redos the best-checked final is answered."
+)
 PLAN = {
     "noaxis": "(1) tick_calibration; (2) marker_detector with defaults; (3) render_overlay "
     "of both; (4) adjust if needed; (5) final.",
@@ -217,10 +230,14 @@ class Conv:
     generation_tokens: int = 0
     model_seconds: float = 0.0
     tool_seconds: float = 0.0
+    verify_on: bool = False
+    attempts: list = field(default_factory=list)  # verified finals (検証とやり直し)
 
 
 def system_prompt(cond: str, conv: Conv, report: str) -> str:
     text = (HERE / "prompt.md").read_text()
+    if conv.verify_on:
+        text = text.rstrip("\n") + "\n\n" + VERIFY_TEXT.replace("{R}", str(MAX_RETRIES)) + "\n"
     return (text.replace("{VIEW_W}", str(conv.view_size[0]))
             .replace("{VIEW_H}", str(conv.view_size[1]))
             .replace("{CALIBRATION_TOOL}", CAL_TOOL[cond])
@@ -258,15 +275,19 @@ def messages_for(conv: Conv) -> list[dict]:
 
 
 def scripted_turn(conv: Conv) -> str:
-    """No model: calibrate (cond. 1), detector with defaults, final with all."""
+    """No model: calibrate (cond. 1), detector with defaults, final with all.
+    With --verify, a redo runs the next detector setting of SCRIPT_LADDER."""
     base = {"thought": "", "params": {}, "calibration": "", "series": []}
     ids = conv.order
     if conv.cond == "noaxis" and not ids:
         return json.dumps({**base, "action": "call", "tool": "tick_calibration",
                            "params": {"mode": "auto"}})
-    if not any(conv.results[r].get("kind") == "points" for r in ids):
-        return json.dumps({**base, "action": "call", "tool": "marker_detector"})
-    pts = [r for r in ids if conv.results[r].get("kind") == "points"][-1]
+    pts_ids = [r for r in ids if conv.results[r].get("kind") == "points"]
+    redo = conv.verify_on and len(conv.attempts) >= len(pts_ids)
+    if not pts_ids or (redo and len(pts_ids) < len(SCRIPT_LADDER)):
+        return json.dumps({**base, "action": "call", "tool": "marker_detector",
+                           "params": SCRIPT_LADDER[len(pts_ids)]})
+    pts = pts_ids[-1]
     cal = ids[0] if conv.cond == "noaxis" else ""
     return json.dumps({**base, "action": "final", "tool": "", "calibration": cal,
                        "series": [{"from": pts, "index": -1, "label": ""}]})
@@ -294,6 +315,13 @@ def apply_turn(conv: Conv, text: str, tools: list[str]) -> dict | None:
             conv.log.append({"step": conv.steps, "final": {"calibration": act.calibration,
                                                            "series": list(act.series)},
                              "thought": act.thought})
+            if conv.verify_on:  # verify decides: accept, or redo (検証とやり直し)
+                cal = act.calibration if need_cal else ""
+                return {"rid": None, "tool": "verify", "final": picked,
+                        "key": answer_key(act.series, cal),
+                        "params": {"series": [{"from": s["from"], "index": s["index"]}
+                                              for s in act.series],
+                                   **({"calibration": cal} if cal else {})}}
             finish(conv, "final", picked)
         except ValueError as exc:
             conv.log.append({"step": conv.steps, "final_error": str(exc),
@@ -307,8 +335,43 @@ def apply_turn(conv: Conv, text: str, tools: list[str]) -> dict | None:
     return {"rid": rid, "tool": act.tool, "params": params}
 
 
+def receive_verify(conv: Conv, job: dict, out: dict) -> None:
+    """A final action came back from verify: the retry rules decide."""
+    entry = conv.log[-1]
+    if out["error"]:  # verify itself failed: the final stands as before
+        entry["verify_error"] = out["error"]
+        finish(conv, "final", job["final"])
+        return
+    v = out["result"]["verdict"]
+    conv.attempts.append({"key": job["key"], "accept": v["accept"], "score": v["score"],
+                          "picked": job["final"]})
+    dec = retry_decision(conv.attempts)
+    entry["verify"] = {"accept": v["accept"], "score": v["score"], "reasons": v["reasons"],
+                       "hints": v["hints"], "decision": dec["action"]}
+    if dec["action"] == "accept":
+        finish(conv, "final", conv.attempts[dec["pick"]]["picked"])
+    elif dec["action"] == "best":
+        finish(conv, "final-best", conv.attempts[dec["pick"]]["picked"])
+    else:
+        view = result_to_view(out["result"], conv.view_scale)
+        conv.turns.append(("user", (
+            f"verify: redo. {'; '.join(v['reasons'])}. What looks wrong: "
+            f"{'; '.join(v['hints']) or 'nothing specific'}. Places that look like markers but "
+            f"have no point (view pixels): {view['missed_places'][:10]}. Fix it with a "
+            "different tool, setting or mask, then give a new final action "
+            f"({dec['retries_left'] + 1} redos left)."), None))
+
+
+def best_attempt(conv: Conv):
+    i = max(range(len(conv.attempts)), key=lambda k: (conv.attempts[k]["score"], -k))
+    return conv.attempts[i]["picked"]
+
+
 def receive(conv: Conv, job: dict, out: dict) -> None:
     conv.tool_seconds += out["seconds"]
+    if job.get("final") is not None:
+        receive_verify(conv, job, out)
+        return
     rid = job["rid"]
     entry = conv.log[-1]
     if out["error"]:
@@ -331,6 +394,9 @@ def close_turn(conv: Conv) -> None:
         return
     if left <= 0:
         conv.log.append({"step": conv.steps, "cap": True})
+        if conv.attempts:  # verified finals exist: the best-scoring one
+            finish(conv, "final-best", best_attempt(conv))
+            return
         picked = fallback_final(conv.results, conv.order, conv.cond == "noaxis")
         finish(conv, "fallback", picked)
         return
@@ -384,15 +450,16 @@ class VlmEngine:
 # ------------------------------------------------------------------ run
 
 
-def run_condition(cond: str, tasks: list[dict], engine, pool, out_dir: Path, policy: str
-                  ) -> list[dict]:
+def run_condition(cond: str, tasks: list[dict], engine, pool, out_dir: Path, policy: str,
+                  verify: bool = False) -> list[dict]:
     tools = TOOLS_BY_COND[cond]
     schema = action_schema(tools)
     convs = []
     for t in tasks:
         w, h = Image.open(t["image"]).size
         s = min(1.0, VIEW_LONG_SIDE / max(w, h))
-        c = Conv(task=t, cond=cond, view_scale=s, view_size=(round(w * s), round(h * s)))
+        c = Conv(task=t, cond=cond, view_scale=s, view_size=(round(w * s), round(h * s)),
+                 verify_on=verify)
         c.turns.append(("user", f"Task {t['fig']}. Find the data points of every marker "
                         "series in the main plot.", str(t["image"])))
         convs.append(c)
@@ -441,7 +508,8 @@ def run_condition(cond: str, tasks: list[dict], engine, pool, out_dir: Path, pol
                "prompt_tokens": c.prompt_tokens, "generation_tokens": c.generation_tokens,
                "seconds": round(c.model_seconds + c.tool_seconds, 2),
                "model_seconds": round(c.model_seconds, 2),
-               "tool_seconds": round(c.tool_seconds, 2)}
+               "tool_seconds": round(c.tool_seconds, 2),
+               "verify": [{k: a[k] for k in ("key", "accept", "score")} for a in c.attempts]}
         if c.final is None:
             rec["parse_error"] = "no answer: no points result" + (
                 " or calibration" if cond == "noaxis" else "")
@@ -469,6 +537,8 @@ def main() -> None:
     ap.add_argument("--dev", type=int, default=0, help="n Starrydata validation figures")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--workers", type=int, default=12)
+    ap.add_argument("--verify", action="store_true",
+                    help="check each final with verify; its verdict decides redo (検証とやり直し)")
     args = ap.parse_args()
     root = CACHE / "dev-runs" if args.dev else REPO / "data/local_orchestrator_runs"
     out_dir = root / args.run
@@ -488,6 +558,8 @@ def main() -> None:
         "python": platform.python_version(),
         "cpu_tool_workers": args.workers,
         "prompt": "scripts/eval/orchestrator/prompt.md",
+        "verify": ({"thresholds": Thresholds().as_dict(), "max_retries": MAX_RETRIES,
+                    "prompt_addition": VERIFY_TEXT} if args.verify else None),
         **(engine.env() if engine else {}),
     }
     (out_dir / "env.json").write_text(json.dumps(env, indent=2, ensure_ascii=False) + "\n")
@@ -498,8 +570,9 @@ def main() -> None:
             if args.limit:
                 tasks = tasks[: args.limit]
             t0 = time.time()
-            recs = run_condition(cond, tasks, engine, pool, out_dir, args.policy)
-            fin = {k: sum(r["finish"] == k for r in recs) for k in ("final", "fallback")}
+            recs = run_condition(cond, tasks, engine, pool, out_dir, args.policy, args.verify)
+            fin = {k: sum(r["finish"] == k for r in recs)
+                   for k in ("final", "final-best", "fallback")}
             print(f"[{cond}] {len(recs)} figures in {time.time() - t0:.0f}s, {fin}, "
                   f"answered {sum(r['parsed'] is not None for r in recs)}", flush=True)
         print(f"書き出し: {out_dir}", flush=True)

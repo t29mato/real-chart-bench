@@ -43,7 +43,8 @@ def _store():
 
 def test_tools_listed():
     assert TOOLS == ("dominant_colors", "mask", "symbol_extract", "line_extract",
-                     "marker_detector", "tick_calibration", "to_values", "render_overlay")
+                     "marker_detector", "tick_calibration", "to_values", "render_overlay",
+                     "verify")
 
 
 def test_colors_then_symbol_extract(chart):
@@ -146,3 +147,43 @@ def test_render_overlay_writes_png(chart, tmp_path):
     im = Image.open(o["path"])
     assert im.size == (100, 60)
     assert o["series"] == [{"result": "p", "index": 0, "overlay_color": "#e6194b", "n": 3}]
+
+
+def test_verify_reports_signals_and_verdict(chart):
+    tb = ToolBox(chart, given_calibration={
+        "x": {"scale": "linear", "ticks": [[20, 0], [190, 17]]},
+        "y": {"scale": "linear", "ticks": [[100, 0], [10, 9]]}, "frame": None,
+        "source": "person"})
+    results, resolve = _store()
+    results["c"] = tb.run("tick_calibration", {}, resolve)
+    results["p"] = tb.run("symbol_extract", {"color": "#dc1414", "distance_pct": 5}, resolve)
+    v = tb.run("verify", {"series": [{"from": "p", "index": -1}], "calibration": "c",
+                          "ocr": False}, resolve)
+    assert v["kind"] == "verify"
+    assert v["series"][0]["hit"] == 1.0
+    assert v["unexplained"]["n"] == 2  # the blue squares
+    assert v["verdict"]["accept"] is False
+    assert "calibration" not in v  # the person's calibration is not checked
+    assert "detector" not in v  # no detection cache here
+    # mask the squares out: accepted
+    v = tb.run("verify", {"series": [{"from": "p", "index": -1}], "calibration": "c",
+                          "ocr": False, "mask": {"exclude": [[50, 20, 70, 40],
+                                                             [140, 60, 160, 80]]}}, resolve)
+    assert v["unexplained"]["n"] == 0 and v["verdict"]["accept"]
+    with pytest.raises(ToolError, match="series"):
+        tb.run("verify", {"ocr": False}, resolve)
+
+
+def test_verify_checks_a_manual_calibration(chart):
+    tb = ToolBox(chart, allow_auto_calibration=False)
+    results, resolve = _store()
+    results["c"] = tb.run("tick_calibration", {"mode": "manual",
+                                               "x": {"scale": "linear",
+                                                     "ticks": [[20, 0], [190, 17]]},
+                                               "y": {"scale": "linear",
+                                                     "ticks": [[100, 9], [10, 0]]}}, resolve)
+    results["p"] = tb.run("symbol_extract", {"color": "#dc1414", "distance_pct": 5}, resolve)
+    v = tb.run("verify", {"series": [{"from": "p", "index": -1}], "calibration": "c",
+                          "ocr": False}, resolve)
+    assert v["calibration"]["y"]["direction_ok"] is False
+    assert any("wrong way" in r for r in v["verdict"]["reasons"])

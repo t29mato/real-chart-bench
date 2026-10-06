@@ -20,8 +20,10 @@ Word = tuple[str, float, float, float, float, float]  # text, x0, y0, x1, y1, co
 _WHITELIST = "0123456789.-−^Ee"
 
 
-def ocr_words(gray: np.ndarray, *, upscale: int = 3, psm: int = 11) -> list[Word]:
-    """Words in a uint8 grayscale strip, boxes in the strip's pixels."""
+def ocr_words(gray: np.ndarray, *, upscale: int = 3, psm: int = 11,
+              whitelist: str | None = _WHITELIST) -> list[Word]:
+    """Words in a uint8 grayscale strip, boxes in the strip's pixels.
+    `whitelist` None reads any text (legend entries, annotations)."""
     if gray.size == 0 or gray.shape[0] < 4 or gray.shape[1] < 4:
         return []
     img = Image.fromarray(gray).resize(
@@ -33,9 +35,9 @@ def ocr_words(gray: np.ndarray, *, upscale: int = 3, psm: int = 11) -> list[Word
     canvas.paste(img, (pad, pad))
     buf = io.BytesIO()
     canvas.save(buf, format="PNG")
+    wl = ["-c", f"tessedit_char_whitelist={whitelist}"] if whitelist else []
     out = subprocess.run(
-        ["tesseract", "stdin", "stdout", "--psm", str(psm), "-l", "eng",
-         "-c", f"tessedit_char_whitelist={_WHITELIST}", "tsv"],
+        ["tesseract", "stdin", "stdout", "--psm", str(psm), "-l", "eng", *wl, "tsv"],
         input=buf.getvalue(), capture_output=True, check=False, timeout=60,
     )
     words: list[Word] = []

@@ -145,6 +145,18 @@ def test_result_to_view_is_compact_and_scaled():
                                                          "n": 2}]}
 
 
+def test_result_to_view_of_verify():
+    res = {"kind": "verify", "verdict": {"accept": False, "reasons": ["r"], "score": 0.5},
+           "series": [{"index": 0, "n": 3, "hit": 1.0, "null": 0.1, "duplicates": 0,
+                       "color": "#000000"}],
+           "unexplained": {"blobs": [{"x": 10.0, "y": 20.0}]},
+           "lookalikes": {"points": [{"x": 30.0, "y": 40.0}]}}
+    assert result_to_view(res, 0.5) == {
+        "accept": False, "reasons": ["r"], "score": 0.5,
+        "series": [{"index": 0, "n": 3, "hit": 1.0, "shifted": 0.1, "duplicates": 0}],
+        "missed_places": [[5, 10], [15, 20]]}
+
+
 def test_fallback_takes_last_points_and_last_good_calibration():
     results = {"r1": _cal(), "r2": _pts(A), "r3": _pts(B, EMPTY), "r4": _pts(EMPTY),
                "r5": _cal(ok=False)}
