@@ -498,6 +498,58 @@ for _env in sorted(LOCAL_MODEL_ARCHIVE.glob("*/noaxis.jsonl")):
             f"生出力は data/local_model_runs/{_run}/noaxis.jsonl。"
         ),
     }
+# docs/design/local-model.md 方式D: an orchestrator (local VLM, or a fixed
+# script as the check) chooses and configures fixed tools
+# (adapter/orchestrator_tools.py); every number comes from a tool.
+# Condition 1: values through the calibration it chose (printed space);
+# condition 2: pixel points, converted by the scorer through the person's
+# tick calibration as for the detector rows. One run dir per run in
+# data/local_orchestrator_runs/<run>/ (scripts/eval/orchestrator/run_local.py).
+LOCAL_ORCH_ARCHIVE = REPO / "data/local_orchestrator_runs"
+_ORCH_NOTES = (
+    "方式D(docs/design/local-model.md「方式D: 司令塔 + 道具」)。"
+    "司令塔は道具の選択と設定だけを行い、答えの数値はすべて道具"
+    "(starry-digitizer の Symbol Extract / Line Extract の移植、方式A の検出器、"
+    "方式C の目盛 OCR、色の候補、マスク、重ね描き)から来る。"
+    "司令塔は最後に、どの道具の結果のどの系列を答えにするかを名指しする。"
+    "1図あたり最大 12 手、終わらない図は固定の代替(最後の抽出結果の全系列)。"
+    "プロンプトは scripts/eval/orchestrator/prompt.md、生出力・手順の記録は "
+)
+for _env in sorted(LOCAL_ORCH_ARCHIVE.glob("*/env.json")):
+    _run = _env.parent.name
+    _meta = json.loads(_env.read_text())
+    if (_env.parent / "noaxis.jsonl").exists():
+        CONDITIONS[f"local-orch-{_run}-noaxis"] = {
+            **CONDITIONS["local-cuda-bf16-noaxis"],
+            "answers_in_printed_space": True,
+            "local_archive": LOCAL_ORCH_ARCHIVE,
+            # the scripted policy only checks the loop (it is 方式C's -posta row again)
+            **({"diagnostic": True} if _meta.get("policy") == "scripted" else {}),
+            "models": {_run: _meta["display_name"]},
+            "suffix": "-local-orch-noaxis",
+            "name_suffix": "（司令塔 + 道具、軸レンジなし、ローカル）",
+            "label": "軸レンジを与えない条件・司令塔 + 道具(方式D、採点対象全図)",
+            "notes": _ORCH_NOTES + f"data/local_orchestrator_runs/{_run}/。"
+            "主条件1: 司令塔が選んだ目盛校正(自動 OCR か、司令塔が読んだ目盛)で"
+            "値に直した。値は印字空間。",
+        }
+    if (_env.parent / "pixpts_px.jsonl").exists():
+        CONDITIONS[f"local-orch-{_run}-pixcal"] = {
+            **CONDITIONS["local-cuda-bf16-pixcal"],
+            "v2": "pixpts_px",
+            "version_tag": "pixcal",
+            "pixel_answer": "pixel",
+            "answers_in_printed_space": True,
+            "local_archive": LOCAL_ORCH_ARCHIVE,
+            **({"diagnostic": True} if _meta.get("policy") == "scripted" else {}),
+            "models": {_run: _meta["display_name"]},
+            "suffix": "-local-orch-pixcal",
+            "name_suffix": "（司令塔 + 道具、画素座標を目盛校正で換算、ローカル）",
+            "label": "目盛のピクセル位置を与えた条件・司令塔 + 道具(方式D、採点対象全図)",
+            "notes": _ORCH_NOTES + f"data/local_orchestrator_runs/{_run}/。"
+            "主条件2: 答えは画素座標で、値への変換は採点側で人の目盛校正"
+            "(data/verified_pairs/tick_calibration.json)で行った。",
+        }
 # docs/design/local-model.md 方式B: Qwen3.5-9B + a QLoRA adapter trained on
 # synthetic / Starrydata charts (scripts/train/vlm_lora/), served by vLLM's LoRA
 # support (scripts/eval/local_vlm/worker_ft.py). Same prompt, schema and
@@ -536,6 +588,44 @@ for _c, _base in (("noaxis", "local-cuda-bf16-noaxis"), ("pixcal", "local-cuda-b
         "label": ("軸レンジを与えない条件" if _c == "noaxis" else "目盛のピクセル位置を与えた条件")
         + "（Qwen3.5-9B + QLoRA、RTX 4090 + vLLM、採点対象全図）",
         "notes": LOCAL_FT_NOTES,
+    }
+# 方式D with Claude as the orchestrator: the upper bound of choosing the fixed
+# tools. Sealed dirs by scripts/eval/prepare_orchestrator_claude.py; the agent
+# may only run the `tool` command and look at images / overlays. Answers in
+# data/llm_run_orchestrator/<noaxis|pixpts_px>/<model>/<part>.predictions.json
+# (archive_orchestrator_claude.py): values (printed space) in condition 1,
+# image pixels converted through the person's calibration in condition 2.
+ORCH_CLAUDE_ARCHIVE = REPO / "data/llm_run_orchestrator"
+for _c, _v2, _src in (("noaxis", "noaxis", "data/llm_run_v3"),
+                      ("pixcal", "pixpts_px", "data/llm_run_pixcal")):
+    CONDITIONS[f"orch-claude-{_c}"] = {
+        "v2": _v2,
+        "run_dir": REPO / _src,
+        "pred_root": ORCH_CLAUDE_ARCHIVE,
+        "rescale": {},
+        "answers_in_printed_space": True,
+        **({"pixel_answer": "pixel", "version_tag": "pixcal"} if _c == "pixcal" else {}),
+        "models": {m: label for m, label in MODELS_V2.items()
+                   if (ORCH_CLAUDE_ARCHIVE / _v2 / m).is_dir()},
+        "pred_parts": ["part1", "part2"],
+        "suffix": f"-orch-{_c}",
+        "name_suffix": "（司令塔 + 道具のみ、"
+        + ("軸レンジなし" if _c == "noaxis" else "目盛のピクセル位置あり") + "）",
+        "label": ("軸レンジを与えない条件" if _c == "noaxis" else "目盛のピクセル位置を与えた条件")
+        + "・Claude が司令塔、決まった道具だけを使う(方式D の上限、採点対象全図)",
+        "notes": (
+            "方式D(docs/design/local-model.md「方式D: 司令塔 + 道具」)の上限を測る行。"
+            "Claude Code のサブエージェントを封印ディレクトリで起動し、用意した道具コマンド"
+            "(starry-digitizer の Symbol Extract / Line Extract の移植、方式A の検出器、"
+            "方式C の目盛 OCR、色の候補、マスク、重ね描き)と画像・重ね描きを見ることだけを許した。"
+            "自分で画像処理のコードを書くことと、答えの数値を手で打つことは指示で禁止した"
+            "(scripts/eval/orchestrator/claude_prompt.md)。答えは道具の answer コマンドが"
+            "保存済みの道具の結果から書く。"
+            + ("目盛は自動 OCR か、司令塔が読んだ目盛(manual)で校正し、値は印字空間。"
+               if _c == "noaxis" else
+               "答えは画素座標で、値への変換は採点側で人の目盛校正で行った。")
+            + "推論時の利用だけで、学習には使わない。回答は data/llm_run_orchestrator/。"
+        ),
     }
 # design 7.81: GPT through the Codex CLI (ChatGPT sign-in, no API key), the
 # same sealed-directory setup and v3 prompt as the Claude agents. A pilot on a
@@ -696,6 +786,34 @@ def _local_run_block(
             if key[i]["figure_id"] in scoreable
         ]
 
+    if env.get("kind") == "orchestrator":
+        recs = [json.loads(line) for line in
+                (archive / model_id / f"{condition}.jsonl").read_text().splitlines() if line]
+        recs = [r for r in recs if key[r["fig"]]["figure_id"] in scoreable]
+        return {
+            "raw_output": f"{archive.relative_to(REPO)}/{model_id}/{condition}.jsonl",
+            "transcripts": f"{archive.relative_to(REPO)}/{model_id}/transcripts/",
+            "policy": env["policy"],
+            "model_repo_id": env.get("repo_id"),
+            "model_revision": env.get("revision"),
+            "engine": f"vLLM {env['vllm']}, torch {env['torch']}" if env.get("vllm") else None,
+            "hardware": f"{env['gpu']} (24GB) + CPU tools, Linux" if env.get("gpu")
+            else "CPU, Linux",
+            "max_steps": env["max_steps"],
+            "view_long_side": env.get("view_long_side"),
+            "temperature": env.get("temperature"),
+            "enable_thinking": env.get("enable_thinking"),
+            "constrained_json_schema": env.get("constrained_json_schema"),
+            "finished_by_final_action": sum(r.get("finish") == "final" for r in recs),
+            "finished_by_fallback": sum(r.get("finish") == "fallback" for r in recs),
+            "steps_per_figure_mean": round(sum(r.get("n_steps", 0) for r in recs)
+                                           / max(1, len(recs)), 2),
+            "seconds_per_figure": _seconds_stats(run, key, scoreable),
+            "tokens_per_figure": _token_stats(run, key, scoreable),
+            "n_scored_figures_without_answer": len(figs(run.parse_failures))
+            + len(figs(run.errors)),
+            "runtime_errors": figs(run.errors),
+        }
     if env.get("kind") == "detector":
         return {
             "raw_output": f"{archive.relative_to(REPO)}/{model_id}/{condition}.jsonl",
