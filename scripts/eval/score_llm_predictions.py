@@ -690,6 +690,56 @@ for _c, _src, _label in (
         "label": f"{_label}の条件(GPT、Codex CLI、採点対象全図)",
         "notes": CODEX_NOTES,
     }
+# local-model.md "ローカルエージェント": the same Codex CLI and sealed
+# directories, the model served by Ollama on this machine (nothing leaves it)
+CODEX_LOCAL_MODELS = {"qwen3.8-27b": "Qwen3.8-27B Q4_K_M (Codex CLI + Ollama)"}
+CODEX_LOCAL_NOTES = (
+    "OpenAI Codex CLI 0.160.0 をローカルモデルで実行した(2026-10-06、RTX 4090 1枚)。"
+    "codex exec --oss --local-provider ollama -m qwen3.8-27b-100k:latest"
+    "(Ollama の qwen3.8:27b Q4_K_M、文脈 102,400 トークン)"
+    " -c model_context_window=102400 -c model_reasoning_effort=medium -s workspace-write"
+    "(書き込みは作業ディレクトリのみ、シェルのネットワークなし。モデルへの接続は codex 本体が"
+    "サンドボックスの外から localhost の Ollama に行う)。CODEX_HOME は別ディレクトリ。"
+    "図・タスク・fig_NNN の名前・指示文は GPT の Codex 行と同一(prepare_llm_run_codex.py)。"
+    "scripts/eval/run_codex_local_batch.sh。回答・イベントログは data/llm_run_codex/。"
+    "local-model.md「ローカルエージェント」。"
+)
+CONDITIONS["codex-local-pilot10-pixcal"] = {
+    "v2": "pixcal",
+    "run_dir": REPO / "data/llm_run_codex/pilot10-pixcal",
+    "pred_root": REPO / "data/llm_run_codex",
+    "rescale": {},
+    "execution": "local",
+    "models": CODEX_LOCAL_MODELS,
+    "pred_parts": ["pilot10"],
+    "subset_tag": "codex-local-pilot10-pixcal",
+    "suffix": "-codex-local-pilot10-pixcal",
+    "name_suffix": "（Codex CLI + ローカルモデル、目盛のピクセル位置あり、10図の試行）",
+    "label": "Codex CLI + ローカルモデルの試行(pixcal の10図)",
+    "notes": CODEX_LOCAL_NOTES,
+}
+# batches of ~12 figures (a 100k context); pixcal's first ten are the pilot
+CODEX_LOCAL_PARTS = {
+    "noaxis": [f"part{i}" for i in range(1, 9)],
+    "pixcal": ["pilot10"] + [f"part{i}" for i in range(1, 8)],
+}
+for _c, _src, _label in (
+    ("noaxis", "data/llm_run_v3", "軸レンジなし"),
+    ("pixcal", "data/llm_run_pixcal", "目盛のピクセル位置あり"),
+):
+    CONDITIONS[f"codex-local-{_c}"] = {
+        "v2": _c,
+        "run_dir": REPO / _src,
+        "pred_root": REPO / "data/llm_run_codex",
+        "rescale": {},
+        "execution": "local",
+        "models": CODEX_LOCAL_MODELS,
+        "pred_parts": CODEX_LOCAL_PARTS[_c],
+        "suffix": f"-codex-local-{_c}",
+        "name_suffix": f"（Codex CLI + ローカルモデル、{_label}、RTX 4090）",
+        "label": f"{_label}の条件(ローカルモデル、Codex CLI、採点対象全図)",
+        "notes": CODEX_LOCAL_NOTES,
+    }
 DIAGNOSTIC_VERSION_SUFFIX = "-diagnostic-no-image-tools"
 V3_NOTES = (
     "Claude Code のサブエージェントとして起動(2026-10-04、"
@@ -1127,7 +1177,7 @@ def main() -> None:
             "model_name": model_name + cond["name_suffix"],
             # where the model ran (design §7.69): the deployment question --
             # a local row needs no data to leave the machine
-            "execution": "local" if cond.get("local") else "cloud",
+            "execution": cond.get("execution") or ("local" if cond.get("local") else "cloud"),
             "dataset_version": (
                 f"v0-eval-pilot-n{len(reg_scoreable)}{gt_rev}-llm-subset-"
                 f"n{len(items)}-{cond['subset_tag']}"

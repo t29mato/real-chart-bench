@@ -10,7 +10,8 @@ numbers stay reproducible after the logs are gone:
       run (the owner's Mac) and the 2026-09 runs are "not recorded".
   codex.json -- each Codex session (data/llm_run_codex/ event logs name it):
       the final cumulative token usage and the active time summed over its
-      turns (task_started -> task_complete), from ~/.codex/sessions. A turn
+      turns (task_started -> task_complete), from ~/.codex/sessions (and the
+      local-model runs' separate CODEX_HOME). A turn
       that died on a server error still counts its tokens and time.
 
 Local VLMs and chart-to-table models are not collected here: their per-figure
@@ -32,7 +33,12 @@ OUT = REPO / "data/run_costs"
 TRANSCRIPTS = pathlib.Path.home() / ".claude/projects" / (
     "-" + str(REPO).strip("/").replace("/", "-")
 )
-CODEX_SESSIONS = pathlib.Path.home() / ".codex/sessions"
+# the user's Codex home (ChatGPT runs) and the separate one the local-model
+# runs use (run_codex_local_batch.sh)
+CODEX_SESSIONS = (
+    pathlib.Path.home() / ".codex/sessions",
+    pathlib.Path.home() / ".cache/real-chart-bench/codex-local/home/sessions",
+)
 FULL = {
     "opus": "claude-opus-5-5",
     "sonnet": "claude-sonnet-5-5",
@@ -90,7 +96,7 @@ def _ts(s: str) -> datetime:
 def _session(thread_id: str) -> dict | None:
     """Active time (task_started -> task_complete, summed over turns) and the
     session's final cumulative token usage, from Codex's own session log."""
-    files = list(CODEX_SESSIONS.rglob(f"*{thread_id}*.jsonl"))
+    files = [f for root in CODEX_SESSIONS for f in root.rglob(f"*{thread_id}*.jsonl")]
     if not files:
         return None
     total, start, usage = 0.0, None, {}

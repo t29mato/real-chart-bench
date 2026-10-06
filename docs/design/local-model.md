@@ -708,3 +708,72 @@ scripts/eval/orchestrator/run_local.sh --run qwen3.5-9b-orch          # 94 図 �
   - 採点では、図ごとに答えの値がどちらの空間にあるかを、値の範囲だけで判定して換算した(`adapter/printed_space.answer_to_printed_if_old`、テストあり)。
   - 判定の結果: 12図は旧ルール、2図(45356、45360)は印字どおりだった。
   - 判定に点数は使っていない。今後の封印タスクは、印字どおりの単一ルールで作る。
+
+## ローカルエージェント(Codex + ローカルモデル)
+
+2026-10-06〜、統括の依頼。問い: クラウドのエージェント(Claude / GPT)と同じやり方 — 画像処理のコードを書き、目盛から校正し、
+拡大して確かめる — を、**機械の外に何も出さずに**ローカルの VLM でできるか。
+
+### 構成(動いたもの)
+
+```mermaid
+flowchart LR
+  P[prepare_llm_run_codex.py<br/>GPT の Codex 行と同じ図・タスク・指示文] --> D[封印ディレクトリ]
+  D --> C["codex exec --oss --local-provider ollama<br/>-m qwen3.8-27b-100k:latest<br/>-s workspace-write"]
+  C -- "localhost:11434(codex 本体から、サンドボックスの外)" --> O[Ollama<br/>Qwen3.8-27B Q4_K_M<br/>文脈 102,400]
+  C --> R[predictions.json] --> A[data/llm_run_codex/] --> S[score_llm_predictions.py<br/>codex-local-* 条件]
+```
+
+- **Codex CLI 0.160 + Ollama** で動いた(手順の1つ目)。vLLM の Qwen3.5-9B(手順の2つ目)は試していない。
+- モデルは Ollama の `qwen3.8:27b`(Q4_K_M、17 GB、Apache-2.0、vision・tools 対応)の文脈 100k 版 `qwen3.8-27b-100k:latest`。
+  RTX 4090 に全層が載る(VRAM 20.8 GB)。`-m` にはタグまで書く(`:latest` がないと Codex が pull しようとして失敗する)。
+- Codex のモデル情報にこのモデルはなく、「fallback metadata」の警告が出る。文脈長は `-c model_context_window=102400` で教えた
+  (これがないと Codex の自動要約が働く前に Ollama 側で文脈があふれる)。推論レベルは GPT 行と同じく `-c model_reasoning_effort=medium`。
+- **CODEX_HOME は別にした**(`~/.cache/real-chart-bench/codex-local/home`)。オーナーの `~/.codex`(ChatGPT ログインと config.toml)には触れない。
+  セッションログはその `sessions/` に残り、`collect_run_costs.py` はそこも読む。
+- **サンドボックスで許可したものはない。** モデルへの接続は codex 本体(サンドボックスの外)が localhost の Ollama に対して行う。
+  サンドボックスに入るのはモデルが実行するシェルコマンドだけで、そのネットワークは GPT 行と同じく遮断のまま(`network_access: false`)。
+- スクリプト: `scripts/eval/run_codex_local_batch.sh`(1バッチ)、`resume_codex_local_batch.sh`(再開)、
+  `run_codex_local_batches.sh`(順に実行。GPU ロックはセッションごとに取り、終わるたびにモデルを降ろす)。
+
+### 画像がモデルに届くか(確認済み)
+
+4桁の数字(4729)を描いた PNG で2通り確かめた。どちらも正しく読んだ。
+1. `codex exec -i number.png -- "What number ..."`(`-i` は複数値を取るので、プロンプトの前に `--` が要る)。
+2. 画像を添付せず「カレントディレクトリの number.png を見て」と頼む。セッションログに `view_image` の呼び出しと `input_image` があり、
+   Codex の画像閲覧ツール経由で Ollama のモデルに画像が届いた。ベンチマークの実行はこちらの経路を使う。
+
+### 10図の試行(pixcal、GPT の Codex 行と同じ固定シード)
+
+| 同じ10図(密な1図を除く9図で点 F1) | 点 F1(τ=2%) |
+|---|---|
+| **Qwen3.8-27B Q4(Codex CLI + Ollama、ローカル)** | **0.941** |
+| Claude Opus 5.5 / Sonnet 5.5(pixcal) | 0.950 |
+| Claude Fable 5.1(pixcal) | 0.948 |
+| 検出器 markernet-r34 synth+real(pixcal) | 0.847 |
+| GPT-6.1-Sol(Codex CLI、pixcal) | 0.785 |
+| Qwen3.8-27B 8bit 単発(v3、軸レンジなし) | 0.660 |
+| Qwen3.5-9B bf16 単発(pixcal) | 0.302 |
+
+- 10図すべてに回答した(34系列、453点)。summary_score は 0.978。
+- 5166-23909 は 0.571 で、Claude 上位と同じ値(正解データ側の問題の可能性、§7.81)。
+- **やり方はクラウドのエージェントと同じだった。** 目測で値を打ち込むことはしていない。
+  - 最初に全図を `view_image` で見て、系列・マーカーの形・凡例の位置を把握した。
+  - Pillow / numpy / scipy(`ndimage.label`、`binary_fill_holes`)で色マスクと連結成分を作るライブラリ(`markerlib.py`)を書き、図ごとの検出スクリプトを足した。
+  - 重なったマーカーは、列ごとに画素の色の帯を数えて中心を決めた。凡例を検出から外した。
+  - 拡大した切り抜き(`/tmp/f66_zoom2.png` など)を作って `view_image` で見直した(56回)。検出点を描き込んだ重ね合わせ画像は作らなかった。
+  - 校正は渡された目盛の画素位置と値をそのまま使った(log 軸は log10 で補間)。
+- コマンド 275 回(うち python 248 回)。作業ディレクトリの外を読んだコマンドはない。書き込みは作業ディレクトリと `/tmp`(拡大画像)だけ
+  (`workspace-write` は `/tmp` への書き込みを許す。GPT 行と同じ設定)。
+- **遅い。** 91 分(5,473 秒、1図 547 秒)。入力 15.3M トークン(うち 14.3M はキャッシュ)、出力 332k トークン。
+  文脈 100k に対して自動要約が6回起きた。GPT-6.1-Sol の試行(コマンド8回、出力 3,620 トークン)の約 100 倍の出力である。
+
+### 全図の実行(途中、2026-10-07 時点)
+
+- 試行が妥当だったので、残りの pixcal 84図(7バッチ、各12図)と noaxis 94図(8バッチ、12/11図)を用意した(`prepare_llm_run_codex.py ... parts7` / `parts8`)。
+  文脈 100k で要約の回数を抑えるため、GPT 行の2バッチより細かく分けた。
+- **pixcal part1 は 12図中6図で止まった。** モデルが「次にこれを調べる」という途中のメッセージだけを返してツールを呼ばず、Codex がそれをターンの終わりとして扱った(2時間、入力 23.3M・出力 428k トークン)。
+  ローカルモデル特有の失敗である。GPT 行でサーバーエラーの後に `codex exec resume` したのと同じく、図を名指ししない中立の文で同じセッションを再開する(最大3回、`resume_codex_local_batch.sh`)。
+- **GPU が空かず止まっている。** part1 の後、GPU ロックを取らずに起動された vLLM の EngineCore(親プロセスなし、使用率 0%)が VRAM 23 GB を持ったままになり、
+  Ollama がモデルを載せられなかった(out of memory)。その間に走った part2〜4 と再開2回はモデルを読み込めずに即座に失敗した(作業なし、ログは削除)。
+  ドライバは VRAM が 21.5 GB 空くまでロックの外で待つように直し、待機中である。
