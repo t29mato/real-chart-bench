@@ -27,8 +27,10 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts/eval/repro/third_party/chartinfo"))
+sys.path.insert(0, str(REPO / "scripts/eval"))
 
 import metric6b  # noqa: E402  (vendored, unmodified)
+from chartinfo_axis_range import span_for_scoring  # noqa: E402
 
 
 def their_score(pred: list, gt: list) -> tuple[float, float, float]:
@@ -54,12 +56,17 @@ def their_score(pred: list, gt: list) -> tuple[float, float, float]:
     return float(combined), float(name), float(data)
 
 
-def our_score(pred: list, gt: list, tau: float = 0.02) -> dict:
-    """本研究の点単位 F1。軸レンジは正解点の範囲から推定する。
+def our_score(pred: list, gt: list, tau: float = 0.02, annotation: dict | None = None) -> dict:
+    """本研究の点単位 F1。
 
-    CHART-Infographics の注釈は軸の範囲そのものを持たないので、正解点の広がりを軸レンジの
-    代わりに使う。本研究のデータセットではレジストリの軸レンジを使うため、ここだけ扱いが
-    違う。正解点が軸いっぱいに広がっていない図では τ が実質的に厳しくなる。
+    正規化に使う軸レンジは、注釈から復元する(`chartinfo_axis_range`)。
+    `task4` の目盛ピクセル位置が `task2` の目盛ラベル文字列に id で紐づいているので、
+    ラベルの最小・最大が軸レンジになる。scatter で使える 592 図のうち 93.4% が
+    両軸とも復元できる。
+
+    復元できない図では正解点の広がりで代用するが、その場合 τ は実質的に厳しくなる
+    (本研究の 94 図で測ると、正解点の広がりは軸レンジの中央値 x 0.920 / y 0.787)。
+    どちらを使ったかは戻り値の `span_source` に入れる。
     """
     import numpy as np
     from scipy.optimize import linear_sum_assignment
@@ -74,19 +81,20 @@ def our_score(pred: list, gt: list, tau: float = 0.02) -> dict:
     gt_sets, pred_sets = pts(gt), pts(pred)
     flat = [p for s in gt_sets for p in s]
     if not flat:
-        return {"f1": float("nan"), "recall": float("nan"), "precision": float("nan"), "n_gt": 0}
-    xs = [p[0] for p in flat]
-    ys = [p[1] for p in flat]
-    span_x = max(xs) - min(xs) or 1.0
-    span_y = max(ys) - min(ys) or 1.0
+        return {"f1": float("nan"), "recall": float("nan"), "precision": float("nan"),
+                "n_gt": 0, "span_source": "none"}
+    (x_lo, x_hi), (y_lo, y_hi), span_source = span_for_scoring(annotation, flat)
+    span_x = (x_hi - x_lo) or 1.0
+    span_y = (y_hi - y_lo) or 1.0
 
     def norm(s):
-        return np.array([[(x - min(xs)) / span_x, (y - min(ys)) / span_y] for x, y in s])
+        return np.array([[(x - x_lo) / span_x, (y - y_lo) / span_y] for x, y in s])
 
     # 系列の対応づけ: 組ごとの点 F1 を最大化する 1 対 1 割当(本研究 3.2 と同じ)
     n_p, n_g = len(pred_sets), len(gt_sets)
     if n_p == 0 or n_g == 0:
-        return {"f1": 0.0, "recall": 0.0, "precision": 0.0, "n_gt": len(flat)}
+        return {"f1": 0.0, "recall": 0.0, "precision": 0.0, "n_gt": len(flat),
+                "span_source": span_source}
     cost = np.ones((n_p, n_g))
     cache: dict[tuple[int, int], int] = {}
     for i, ps in enumerate(pred_sets):
@@ -106,7 +114,8 @@ def our_score(pred: list, gt: list, tau: float = 0.02) -> dict:
     recall = matched / n_gt if n_gt else 0.0
     precision = matched / n_pred if n_pred else 0.0
     f1 = 2 * recall * precision / (recall + precision) if (recall + precision) else 0.0
-    return {"f1": f1, "recall": recall, "precision": precision, "n_gt": n_gt, "n_pred": n_pred}
+    return {"f1": f1, "recall": recall, "precision": precision, "n_gt": n_gt,
+            "n_pred": n_pred, "span_source": span_source}
 
 
 def main() -> None:
