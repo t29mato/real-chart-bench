@@ -36,6 +36,9 @@ class LocalVlmRun:
     # wall-clock seconds per figure (task id -> seconds), failures included;
     # only meaningful across models when the run had the machine to itself
     seconds: dict[str, float] | None = None
+    # tokens per figure (task id -> count), failures included
+    prompt_tokens: dict[str, int] | None = None
+    generation_tokens: dict[str, int] | None = None
 
 
 def load_local_vlm_run(path: Path) -> LocalVlmRun:
@@ -44,6 +47,8 @@ def load_local_vlm_run(path: Path) -> LocalVlmRun:
     errors, parse_failures, truncated, warned = [], [], [], []
     peaks: list[float] = []
     seconds: dict[str, float] = {}
+    prompt_tokens: dict[str, int] = {}
+    generation_tokens: dict[str, int] = {}
     for line in path.read_text().splitlines():
         if not line.strip():
             continue
@@ -56,6 +61,10 @@ def load_local_vlm_run(path: Path) -> LocalVlmRun:
             peaks.append(float(rec["peak_memory_gb"]))
         if rec.get("seconds") is not None:
             seconds[fig] = float(rec["seconds"])
+        if rec.get("prompt_tokens") is not None:
+            prompt_tokens[fig] = int(rec["prompt_tokens"])
+        if rec.get("generation_tokens") is not None:
+            generation_tokens[fig] = int(rec["generation_tokens"])
         if rec.get("truncated"):
             truncated.append(fig)
         if rec.get("error"):
@@ -75,4 +84,6 @@ def load_local_vlm_run(path: Path) -> LocalVlmRun:
         accepted_with_warning=tuple(warned),
         peak_memory_gb_max=max(peaks) if peaks else None,
         seconds=seconds,
+        prompt_tokens=prompt_tokens,
+        generation_tokens=generation_tokens,
     )
