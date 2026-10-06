@@ -80,7 +80,7 @@ def main() -> None:
         if tool == "answer":
             act = parse_action(json.dumps({"action": "final", **params}), list(TOOLS))
             results = {s["from"]: resolve(s["from"]) for s in act.series}
-            if act.calibration:
+            if act.calibration and not PIXELS:
                 results[act.calibration] = resolve(act.calibration)
             series, cal = assemble_final(act, results, need_calibration=not PIXELS)
             if cal is not None:
