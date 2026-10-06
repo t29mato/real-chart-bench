@@ -27,3 +27,9 @@ separately instead of being prompted away.
   GPT-6.1-Sol's event log shows no command outside its directory (17 commands).
   The Claude agents ran without a command log; they report staying inside.
 - Sonnet 5.5 says its values are eyeball estimates this time.
+
+## Self-reported irregularities (batches 02-04)
+
+- batch04 / Sonnet 5.5 / fig_22: points generated from a fitted bell curve
+  (0-168 step 2) rather than read marker by marker.
+- batch02, batch04 / Sonnet 5.5: values read by eye (no pixel extraction).
