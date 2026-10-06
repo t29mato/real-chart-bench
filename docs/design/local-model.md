@@ -528,3 +528,44 @@ scripts/train/vlm_lora/pipeline_v0.sh
 - 生成器の x 間隔を不規則にして (a) をやり直す(暴走対策。データ担当への依頼)。
 - 実図を増やす(Starrydata の歩留まり改善、CC-BY 以外の扱いの判断)。今回の伸びの大半は 76 図の実図から来ている。
 - 推論での系列あたり点数の上限(学習データの分布から決める)。
+
+## 方式D: 司令塔 + 道具(2026-10-06、オーナー指示)
+
+LLM は司令塔だけを担い、点の抽出は決まった道具に任せる。上位のエージェントが毎回コードで書いている手順(色で抽出、塊の重心、目盛で値に変換、重ね描きで確認)を道具として固定する。モデルは、どの道具を使うか、その設定、マスク、どの系列をどちらの軸で読むかを選ぶ。
+
+```mermaid
+flowchart LR
+  I[図] --> L[司令塔<br/>ローカル VLM / 比較用に Claude]
+  L -->|道具と設定を選ぶ| T1[symbol_extract<br/>starry-digitizer 移植]
+  L --> T2[line_extract<br/>starry-digitizer 移植]
+  L --> T3[marker_detector<br/>方式A]
+  L --> T4[tick_ocr<br/>方式C の自動校正]
+  L --> T5[mask / crop]
+  T1 & T2 & T3 --> P[点の画素位置]
+  T4 --> C[画素→値]
+  P --> C --> R[render_overlay<br/>重ね描き]
+  R -->|見て直す| L
+  C --> O[系列ごとの点]
+```
+
+**道具**
+- starry-digitizer の Symbol Extract / Line Extract を Python に忠実に移植する(MIT、原典は t29mato/starry-digitizer の `application/strategies/extractStrategies/`)。移植の一致は、同じ入力で同じ点が出ることをテストで確かめる。
+- これまでに作った部品を道具として包む。
+  - 方式A の検出器
+  - 方式C の目盛 OCR と軸枠の検出
+  - 色の候補を出す(図の主な色のクラスタ)
+  - マスク・切り出し
+  - 重ね描き画像の生成
+
+**司令塔**
+- **ローカル:** Qwen3.5-9B(または Gemma)。JSON で道具呼び出しを返させる単純なループにし、データは外に出さない。
+- **比較用:** Claude を、同じ道具の CLI だけで動かす。自分で画像処理のコードを書くことは禁止する。推論時の利用だけで、学習には使わない。これにより「道具の選び方」の上限を測る。
+
+**評価**
+- 主条件1(完全自動)と主条件2(人が軸を校正)。
+- 失敗の分類(2軸、系列の分け方、密集、目盛)ごとに、方式C や検出器だけの場合と比べる。
+
+**starry-digitizer への還元**
+- 新しく足した道具(重なりの分割、検出器の呼び出しなど)を starry-digitizer に戻すときは、このリポジトリでは作業しない。
+- starry-digitizer を別の場所(`~/projects/starry-digitizer`)に clone し、専用のブランチ(`feature/rcb-*`)で作業する。
+- main への取り込みは PR で行い、オーナーの判断を経る。
