@@ -204,6 +204,19 @@ def main() -> None:
                 "models": models,
             }
         )
+    # the automatic failure analysis (analyze_chartinfo_errors.py), when present
+    ea = batch / "error_analysis.json"
+    if ea.exists():
+        by_fig = {r["fig"]: r for r in json.loads(ea.read_text())}
+        for f in figs:
+            r = by_fig.get(f["fig"])
+            if not r:
+                continue
+            f["features"] = [k for k in ("dense", "dual_y", "log_x", "log_y", "labelled") if r[k]]
+            for m, v in r["models"].items():
+                if m in f["models"]:
+                    for k in ("category", "agnostic_f1", "curve_f1"):
+                        f["models"][m][k] = v[k]
     pathlib.Path(sys.argv[3]).write_text(
         json.dumps({"batch": batch.name, "tau": TAU, "figures": figs})
     )

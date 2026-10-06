@@ -282,3 +282,47 @@ def is_dense_marker_figure(spacing: float, tau: float) -> bool:
     """design §7.72: dense when the median spacing is strictly below 2*tau
     (exactly 2*tau is not dense)."""
     return spacing < DENSE_SPACING_TAU_FACTOR * tau
+
+
+def _covered(a: np.ndarray, b: np.ndarray, tau: float) -> int:
+    """How many points of ``a`` have some point of ``b`` within ``tau``."""
+    if len(a) == 0 or len(b) == 0:
+        return 0
+    d = np.sqrt(((a[:, None, :] - b[None, :, :]) ** 2).sum(axis=2))
+    return int((d.min(axis=1) <= tau).sum())
+
+
+def curve_f1(pred: Sequence[np.ndarray], gt: Sequence[np.ndarray], tau: float) -> dict:
+    """design 7.83: F1 for dense-marker figures, in an already-normalised
+    space. Recall = ground-truth points with a predicted point of the paired
+    series within tau; precision = predicted points with a ground-truth point
+    of the paired series within tau. No one-to-one point matching, so a curve
+    sampled differently from the ground truth is not penalised, and curves
+    need not be functions of x. Series are paired one to one (Hungarian on
+    1 - pair F1); unpaired series contribute only misses."""
+    from scipy.optimize import linear_sum_assignment
+
+    n_gt = sum(len(g) for g in gt)
+    n_pred = sum(len(p) for p in pred)
+    if n_gt == 0 or n_pred == 0:
+        return {"f1": 0.0, "recall": 0.0, "precision": 0.0, "n_gt": n_gt, "n_pred": n_pred}
+    rec = np.zeros((len(pred), len(gt)), dtype=int)
+    prec = np.zeros((len(pred), len(gt)), dtype=int)
+    cost = np.ones((len(pred), len(gt)))
+    for i, p in enumerate(pred):
+        for j, g in enumerate(gt):
+            rec[i, j] = _covered(np.asarray(g, float), np.asarray(p, float), tau)
+            prec[i, j] = _covered(np.asarray(p, float), np.asarray(g, float), tau)
+            r, q = rec[i, j] / max(len(g), 1), prec[i, j] / max(len(p), 1)
+            cost[i, j] = 1 - (2 * r * q / (r + q) if r + q else 0.0)
+    rows, cols = linear_sum_assignment(cost)
+    recall = sum(rec[i, j] for i, j in zip(rows, cols)) / n_gt
+    precision = sum(prec[i, j] for i, j in zip(rows, cols)) / n_pred
+    f1 = 2 * recall * precision / (recall + precision) if recall + precision else 0.0
+    return {
+        "f1": float(f1),
+        "recall": float(recall),
+        "precision": float(precision),
+        "n_gt": n_gt,
+        "n_pred": n_pred,
+    }
