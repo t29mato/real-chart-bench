@@ -68,9 +68,13 @@ flowchart LR
     - Starrydata と誤認されるコピーを作らないこと
   - モデルの学習を制限する条項はない。
 - **学習したモデルの重みは非商用(NC)ライセンスで公開する**(オーナー判断)。NC の図で学習しても条件が矛盾しないようにするためである。公開そのものは、司令塔経由で人の承認を得る。
-- **CHART-Infographics(UB-PMC):** 主催者のサイト(https://chartinfo.github.io/ )によると、PubMed Central の図のうち CC-BY のものだけを選んでいる。
-  - 原文: "we only picked images released under a Creative Commons By Attribution license (CC-BY), which allows us to redistribute them"
-  - ただし、この記述は ICDAR 2023 の説明にある。ICPR 2022 / 2024 の配布ページ(toolsanddata.html)には、ライセンスや規約の記載がない。配布 ZIP の中に規約のファイルがあるかは、取得後に確認する。
+- **CHART-Infographics(UB-PMC):** 配布 ZIP(CHART-Info 2024 Train、v4.0)の `license.txt` によると、データセットは **CC BY-NC-SA 4.0** である。
+  - readme には「画像は PubMed Central のオープンアクセス部分から取り、元は Creative Commons のライセンスで公開されていた」とある。CC-BY に限るとは書かれていない。
+  - 主催者サイトにある「CC-BY の図だけを選んだ」という記述は、ICDAR 2023 の説明だった。配布物の license.txt を正とする。
+  - 帰結は次の3つ。
+    1. 学術目的の利用(NC)は問題ない。
+    2. 改変物を公開するときは BY-NC-SA で出す(SA)。この図で学習したモデルの重みは、**CC BY-NC-SA 4.0** で公開する。
+    3. 正解データから派生させてリポジトリに入れたファイル(`data/chartinfo_pilot/`)には、帰属と BY-NC-SA を明記する(`LICENSE.md`)。
   - 利用時は、競技会の論文(Davila et al.)と元論文を引用する。
 - 上の結果、ルール3の「学習に使う実図は当面 CC-BY に限る」は次のように緩める。
   - **学術目的の学習には、NC の図も使ってよい**(著作権法30条の4、オーナー判断)。
