@@ -22,12 +22,22 @@ The tools run with the system python3 (numpy, Pillow) and tesseract.
 Writes <work>/<condition>/<model>/<part>/. Answers are archived to
 data/llm_run_orchestrator/<condition>/<model>/<part>.predictions.json and
 scored as orch-claude-<condition>.
+
+--v2 (検証とやり直し, docs/design/local-model.md): a new seed and new task
+names (key in data/llm_run_orch2/), the single "as printed" rule in
+condition 1, and the verify tool, whose verdict `answer` enforces. Archived
+with archive_orchestrator_claude.py <work> --v2 and scored as
+orch2-claude-<condition>.
+
+  .venv/bin/python scripts/eval/prepare_orchestrator_claude.py \\
+      ~/.cache/real-chart-bench/orchestrator/claude-sealed-v2 claude-opus-5-5 noaxis parts2 --v2
 """
 
 from __future__ import annotations
 
 import json
 import pathlib
+import random
 import shutil
 import sys
 
@@ -40,11 +50,20 @@ from real_chart_bench.usecase.real_image_gate import select_verified_pairings  #
 
 DETS = pathlib.Path.home() / ".cache/real-chart-bench/orchestrator/dets"
 PROMPT = REPO / "scripts/eval/orchestrator/claude_prompt.md"
+PROMPT_V2 = REPO / "scripts/eval/orchestrator/claude_prompt_v2.md"
 SOURCES = {
     "noaxis": (REPO / "data/llm_run_v3", "noaxis"),
     "pixcal": (REPO / "data/llm_run_pixcal", "pixcal"),
 }
+V2_SEED = 20261007
+V2_ARCHIVE = REPO / "data/llm_run_orch2"
+AS_PRINTED = (
+    "Report numbers on the same scale as the printed tick labels. Do not apply "
+    "a multiplier written in the axis title (e.g. '(10^4 S/m)' or 'x10^4'); if "
+    "a tick label itself is written like 5x10^4, report 50000."
+)
 MODULES = [
+    "domain/verification.py",
     "domain/starry_extract.py",
     "domain/digitizer_tools.py",
     "domain/orchestration.py",
@@ -68,8 +87,8 @@ ANSWER_NOTE = {
 }
 
 
-def instructions(directory: pathlib.Path, n: int, condition: str) -> str:
-    text = PROMPT.read_text()
+def instructions(directory: pathlib.Path, n: int, condition: str, v2: bool = False) -> str:
+    text = (PROMPT_V2 if v2 else PROMPT).read_text()
     body = text.split("\n---\n")[1].strip()
     block = text.split(f"## `{{CONDITION}}`, {condition}\n")[1].split("\n## ")[0].strip()
     return (body.replace("{CONDITION}", block).replace("{CALIBRATION_ROW}", CAL_ROW[condition])
@@ -101,18 +120,60 @@ def install_tools(d: pathlib.Path, condition: str, images: list[pathlib.Path]) -
     tool.chmod(0o755)
 
 
+def v2_tasks(condition: str) -> tuple[dict, list[dict]]:
+    """The v2 run (検証とやり直し): a fresh seed and names, every scored
+    figure, and the single "as printed" reporting rule (design 7.82) for
+    condition 1 -- the v1 noaxis tasks still carried the old 10^tick / kelvin
+    rules. Condition 2 hands over the person's tick calibration, whose values
+    are in printed space already (tick_calibration.json). The key and the
+    task lists are archived to data/llm_run_orch2/ (never into the sealed
+    directories); building twice gives the same files."""
+    from PIL import Image
+
+    pairings = select_verified_pairings(load_registry(REPO / "data/verified_pairs/registry.json"))
+    cal = {(c["paper_id"], c["figure_id"]): c for c in json.loads(
+        (REPO / "data/verified_pairs/tick_calibration.json").read_text())["figures"]}
+    random.Random(V2_SEED).shuffle(pairings)
+    key, noaxis, pixcal = {}, [], []
+    for i, p in enumerate(pairings, 1):
+        name = f"fig_{i:03d}.png"
+        key[name] = {"paper_id": p.paper_id, "figure_id": p.figure_id,
+                     "image_path": p.image_path}
+        noaxis.append({"id": name, "x_report": AS_PRINTED, "y_report": AS_PRINTED})
+        c = cal[(p.paper_id, p.figure_id)]
+        w, h = Image.open(REPO / p.image_path).size
+        pixcal.append({"id": name, "image_size": [w, h], "x_scale": c["x_scale"],
+                       "y_scale": c["y_scale"],
+                       "x_ticks": [{"pixel_x": t["px"], "value": t["value"]} for t in c["x"]],
+                       "y_ticks": [{"pixel_y": t["px"], "value": t["value"]} for t in c["y"]]})
+    files = {V2_ARCHIVE / "_key.json": key, V2_ARCHIVE / "noaxis/tasks.json": noaxis,
+             V2_ARCHIVE / "pixpts_px/tasks.json": pixcal}
+    for path, obj in files.items():
+        text = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
+        if path.exists() and path.read_text() != text:
+            raise SystemExit(f"{path} differs from this build -- refusing to overwrite")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    return key, noaxis if condition == "noaxis" else pixcal
+
+
 def main() -> None:
-    work, model, condition, spec = pathlib.Path(sys.argv[1]).resolve(), *sys.argv[2:5]
+    args = [a for a in sys.argv[1:] if a != "--v2"]
+    v2 = "--v2" in sys.argv
+    work, model, condition, spec = pathlib.Path(args[0]).resolve(), *args[1:4]
     if REPO in work.parents or work == REPO:
         raise SystemExit("work dir must be outside the repository")
-    run, name = SOURCES[condition]
-    key = json.loads((run / "_key.json").read_text())
     scored = {
         p.figure_id
         for p in select_verified_pairings(load_registry(REPO / "data/verified_pairs/registry.json"))
     }
-    tasks = [t for t in json.loads((run / name / "tasks.json").read_text())
-             if key[t["id"]]["figure_id"] in scored]
+    if v2:
+        key, tasks = v2_tasks(condition)
+    else:
+        run, name = SOURCES[condition]
+        key = json.loads((run / "_key.json").read_text())
+        tasks = json.loads((run / name / "tasks.json").read_text())
+    tasks = [t for t in tasks if key[t["id"]]["figure_id"] in scored]
     if not spec.startswith("parts"):
         raise SystemExit("spec must be parts<k>")
     k = int(spec[5:])
@@ -125,7 +186,7 @@ def main() -> None:
         for t in batch:
             shutil.copy(REPO / key[t["id"]]["image_path"], d / "images" / t["id"])
         (d / "tasks.json").write_text(json.dumps(batch, indent=2) + "\n")
-        (d / "INSTRUCTIONS.md").write_text(instructions(d, len(batch), condition) + "\n")
+        (d / "INSTRUCTIONS.md").write_text(instructions(d, len(batch), condition, v2) + "\n")
         install_tools(d, condition, [d / "images" / t["id"] for t in batch])
         print(d, len(batch))
 

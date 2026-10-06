@@ -635,6 +635,28 @@ for _c, _v2, _src in (("noaxis", "noaxis", "data/llm_run_v3"),
             + "推論時の利用だけで、学習には使わない。回答は data/llm_run_orchestrator/。"
         ),
     }
+# 方式D v2 (検証とやり直し): new seed and task names (data/llm_run_orch2/), the
+# single "as printed" rule in condition 1, and the verify tool whose verdict
+# the sealed `answer` command enforces. Answers in
+# data/llm_run_orchestrator_v2/<noaxis|pixpts_px>/<model>/<part>.predictions.json.
+ORCH2_ARCHIVE = REPO / "data/llm_run_orchestrator_v2"
+for _c, _v2 in (("noaxis", "noaxis"), ("pixcal", "pixpts_px")):
+    CONDITIONS[f"orch2-claude-{_c}"] = {
+        **CONDITIONS[f"orch-claude-{_c}"],
+        "run_dir": REPO / "data/llm_run_orch2",
+        "pred_root": ORCH2_ARCHIVE,
+        "answers_in_printed_space": True,
+        "answer_space": None,
+        "models": {m: label for m, label in MODELS_V2.items()
+                   if (ORCH2_ARCHIVE / _v2 / m).is_dir()},
+        "suffix": f"-orch2-{_c}",
+        "name_suffix": "（司令塔 + 道具 + 検証、"
+        + ("軸レンジなし" if _c == "noaxis" else "目盛のピクセル位置あり") + "）",
+        "notes": CONDITIONS[f"orch-claude-{_c}"]["notes"]
+        + "v2: 検証の道具 verify(点がマーカーの上にあるか、取り逃しのマーカー、重複、"
+        "目盛の自己整合)を足し、answer は verify が受理した系列か、やり直し2回の後の最良の"
+        "試行だけを受け付ける。主条件1の報告ルールは印字どおりの1本(design 7.82)。",
+    }
 # design 7.81: GPT through the Codex CLI (ChatGPT sign-in, no API key), the
 # same sealed-directory setup and v3 prompt as the Claude agents. A pilot on a
 # seeded subset of the v3 figures first (the subscription's usage is small);

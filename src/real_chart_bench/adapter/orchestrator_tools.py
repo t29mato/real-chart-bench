@@ -17,6 +17,8 @@ one of these:
 |                  | orchestrator read itself ("manual")                           |
 | to_values        | pixel points -> values through a calibration                  |
 | render_overlay   | a PNG of the figure with chosen results drawn over it         |
+| verify           | objective checks of chosen series on the image, with an      |
+|                  | accept / redo verdict (domain/verification.py)                |
 
 Results are JSON-able dicts. Parameters may refer to earlier results by an
 id (a string); ``resolve`` turns the id into the result -- the local loop
@@ -51,7 +53,9 @@ from real_chart_bench.domain.digitizer_tools import (
     value_to_px,
 )
 from real_chart_bench.domain.marker_detection import Detection, PostConfig, postprocess
+from real_chart_bench.domain.orchestration import Action, assemble_final
 from real_chart_bench.domain.starry_extract import line_extract, symbol_extract
+from real_chart_bench.domain.verification import Thresholds, verdict, verify
 
 TOOLS = (
     "dominant_colors",
@@ -62,7 +66,10 @@ TOOLS = (
     "tick_calibration",
     "to_values",
     "render_overlay",
+    "verify",
 )
+# words OCR'd anywhere in the figure count as text for verify when this sure
+TEXT_MIN_CONF = 60.0
 
 # 方式A (b): the setting chosen on the validation split (docs/design/local-model.md)
 DETECTOR_DEFAULTS = {"threshold": 0.4, "group_threshold": 0.5, "long_side": 768,
@@ -356,6 +363,75 @@ class ToolBox:
         out.parent.mkdir(parents=True, exist_ok=True)
         im.save(out)
         return {"kind": "overlay", "path": str(out), "series": legend}
+
+
+    def frame_of(self, cal_result: dict | None) -> list[float] | None:
+        """The plot frame: the calibration's, else the frame rules'."""
+        if cal_result:
+            f = (cal_result.get("calibration") or {}).get("frame") or cal_result.get("frame")
+            if f:
+                return [float(v) for v in f]
+        frames = detect_axis_frames(to_gray(self.rgb) < DARK)
+        if not frames:
+            return None
+        return [float(v) for v in max(frames, key=lambda f: (f[2] - f[0]) * (f[3] - f[1]))]
+
+    def marker_peaks(self) -> list[tuple[float, float, float]] | None:
+        """The detector's raw peaks (default input size) as an independent
+        marker map for verify; None when there is no detection cache."""
+        try:
+            dets = self._raw_detections(DETECTOR_DEFAULTS["long_side"])
+        except ToolError:
+            return None
+        return [(d.x, d.y, d.score) for d in dets]
+
+    def text_boxes(self) -> list[list[float]]:
+        """Words OCR'd anywhere in the figure (legend entries, annotations)."""
+        from real_chart_bench.adapter.tesseract_ocr import ocr_words
+
+        try:
+            words = ocr_words(to_gray(self.rgb), upscale=2, psm=11, whitelist=None)
+        except (OSError, ValueError):  # no tesseract: no text boxes
+            return []
+        return [[x0, y0, x1, y1] for t, x0, y0, x1, y1, conf in words
+                if conf >= TEXT_MIN_CONF and len(t) >= 2 and any(c.isalnum() for c in t)]
+
+    def _t_verify(self, p, resolve):
+        _check_keys(p, {"series", "calibration", "mask", "ocr"}, "verify")
+        items = p.get("series")
+        if not isinstance(items, list) or not items:
+            raise ToolError('series is required: [{"from": "r2", "index": -1}, ...] '
+                            "(the series you would answer)")
+        try:
+            act = Action("final", series=tuple(
+                {"from": str(s["from"]), "index": int(s.get("index", -1)), "label": ""}
+                for s in items))
+        except (TypeError, KeyError, ValueError) as exc:
+            raise ToolError(f"series items need from (result name) and index: {exc}") from exc
+        refs = {s["from"] for s in act.series}
+        try:
+            series, _ = assemble_final(act, {r: resolve(r) for r in refs}, False)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        cal_res = resolve(p["calibration"]) if p.get("calibration") else None
+        if cal_res is not None and (cal_res.get("kind") != "calibration"
+                                    or not cal_res.get("ok")):
+            raise ToolError("calibration must be a successful calibration result")
+        frame = self.frame_of(cal_res)
+        _, spec = self._mask(p.get("mask"), resolve)
+        cal, marks = None, None
+        if cal_res is not None and (cal_res["calibration"] or {}).get("source") in (
+                "auto", "manual"):
+            cal = cal_res["calibration"]
+            if frame:
+                xt, yt = detect_ticks(to_gray(self.rgb) < DARK, frame)
+                marks = {"x": list(xt), "y": list(yt)}
+        text = self.text_boxes() if p.get("ocr", True) else []
+        out = verify(self.rgb, series, frame, mask=spec, text_boxes=text, calibration=cal,
+                     tick_marks=marks, detections=self.marker_peaks())
+        out["verdict"] = verdict(out, Thresholds())
+        out["n_text_boxes"] = len(text)
+        return out
 
 
 def _font(size: int):

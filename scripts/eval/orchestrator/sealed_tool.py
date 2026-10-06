@@ -6,7 +6,13 @@ only this; it never writes image-processing code of its own.
   ./tool <tool> <task id> '<params JSON>' [--save NAME]
   ./tool answer <task id> '{"series": [{"from": "r2", "index": -1, "label": ""}],
                             "calibration": "r1"}'
+  ./tool verify <task id> '{"series": [...as for answer...], "calibration": "r1"}'
   ./tool check
+
+verify checks the series on the image and gives a verdict; every verify is
+logged (work/<task id>/_verify_log.json) and `answer` only takes series that
+verify accepted -- or, once the retries are used up (domain/orchestration.
+MAX_RETRIES), the best-scoring verified attempt.
 
 Results are saved as work/<task id>/<NAME>.json; a parameter naming an
 earlier result uses that NAME (e.g. "r2"). render_overlay writes
@@ -27,7 +33,13 @@ from real_chart_bench.domain.digitizer_tools import (  # noqa: E402
     calibration_from_person,
     series_to_values,
 )
-from real_chart_bench.domain.orchestration import assemble_final, parse_action  # noqa: E402
+from real_chart_bench.domain.orchestration import (  # noqa: E402
+    answer_key,
+    assemble_final,
+    may_answer,
+    parse_action,
+    retry_decision,
+)
 
 CONFIG = json.loads((DIR / "tools/config.json").read_text())
 TASKS = {t["id"]: t for t in json.loads((DIR / "tasks.json").read_text())}
@@ -37,6 +49,28 @@ PIXELS = CONFIG["condition"] == "pixcal"
 def fail(msg: str) -> None:
     print(json.dumps({"error": msg}))
     sys.exit(2)
+
+
+def _next_step(dec: dict, vlog: list) -> str:
+    if dec["action"] == "accept":
+        return "accepted: answer exactly these series (./tool answer)"
+    if dec["action"] == "redo":
+        return ("redo: fix what the reasons say with a different tool, setting or mask, then "
+                f"verify again ({dec['retries_left'] + 1} retries left)")
+    best = vlog[dec["pick"]]
+    return (f"retries used up: answer the best-scoring attempt, {best['name']} "
+            f"(score {best['score']})")
+
+
+def _brief_verify(out: dict) -> dict:
+    """verify's printout: the verdict first, lists shortened."""
+    o = dict(out)
+    for k in ("unexplained", "lookalikes"):
+        if isinstance(o.get(k), dict):
+            o[k] = {kk: (vv[:10] if isinstance(vv, list) else vv) for kk, vv in o[k].items()}
+    if isinstance(o.get("detector"), dict):
+        o["detector"] = {**o["detector"], "uncovered": o["detector"]["uncovered"][:10]}
+    return o
 
 
 def main() -> None:
@@ -76,9 +110,15 @@ def main() -> None:
             raise ToolError(f"no saved result {ref!r} for {fig} (save results with --save)")
         return json.loads(p.read_text())
 
+    log_path = work / "_verify_log.json"
+    vlog = json.loads(log_path.read_text()) if log_path.exists() else []
     try:
         if tool == "answer":
             act = parse_action(json.dumps({"action": "final", **params}), list(TOOLS))
+            key = answer_key(act.series, "" if PIXELS else act.calibration)
+            ok, why = may_answer(vlog, key)
+            if not ok:
+                fail(f"not answered: {why}")
             results = {s["from"]: resolve(s["from"]) for s in act.series}
             if act.calibration and not PIXELS:
                 results[act.calibration] = resolve(act.calibration)
@@ -105,6 +145,17 @@ def main() -> None:
             out = tb.run(tool, params, resolve)
             if out.get("kind") == "overlay":
                 out["path"] = str(Path(out["path"]).relative_to(DIR))
+            if tool == "verify":
+                key = answer_key(params.get("series") or [],
+                                 "" if PIXELS else params.get("calibration", ""))
+                vlog.append({"key": key, "accept": out["verdict"]["accept"],
+                             "score": out["verdict"]["score"],
+                             "name": save or f"verify_{len(vlog) + 1}"})
+                log_path.write_text(json.dumps(vlog) + "\n")
+                save = save or f"verify_{len(vlog)}"
+                dec = retry_decision(vlog)
+                out = {"verdict": out["verdict"], "next": _next_step(dec, vlog),
+                       **{k: v for k, v in out.items() if k != "verdict"}}
         else:
             fail(f"unknown tool {tool!r}; tools: {', '.join(TOOLS)}, answer, check")
     except (ToolError, ValueError) as exc:
@@ -112,6 +163,8 @@ def main() -> None:
     if save:
         (work / f"{save}.json").write_text(json.dumps(out) + "\n")
         out = {"saved_as": save, **out}
+    if tool == "verify":
+        out = _brief_verify(out)
     text = json.dumps(out)
     if len(text) > 6000 and out.get("kind") in ("points", "values"):
         # long point lists: the counts and the start, the full result is saved
