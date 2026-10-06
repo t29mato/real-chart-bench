@@ -43,3 +43,6 @@ separately instead of being prompted away.
   detected; fig_22 101 points fitted on an even grid; hidden points added in
   fig_14, fig_16, fig_30; fig_18 y reported in absolute units (ticks print x10^9,
   against the "as printed" rule).
+- batch03, batch04 / Fable 5.1: **stopped mid-run** (owner's rule: stop Claude
+  agents past 80% session usage; it read 92% at 02:21 on 2026-10-07). The
+  archived files are partial; empty lists are figures not yet answered and score 0.
