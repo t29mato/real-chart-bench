@@ -41,6 +41,13 @@ def their_score(pred: list, gt: list) -> tuple[float, float, float]:
     「Combined / Name / Data」の分解に対応する。先行研究と比べるべきは data-score である
     (名前スコアは凡例テキストの一致を測っており、読み取り精度ではない)。
     """
+    # A predicted series with no points (the model listed a legend entry it
+    # could not find) makes metric_6b's cost matrix NaN; it carries no data,
+    # so it is dropped here, before the unmodified metric, and counted by the
+    # caller. A prediction left with no series at all scores 0.
+    pred = [s for s in pred if s.get("data")]
+    if not pred:
+        return 0.0, 0.0, 0.0
     combined, name, data = metric6b.metric_6b(
         pred, gt, "scatter", alpha=1, beta1=0.75, beta2=0.75, gamma=1
     )
