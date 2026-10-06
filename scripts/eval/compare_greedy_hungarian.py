@@ -5,8 +5,12 @@ Scatteract は「近い順に確定して双方から除く」貪欲法で点を
 
 同じ τ・同じ正規化のまま、点の対応づけだけを貪欲法に差し替えて全図を採点し直す。
 """
-import json, pathlib, statistics as st, sys
+import json
+import pathlib
+import sys
+
 import numpy as np
+
 sys.path.insert(0, "src")
 
 from real_chart_bench.adapter.verified_pairing_registry import load_registry
@@ -26,7 +30,9 @@ def greedy_match(d, tau):
             break
         if i in used_p or j in used_g:
             continue
-        used_p.add(int(i)); used_g.add(int(j)); pairs.append((int(i), int(j)))
+        used_p.add(int(i))
+        used_g.add(int(j))
+        pairs.append((int(i), int(j)))
     return pairs
 
 
@@ -82,8 +88,10 @@ for model in ("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1"):
                 d = np.linalg.norm(a[:, None, :] - g[None, :, :], axis=2)
                 best_g = max(best_g, len(greedy_match(d, TAU)))
                 best_h = max(best_h, len(hungarian_match(d, TAU)))
-            fig_g += best_g; fig_h += best_h
-        gcnt += fig_g; hcnt += fig_h
+            fig_g += best_g
+            fig_h += best_h
+        gcnt += fig_g
+        hcnt += fig_h
         if fig_g != fig_h:
             diff_figs += 1
     results[model] = (gcnt, hcnt, diff_figs)
