@@ -59,6 +59,23 @@ flowchart LR
    - push 前に pytest・ruff・import-linter を green にする。
    - 各自の作業は git worktree のブランチで行い、main への統合は統括(私)が行う。
 
+## ライセンスと利用条件(2026-10-06、オーナー判断)
+
+- **Starrydata:** NIMS の研究チームが、学術研究として非営利で運営している(https://www.starrydata.org/ )。営利企業ではない。本研究も学術目的である。
+  - 利用規約(https://www.starrydata.org/utility/terms.html )は次を求めている。
+    - Starrydata の論文を引用すること
+    - できる範囲で元論文も引用すること
+    - Starrydata と誤認されるコピーを作らないこと
+  - モデルの学習を制限する条項はない。
+- **学習したモデルの重みは非商用(NC)ライセンスで公開する**(オーナー判断)。NC の図で学習しても条件が矛盾しないようにするためである。公開そのものは、司令塔経由で人の承認を得る。
+- **CHART-Infographics(UB-PMC):** 主催者のサイト(https://chartinfo.github.io/ )によると、PubMed Central の図のうち CC-BY のものだけを選んでいる。
+  - 原文: "we only picked images released under a Creative Commons By Attribution license (CC-BY), which allows us to redistribute them"
+  - ただし、この記述は ICDAR 2023 の説明にある。ICPR 2022 / 2024 の配布ページ(toolsanddata.html)には、ライセンスや規約の記載がない。配布 ZIP の中に規約のファイルがあるかは、取得後に確認する。
+  - 利用時は、競技会の論文(Davila et al.)と元論文を引用する。
+- 上の結果、ルール3の「学習に使う実図は当面 CC-BY に限る」は次のように緩める。
+  - **学術目的の学習には、NC の図も使ってよい**(著作権法30条の4、オーナー判断)。
+  - データセットとして再配布するのは、CC-BY の図だけに限る(変更なし)。
+
 ## 教師データの共通形式(`labels.jsonl`、1行1画像)
 
 ```json
