@@ -68,3 +68,32 @@ def answer_to_printed(answer: list, ops: dict[str, str]) -> list:
             s[axis] = conv(list(s.get(axis) or []), op)
         out.append(s)
     return out
+
+
+def _inside_share(values, lo: float, hi: float) -> float:
+    span = (hi - lo) or 1.0
+    nums = [v for v in values if _is_number(v) and not math.isnan(v)]
+    if not nums:
+        return 0.0
+    return sum(lo - 0.05 * span <= v <= hi + 0.05 * span for v in nums) / len(nums)
+
+
+def answer_to_printed_if_old(
+    answer: list, ops: dict[str, str], printed_ranges: dict[str, tuple[float, float]]
+) -> tuple[list, bool]:
+    """For runs whose answers may be in either space (an agent told the old
+    rule that answered through a tool reading printed ticks): convert only
+    when the answer's own values sit in the old space -- decided per figure
+    by which space puts more of the values inside the printed axis range
+    (widened by 5% of its span), never by the score."""
+    converted = answer_to_printed(answer, ops)
+    as_is = conv = 0.0
+    for axis in ops:
+        lo, hi = printed_ranges[axis]
+        as_is += _inside_share(
+            [v for s in answer if isinstance(s, dict) for v in s.get(axis) or []], lo, hi
+        )
+        conv += _inside_share(
+            [v for s in converted if isinstance(s, dict) for v in s.get(axis) or []], lo, hi
+        )
+    return (converted, True) if conv > as_is else (answer, False)

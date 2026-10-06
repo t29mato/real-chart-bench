@@ -57,3 +57,37 @@ def test_migration_covers_the_thirteen_log_axes_and_the_one_celsius_axis():
     ops = [op for axes in PRINTED_SPACE_MIGRATION.values() for op in axes.values()]
     assert ops.count("log10") == 13 and ops.count("k_to_degc") == 1
     assert PRINTED_SPACE_MIGRATION["20121"] == {"x": "k_to_degc"}
+
+
+# --- answers whose space is not known per run (design 7.82 addendum) ---------
+
+
+def test_an_answer_in_the_old_10_pow_space_is_recognised_and_converted():
+    from real_chart_bench.adapter.printed_space import answer_to_printed_if_old
+
+    # printed y range is log10 values -6..-1; the answer gave 10^tick
+    answer = [{"x": [1.0, 1.5], "y": [1e-5, 1e-2]}]
+
+    out, was_old = answer_to_printed_if_old(answer, {"y": "log10"}, {"y": (-6.0, -1.0)})
+
+    assert was_old is True and out[0]["y"] == [-5.0, -2.0]
+
+
+def test_an_answer_already_printed_is_left_alone():
+    from real_chart_bench.adapter.printed_space import answer_to_printed_if_old
+
+    answer = [{"x": [1.0, 1.5], "y": [-5.0, -2.0]}]
+
+    out, was_old = answer_to_printed_if_old(answer, {"y": "log10"}, {"y": (-6.0, -1.0)})
+
+    assert was_old is False and out == answer
+
+
+def test_a_kelvin_answer_on_a_celsius_axis_is_recognised():
+    from real_chart_bench.adapter.printed_space import answer_to_printed_if_old
+
+    answer = [{"x": [723.15, 1123.15], "y": [1, 2]}]
+
+    out, was_old = answer_to_printed_if_old(answer, {"x": "k_to_degc"}, {"x": (450.0, 850.0)})
+
+    assert was_old is True and abs(out[0]["x"][0] - 450.0) < 1e-9

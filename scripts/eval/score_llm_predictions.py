@@ -38,6 +38,7 @@ from real_chart_bench.adapter.local_vlm_run import load_local_vlm_run  # noqa: E
 from real_chart_bench.adapter.printed_space import (  # noqa: E402
     PRINTED_SPACE_MIGRATION,
     answer_to_printed,
+    answer_to_printed_if_old,
 )
 from real_chart_bench.adapter.tick_plot_areas import (  # noqa: E402
     load_tick_calibration,
@@ -603,8 +604,15 @@ for _c, _v2, _src in (("noaxis", "noaxis", "data/llm_run_v3"),
         "run_dir": REPO / _src,
         "pred_root": ORCH_CLAUDE_ARCHIVE,
         "rescale": {},
-        "answers_in_printed_space": True,
-        **({"pixel_answer": "pixel", "version_tag": "pixcal"} if _c == "pixcal" else {}),
+        # condition 2 converts pixels through the (printed) tick calibration;
+        # condition 1's sealed tasks still carried the old per-axis rules for
+        # 14 axes, and an answer may follow them or come out of a tool that read
+        # the printed ticks -- decided per figure from the values (design 7.82)
+        **(
+            {"pixel_answer": "pixel", "version_tag": "pixcal", "answers_in_printed_space": True}
+            if _c == "pixcal"
+            else {"answer_space": "auto"}
+        ),
         "models": {m: label for m, label in MODELS_V2.items()
                    if (ORCH_CLAUDE_ARCHIVE / _v2 / m).is_dir()},
         "pred_parts": ["part1", "part2"],
@@ -1098,7 +1106,16 @@ def main() -> None:
             # space; every answer so far followed the old rules (10^tick on a
             # log10-printed axis, kelvin on a degC axis) and is mapped back
             ops = PRINTED_SPACE_MIGRATION.get(key[t["id"]]["figure_id"])
-            if ops and not cond.get("answers_in_printed_space"):
+            if ops and cond.get("answer_space") == "auto":
+                pr = reg[key[t["id"]]["figure_id"]]
+                answer, was_old = answer_to_printed_if_old(
+                    answer if isinstance(answer, list) else [],
+                    ops,
+                    {"x": tuple(pr.x_range), "y": tuple(pr.y_range)},
+                )
+                print(f"  {key[t['id']]['figure_id']}: answer space "
+                      + ("old rule -> converted" if was_old else "printed"))
+            elif ops and not cond.get("answers_in_printed_space"):
                 answer = answer_to_printed(answer if isinstance(answer, list) else [], ops)
             preds[t["id"]] = parse_curves(answer, reg[key[t["id"]]["figure_id"]].x_scale)
         results = evaluate_model_on_dataset(
