@@ -1303,7 +1303,9 @@ def main() -> None:
             ),
         }
         out = RESULTS / f"{model_id}-v0{cond['suffix']}.json"
-        out.write_text(json.dumps(payload, indent=2) + "\n")
+        # ensure_ascii=False: 条件やモデル名は日本語なので、エスケープすると
+        # 再採点のたびに全行が差分になり、値が動いたのか見えなくなる
+        out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
         written.append((model_id, payload["mean_summary_score"], len(preds)))
         print(f"  {model_id:<20} 平均 {payload['mean_summary_score']:.4f}  "
               f"（回答 {len(preds)}/{len(items)} 図） → {out.name}")
