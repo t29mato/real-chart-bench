@@ -271,3 +271,79 @@ def test_accuracy_against_hand_labelled_fixture(scs):
     assert line_correct / line_total >= 0.90, (
         f"line-style accuracy dropped to {line_correct}/{line_total}"
     )
+
+
+# --- inverted-background figures (white ink on black) ---------------------
+
+
+def _figure_on_background(background, ink, size=61):
+    """A square marker of `ink` centred on a field of `background`."""
+    image = np.full((size, size, 3), background, dtype=np.uint8)
+    centre = size // 2
+    image[centre - 6 : centre + 7, centre - 6 : centre + 7] = ink
+    return image
+
+
+def test_colour_is_read_on_a_dark_background(scs):
+    """Figure 40587 is white-on-black. Treating "dark" as ink reads the
+    background as the curve's colour, so both its series came out #000000."""
+    image = _figure_on_background((0, 0, 0), (245, 245, 245))
+    assert scs.sample_point_color(image, 30, 30) == (245, 245, 245)
+
+
+def test_colour_is_still_read_on_a_light_background(scs):
+    image = _figure_on_background((255, 255, 255), (204, 19, 42))
+    assert scs.sample_point_color(image, 30, 30) == (204, 19, 42)
+
+
+def test_a_coloured_marker_on_a_dark_background_keeps_its_hue(scs):
+    image = _figure_on_background((12, 12, 20), (60, 200, 90))
+    assert scs.sample_point_color(image, 30, 30) == (60, 200, 90)
+
+
+def test_an_empty_patch_reads_as_no_ink_on_either_background(scs):
+    for background in ((255, 255, 255), (0, 0, 0)):
+        plain = np.full((41, 41, 3), background, dtype=np.uint8)
+        assert scs.sample_point_color(plain, 20, 20) is None
+
+
+def test_marker_shape_survives_a_dark_background(scs):
+    image = _figure_on_background((0, 0, 0), (245, 245, 245))
+    assert scs.marker_shape(image, 30, 30, (245, 245, 245)) == "square"
+
+
+def test_windows_scale_with_the_image(scs):
+    """40587 is 2500 px wide, where a fixed 11 px window sits entirely inside
+    one marker: the local 'background' reads as the marker's own outline and
+    the 'ink' as the figure's background showing through it. The windows are
+    sized against the image so a large scan behaves like an 886 px one."""
+    assert scs.window_scale((886, 886)) == 1.0
+    assert scs.window_scale((400, 500)) == 1.0  # never shrink below the tuned size
+    assert scs.window_scale((2927, 2500)) > 2.5
+
+
+def test_a_large_figure_reaches_further_for_its_ink(scs):
+    """40587 is 2500 px wide and its markers are drawn as outlines. A window
+    tuned for an 886 px figure sits inside one marker there, so the sampler
+    read the stroke as 'background' and the page showing through it as 'ink' --
+    both its series came out #000000 on a white-on-black figure.
+
+    The reach is what is fixed here. Whether the stroke is found still depends
+    on where the ground-truth point lands relative to it: a point at the exact
+    centre of a marker larger than the reach is still unreadable, and that
+    limitation is recorded in the module rather than tuned away.
+    """
+    stroke = (255, 255, 255)
+    for edge, offset in ((900, 7), (2400, 19)):
+        canvas = Image.fromarray(np.zeros((edge, edge, 3), dtype=np.uint8))
+        pen = ImageDraw.Draw(canvas)
+        centre = edge // 2
+        pen.rectangle(
+            [centre - offset, centre - offset, centre + offset, centre + offset],
+            outline=stroke,
+            width=max(3, offset // 3),
+        )
+        image = np.asarray(canvas)
+        assert scs.sample_point_color(image, centre, centre) == stroke, (
+            f"{edge}px figure: an outline {offset}px from the point was not reached"
+        )

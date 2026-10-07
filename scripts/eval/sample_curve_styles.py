@@ -7,6 +7,15 @@
 線種も同じ考えで見る。隣り合うマーカーの間を歩いて、その色のインクがどれだけ
 連続しているかを数える。全部あれば実線、切れていれば破線か点線、ほとんど無ければ線なし。
 
+**限界**(測ったうえで残しているもの):
+
+- マーカーが輪郭線だけで描かれ、その輪郭が窓の届く範囲より外にあると、中心の画素は
+  図の地なので色が採れない。窓は画像の長辺に比例させてあるが、マーカーの実寸までは
+  測っていない。
+- マーカーの形はおよそ7割の正解率で、**推定であって事実ではない**
+  (tests/fixtures/curve_style_ground_truth.json で測定)。幾何的に綺麗な菱形は
+  塗りの割合では丸と区別できず、星と五角形には分類先がない。
+
 使い方(確認ページから呼ばれる。単体でも動く):
     python3 scripts/eval/sample_curve_styles.py [figure_id ...]
 """
@@ -32,6 +41,18 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 TICKS = REPO / "data/verified_pairs/tick_calibration.json"
 GROUND_TRUTH = REPO / "data/verified_pairs/ground_truth.json"
 
+# 窓の大きさは画像の長辺に比例させる。データセットの図の長辺は中央値 886px で、
+# 下の定数はその大きさに合わせて実測で決めてある。40587 は 2500px あり、
+# 固定の窓だとマーカー1個の内側に収まってしまって、地としてマーカーの輪郭線を、
+# インクとして輪郭の内側に覗く図の地を読んでいた。
+REFERENCE_EDGE = 886
+
+
+def window_scale(shape) -> float:
+    """この画像で窓を何倍にするか。基準より小さい図では 1.0 のまま。"""
+    return max(1.0, max(shape[0], shape[1]) / REFERENCE_EDGE)
+
+
 # マーカーを探す半径。図の線幅とマーカー径を考えるとこの程度で足りる。
 PATCH = 5
 # 線種を見るとき、マーカーの影響を避けて区間の中央寄りだけを歩く
@@ -42,7 +63,6 @@ SEGMENT_MARGIN = 0.18
 HUE_SIMILARITY = 0.85
 INK_FLOOR = 40.0
 GREY_CHROMA = 30.0
-DARK_CEILING = 170.0
 SOLID_DUTY = 0.85
 DASHED_DUTY = 0.30
 
@@ -66,28 +86,52 @@ def calibration_for(entry: dict) -> PixelCalibration | None:
     )
 
 
-def _inkiness(patch: np.ndarray) -> np.ndarray:
-    """画素ごとの「インクらしさ」。彩度が高いか暗いほど大きい。
+# 地の色を測る窓。マーカーより十分広く取らないと、マーカー自身が最頻色になる。
+BACKGROUND_WINDOW = 28
 
-    図の地は白か薄い灰色で、マーカーは色が付いているか黒い。どちらも拾うために
-    彩度(最大 - 最小)と暗さ(255 - 最大)を足す。
+
+def background_color(image: np.ndarray, px: float, py: float) -> tuple[int, int, int]:
+    """その位置の周りで最も多い色 = その図の地。
+
+    地が白とは限らない。40587 は黒地に白インクで、「暗い = インク」という前提だと
+    地そのものを曲線の色として読んでしまう(両系列とも #000000 になっていた)。
+    地を先に測って、そこからの隔たりでインクを決めれば、白地でも黒地でも同じ式で済む。
     """
-    high = patch.max(axis=-1).astype(float)
-    low = patch.min(axis=-1).astype(float)
-    return (high - low) + (255.0 - high)
+    h, w = image.shape[:2]
+    reach = round(BACKGROUND_WINDOW * window_scale((h, w)))
+    cx, cy = int(round(px)), int(round(py))
+    x0, x1 = max(cx - reach, 0), min(cx + reach + 1, w)
+    y0, y1 = max(cy - reach, 0), min(cy + reach + 1, h)
+    window = image[y0:y1, x0:x1].reshape(-1, 3)
+    if not len(window):
+        return (255, 255, 255)
+    quantized = window // 24
+    _, index, counts = np.unique(quantized, axis=0, return_index=True, return_counts=True)
+    return tuple(int(v) for v in window[index[int(np.argmax(counts))]])
+
+
+def _inkiness(patch: np.ndarray, background: tuple[int, int, int]) -> np.ndarray:
+    """画素ごとの「インクらしさ」= 地からの隔たり。
+
+    白地の図では暗い画素や色の付いた画素が、黒地の図では明るい画素が大きくなる。
+    どちらも「地と違う」という一つの基準で拾える。
+    """
+    diff = patch.astype(float) - np.array(background, dtype=float)
+    return np.linalg.norm(diff, axis=-1)
 
 
 def sample_point_color(image: np.ndarray, px: float, py: float) -> tuple[int, int, int] | None:
     """その位置の近傍で最もインクらしい画素の色。"""
     h, w = image.shape[:2]
+    reach = round(PATCH * window_scale((h, w)))
     cx, cy = int(round(px)), int(round(py))
-    x0, x1 = max(cx - PATCH, 0), min(cx + PATCH + 1, w)
-    y0, y1 = max(cy - PATCH, 0), min(cy + PATCH + 1, h)
+    x0, x1 = max(cx - reach, 0), min(cx + reach + 1, w)
+    y0, y1 = max(cy - reach, 0), min(cy + reach + 1, h)
     if x1 <= x0 or y1 <= y0:
         return None
     patch = image[y0:y1, x0:x1]
-    score = _inkiness(patch)
-    if float(score.max()) < 40.0:  # 地しかない
+    score = _inkiness(patch, background_color(image, px, py))
+    if float(score.max()) < INK_FLOOR:  # 地しかない
         return None
     index = np.unravel_index(int(np.argmax(score)), score.shape)
     return tuple(int(v) for v in patch[index])
@@ -104,18 +148,25 @@ def _modal_color(colors: list[tuple[int, int, int]]) -> tuple[int, int, int] | N
     return tuple(int(round(sum(c[i] for c in best) / len(best))) for i in range(3))
 
 
-def _is_color(pixel: np.ndarray, target: tuple[int, int, int]) -> bool:
+def _is_color(
+    pixel: np.ndarray,
+    target: tuple[int, int, int],
+    background: tuple[int, int, int] = (255, 255, 255),
+) -> bool:
     """その画素が、この曲線のインクか。
 
     明るさは比べない。線の画素は地と混ざって薄くなるが、色みの向きは変わらない。
-    目標が無彩色(黒い線)のときは向きが定まらないので、暗さで見る。
+    目標が無彩色(黒や白の線)のときは向きが定まらないので、地からの隔たりで見る。
     """
     p = pixel.astype(float)
-    if (p.max() - p.min()) + (255.0 - p.max()) < INK_FLOOR:
+    bg = np.array(background, dtype=float)
+    if float(np.linalg.norm(p - bg)) < INK_FLOOR:
         return False  # 地
     t = np.array(target, dtype=float)
     if t.max() - t.min() < GREY_CHROMA:
-        return bool(p.max() < DARK_CEILING and p.max() - p.min() < GREY_CHROMA * 2)
+        # 無彩色の目標。地から目標へ向かう側にいて、かつ自分も無彩色であること。
+        toward = float(np.linalg.norm(p - bg)) >= float(np.linalg.norm(t - bg)) * 0.45
+        return bool(toward and p.max() - p.min() < GREY_CHROMA * 2)
     pv, tv = p - p.mean(), t - t.mean()
     norms = float(np.linalg.norm(pv) * np.linalg.norm(tv))
     if norms < 1e-9:
@@ -181,9 +232,10 @@ def marker_shape(image: np.ndarray, px: float, py: float, color: tuple[int, int,
     四角(高い)・丸(中)・菱形(低い)に分ける。
     """
     h, w = image.shape[:2]
+    reach = round(MARKER_WINDOW * window_scale((h, w)))
     cx, cy = int(round(px)), int(round(py))
-    x0, x1 = max(cx - MARKER_WINDOW, 0), min(cx + MARKER_WINDOW + 1, w)
-    y0, y1 = max(cy - MARKER_WINDOW, 0), min(cy + MARKER_WINDOW + 1, h)
+    x0, x1 = max(cx - reach, 0), min(cx + reach + 1, w)
+    y0, y1 = max(cy - reach, 0), min(cy + reach + 1, h)
     if x1 - x0 < 5 or y1 - y0 < 5:
         return "unknown"
     patch = image[y0:y1, x0:x1]
