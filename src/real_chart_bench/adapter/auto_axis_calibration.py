@@ -207,29 +207,25 @@ def calibrate_frame(
 
     v3 (方式D「v3」, off by default so earlier pipelines are unchanged): words
     cut by the image border are left out (unreadable rather than guessed),
-    dropped minus signs and decimal points are restored from the ink, the
-    frame's own edges count as tick positions (the corner labels), a log fit
-    must be plausible, and a reversed axis is read when nothing else fits."""
+    dropped minus signs and decimal points are restored from the ink, "a x
+    10^n" labels whose "x" the OCR lost are read, a log fit must be
+    plausible, and a reversed axis is read when nothing else fits. (Snapping
+    corner labels to the frame's edges was tried and dropped: on the stress
+    set it moved labels off their ticks.)"""
     x0, y0, x1, y1 = frame
     fw, fh = x1 - x0, y1 - y0
     h, w = gray.shape
     xt, _ = detect_ticks(dark, frame)
-    if v3:
-        xt = sorted({*xt, x0, x1})
     below, _ = outward_tick_extent(dark, frame)
     if y_side == "right":
         mdark = dark[:, ::-1]
         mframe = mirror_frame(frame, w)
         _, yt = detect_ticks(mdark, mframe)
-        if v3:
-            yt = sorted({*yt, mframe[1], mframe[3]})
         _, out_y = outward_tick_extent(mdark, mframe)
         tx0, tx1 = min(w, int(x1 + 2 + out_y)), min(w, int(x1 + 0.4 * fw))
         y_frame = mframe
     else:
         _, yt = detect_ticks(dark, frame)
-        if v3:
-            yt = sorted({*yt, y0, y1})
         _, out_y = outward_tick_extent(dark, frame)
         tx0, tx1 = max(0, int(x0 - 0.4 * fw)), max(0, int(x0 - 2 - out_y))
         y_frame = frame
