@@ -1,0 +1,248 @@
+<title>実論文図のチャート抽出ベンチマーク</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  :root {{
+    --paper: #f7f6f3;
+    --panel: #ffffff;
+    --ink: #1b1b19;
+    --muted: #6a6a63;
+    --rule: #d8d6ce;
+    --hair: #e7e5dd;
+    --accent: #7a4418;
+    --accent-soft: #f0e6dc;
+    --mark: #0d7a6f;
+    --shadow: 0 1px 2px rgba(27,27,25,.05), 0 10px 30px rgba(27,27,25,.05);
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root:not([data-theme="light"]) {{
+      --paper: #14151a; --panel: #1b1d23; --ink: #e8e6e0; --muted: #9a988f;
+      --rule: #32343c; --hair: #262931; --accent: #d79a5b; --accent-soft: #2a2420;
+      --mark: #4ecbb8;
+      --shadow: 0 1px 2px rgba(0,0,0,.45), 0 10px 30px rgba(0,0,0,.35);
+    }}
+  }}
+  :root[data-theme="dark"] {{
+    --paper: #14151a; --panel: #1b1d23; --ink: #e8e6e0; --muted: #9a988f;
+    --rule: #32343c; --hair: #262931; --accent: #d79a5b; --accent-soft: #2a2420;
+    --mark: #4ecbb8;
+    --shadow: 0 1px 2px rgba(0,0,0,.45), 0 10px 30px rgba(0,0,0,.35);
+  }}
+
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Zen Kaku Gothic New", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 15.5px; line-height: 1.95;
+  }}
+  .shell {{ display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 0; }}
+
+  /* ---- 目次 ---- */
+  nav {{
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--rule); padding: 32px 22px 48px; background: var(--panel);
+  }}
+  nav .brand {{
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+  }}
+  nav .built {{ font-size: 11.5px; color: var(--muted); margin-bottom: 26px; font-family: "JetBrains Mono", monospace; }}
+  nav ol {{ list-style: none; margin: 0; padding: 0; }}
+  nav .ch {{ margin-bottom: 15px; }}
+  nav .ch > a {{
+    display: block; font-weight: 700; font-size: 13.5px; color: var(--ink);
+    text-decoration: none; padding: 3px 0; line-height: 1.5;
+  }}
+  nav .ch > a:hover, nav .sec a:hover {{ color: var(--accent); }}
+  nav .sec {{ list-style: none; margin: 2px 0 0; padding: 0 0 0 11px; border-left: 1px solid var(--hair); }}
+  nav .sec a {{
+    display: block; font-size: 12.5px; color: var(--muted); text-decoration: none;
+    padding: 2px 0; line-height: 1.55;
+  }}
+  nav a.on {{ color: var(--accent); font-weight: 700; }}
+  nav .ch.open > .sec {{ display: block; }}
+
+  /* ---- 本文 ---- */
+  main {{ padding: 0 0 120px; min-width: 0; }}
+  .inner {{ max-width: 760px; margin: 0 auto; padding: 0 28px; }}
+  header.hero {{
+    border-bottom: 1px solid var(--rule); padding: 72px 0 40px; margin-bottom: 8px;
+    background: linear-gradient(180deg, var(--accent-soft), transparent);
+  }}
+  header.hero .eyebrow {{
+    font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .17em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 16px;
+  }}
+  header.hero h1 {{
+    font-family: "Zen Old Mincho", serif; font-size: clamp(28px, 4.4vw, 42px);
+    font-weight: 700; line-height: 1.34; margin: 0 0 20px; text-wrap: balance;
+  }}
+  header.hero .sub {{ font-size: 16px; color: var(--muted); margin: 0; max-width: 620px; }}
+  header.hero .facts {{
+    display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 26px;
+    font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--muted);
+  }}
+  header.hero .facts b {{ color: var(--ink); font-weight: 700; }}
+
+  article {{ padding-top: 14px; }}
+  article h1 {{
+    font-family: "Zen Old Mincho", serif; font-size: 29px; font-weight: 700;
+    margin: 78px 0 10px; padding-top: 30px; border-top: 2px solid var(--ink);
+    scroll-margin-top: 20px; text-wrap: balance;
+  }}
+  article h2 {{
+    font-size: 19.5px; font-weight: 700; margin: 52px 0 8px; padding-top: 18px;
+    border-top: 1px solid var(--rule); scroll-margin-top: 20px; text-wrap: balance;
+  }}
+  article h3 {{ font-size: 16px; font-weight: 700; margin: 34px 0 6px; scroll-margin-top: 20px; }}
+  article h4 {{ font-size: 14.5px; font-weight: 700; margin: 26px 0 4px; color: var(--muted); }}
+  p {{ margin: 15px 0; }}
+  ul, ol {{ padding-left: 1.35em; margin: 15px 0; }}
+  li {{ margin: 8px 0; }}
+  li > ul, li > ol {{ margin: 6px 0; }}
+  strong {{ font-weight: 700; }}
+  a {{ color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }}
+  code {{
+    font-family: "JetBrains Mono", monospace; font-size: .86em;
+    background: var(--panel); border: 1px solid var(--hair); border-radius: 4px; padding: 1px 5px;
+  }}
+  pre {{
+    background: var(--panel); border: 1px solid var(--hair); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; box-shadow: var(--shadow);
+  }}
+  pre code {{ background: none; border: 0; padding: 0; font-size: 12.5px; line-height: 1.7; }}
+  blockquote {{
+    margin: 18px 0; padding: 2px 0 2px 18px; border-left: 3px solid var(--accent);
+    color: var(--muted);
+  }}
+  hr {{ border: 0; border-top: 1px solid var(--rule); margin: 44px 0; }}
+
+  .tbl {{ overflow-x: auto; margin: 22px 0; box-shadow: var(--shadow); border-radius: 8px; }}
+  table {{ border-collapse: collapse; font-size: 13.5px; width: 100%; background: var(--panel); }}
+  th, td {{ padding: 9px 13px; text-align: left; border-bottom: 1px solid var(--hair); vertical-align: top; }}
+  thead th {{
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500; border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }}
+  tbody tr:last-child td {{ border-bottom: 0; }}
+  td {{ font-variant-numeric: tabular-nums; }}
+
+  .totop {{
+    position: fixed; right: 20px; bottom: 20px; z-index: 5;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--rule);
+    border-radius: 999px; padding: 9px 15px; font-size: 12.5px; cursor: pointer;
+    box-shadow: var(--shadow); font-family: inherit;
+  }}
+  .totop:hover {{ color: var(--accent); }}
+  :focus-visible {{ outline: 2px solid var(--accent); outline-offset: 2px; }}
+
+  @media (max-width: 900px) {{
+    .shell {{ grid-template-columns: minmax(0, 1fr); }}
+    nav {{
+      position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule);
+      padding: 22px 20px 24px;
+    }}
+    nav .sec {{ display: none; }}
+    nav .ch.open > .sec {{ display: block; }}
+    header.hero {{ padding: 44px 0 32px; }}
+    .inner {{ padding: 0 20px; }}
+    article h1 {{ font-size: 25px; margin-top: 56px; }}
+    article h2 {{ font-size: 18px; margin-top: 42px; }}
+    body {{ font-size: 15px; }}
+  }}
+  @media (prefers-reduced-motion: reduce) {{ * {{ scroll-behavior: auto !important; }} }}
+</style>
+
+<div class="shell">
+<nav>
+  <div class="brand">real-chart-bench</div>
+  <div class="built">{built}</div>
+  <ol id="toc"></ol>
+</nav>
+<main>
+  <header class="hero"><div class="inner">
+    <div class="eyebrow">論文ドラフト · 日本語</div>
+    <h1>実論文の実験グラフによる<br>チャートデータ抽出ベンチマーク</h1>
+    <p class="sub">オープンアクセス論文に実際に印刷された図から数値を読み取る能力を、点単位で測る。正解データは、ベンチマークのために作られたものではない。</p>
+    <div class="facts">
+      <span><b>{n_fig}</b> 図</span><span><b>{n_curve}</b> 曲線</span><span><b>{n_pt}</b> 点</span>
+      <span>すべて <b>CC BY</b></span><span>τ = 軸レンジの <b>2%</b></span>
+    </div>
+  </div></header>
+  <article class="inner" id="body"></article>
+</main>
+</div>
+<button class="totop" id="totop" hidden>目次へ戻る</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+const CHAPTERS = {chapters};
+const body = document.getElementById("body");
+const toc = document.getElementById("toc");
+
+marked.setOptions({{ gfm: true, breaks: false, headerIds: false, mangle: false }});
+
+function slug(chapter, index) {{ return "s" + chapter + "-" + index; }}
+
+CHAPTERS.forEach((chapter, ci) => {{
+  const holder = document.createElement("section");
+  holder.innerHTML = marked.parse(chapter.markdown);
+  // 表は横スクロールできる箱に入れる
+  holder.querySelectorAll("table").forEach(t => {{
+    const box = document.createElement("div");
+    box.className = "tbl";
+    t.parentNode.insertBefore(box, t);
+    box.appendChild(t);
+  }});
+  const li = document.createElement("li");
+  li.className = "ch";
+  const sub = document.createElement("ol");
+  sub.className = "sec";
+  let hi = 0;
+  holder.querySelectorAll("h1, h2").forEach(h => {{
+    const id = slug(ci, hi++);
+    h.id = id;
+    const a = document.createElement("a");
+    a.href = "#" + id;
+    a.textContent = h.textContent;
+    if (h.tagName === "H1") {{
+      li.insertBefore(a, li.firstChild);
+    }} else {{
+      const row = document.createElement("li");
+      row.appendChild(a);
+      sub.appendChild(row);
+    }}
+  }});
+  if (!li.firstChild) {{
+    const a = document.createElement("a");
+    a.href = "#" + slug(ci, 0);
+    a.textContent = chapter.title;
+    li.appendChild(a);
+  }}
+  li.appendChild(sub);
+  toc.appendChild(li);
+  body.appendChild(holder);
+}});
+
+// 読んでいる位置を目次に映す
+const marks = [...document.querySelectorAll("article h1, article h2")];
+const links = new Map([...toc.querySelectorAll("a")].map(a => [a.getAttribute("href").slice(1), a]));
+function highlight() {{
+  let current = marks[0];
+  for (const m of marks) {{
+    if (m.getBoundingClientRect().top <= 120) current = m;
+  }}
+  links.forEach(a => a.classList.remove("on"));
+  if (!current) return;
+  const a = links.get(current.id);
+  if (!a) return;
+  a.classList.add("on");
+  toc.querySelectorAll(".ch").forEach(c => c.classList.remove("open"));
+  a.closest(".ch")?.classList.add("open");
+}}
+highlight();
+addEventListener("scroll", () => requestAnimationFrame(highlight), {{ passive: true }});
+
+const top = document.getElementById("totop");
+addEventListener("scroll", () => {{ top.hidden = scrollY < 600; }}, {{ passive: true }});
+top.addEventListener("click", () => scrollTo({{ top: 0, behavior: "smooth" }}));
+</script>
