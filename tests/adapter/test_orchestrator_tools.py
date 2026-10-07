@@ -186,7 +186,7 @@ def test_verify_checks_a_manual_calibration(chart):
     v = tb.run("verify", {"series": [{"from": "p", "index": -1}], "calibration": "c",
                           "ocr": False}, resolve)
     assert v["calibration"]["y"]["direction_ok"] is False
-    assert any("wrong way" in r for r in v["verdict"]["reasons"])
+    assert any("reversed way" in h for h in v["verdict"]["hints"])  # v3: a hint
 
 
 def test_blob_extract_merges_a_split_marker_and_splits_a_pair(tmp_path):

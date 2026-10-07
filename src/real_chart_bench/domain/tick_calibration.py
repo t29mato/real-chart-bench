@@ -54,6 +54,7 @@ class TickReading:
 
 
 _SCI = re.compile(r"^(-?\d+\.?\d*)\s*[x×X*]\s*10\^?(-?\d{1,2})$")
+_SCI_NO_TIMES = re.compile(r"^(-?\d\.\d)10(-?\d)$")
 
 
 def parse_tick_label(text: str) -> list[TickReading]:
@@ -77,6 +78,9 @@ def parse_tick_label(text: str) -> list[TickReading]:
     m = _POW10_OCR.match(s)
     if m:
         out.append(TickReading("pow10", 10.0 ** int(m.group(1))))
+    m = _SCI_NO_TIMES.match(s)
+    if m:  # "4.0104": "4.0x10^4" with the "x" lost (used by fit_axis(sci=True))
+        out.append(TickReading("sci", float(m.group(1)) * 10.0 ** int(m.group(2))))
     return out
 
 
@@ -220,27 +224,35 @@ def _on_label_grid(idx: list[int], tv: list[float]) -> list[int]:
 
 def fit_axis(
     readings: Sequence[tuple[float, Sequence[TickReading]]], *, direction: int,
-    allow_reversed: bool = False, plausible_log: bool = False,
+    allow_reversed: bool = False, plausible_log: bool = False, sci: bool = False,
 ) -> AxisFit | None:
     """Best (px, value) line through OCR'd ticks. direction=+1 when pixels grow
     with value (x axis), -1 when they shrink (y axis, image y points down).
 
     Ranked by agreeing ticks; on a tie a powers-of-ten reading beats a plain
     one ("102 103 104" fits a linear axis perfectly, but nobody prints that)
-    and linear beats log."""
+    and linear beats log. v3 (sci): "a x 10^n" labels read with the "x" lost
+    ("4.0104") form their own family, with a "0" label, linear only; on a
+    tie it beats the plain reading (labels such as 4.0104 are not printed)."""
     dirs = (direction, -direction) if allow_reversed else (direction,)
+    families = ("pow10", "sci", "plain") if sci else ("pow10", "plain")
     for d in dirs:  # v3 (allow_reversed): a reversed axis when nothing else fits
         cands = []
-        for family in ("pow10", "plain"):
-            pts = [(float(px), r.value) for px, rs in readings for r in rs if r.kind == family]
+        for family in families:
+            pts = [(float(px), r.value) for px, rs in readings for r in rs
+                   if r.kind == family or (family == "sci" and r.kind == "plain"
+                                           and r.value == 0)]
+            if family == "sci" and not any(r.kind == "sci" for _, rs in readings for r in rs):
+                continue
             for scale in ("linear", "log"):
-                if family == "pow10" and scale == "linear":
+                if family in ("pow10", "sci") and scale == ("linear" if family == "pow10"
+                                                             else "log"):
                     continue
                 fit = _fit_family(pts, scale, d, plausible_log)
                 if fit is not None:
                     fit = AxisFit(fit.scale, fit.slope, fit.intercept, fit.ticks,
                                   fit.residual_px, family)
-                    rank = (len(fit.ticks), family == "pow10", scale == "linear",
+                    rank = (len(fit.ticks), family != "plain", scale == "linear",
                             -fit.residual_px)
                     cands.append((rank, fit))
         if cands:

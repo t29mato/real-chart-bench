@@ -18,7 +18,7 @@ from real_chart_bench.domain.tick_calibration import (
     touches_border,
 )
 
-V3 = {"allow_reversed": True, "plausible_log": True}
+V3 = {"allow_reversed": True, "plausible_log": True, "sci": True}
 
 
 def plain(px_vals):
@@ -39,6 +39,16 @@ def test_sci_labels_fit_a_linear_axis():
     fit = fit_axis(plain(labels), direction=-1, **V3)
     assert fit.scale == "linear"
     assert fit.px_to_value(260) == pytest.approx(10000, rel=1e-6)
+
+
+def test_sci_labels_with_the_times_sign_lost():
+    # "4.0x10^4" OCR'd as "4.0104": read as 40000 when sci is on
+    labels = [(10, "4.0104"), (45, "3.5104"), (76, "3.0104"), (140, "2.0104"),
+              (171, "1.5104")]
+    fit = fit_axis(plain(labels), direction=-1, **V3)
+    assert fit.px_to_value(76) == pytest.approx(30000, rel=1e-2)
+    off = fit_axis(plain(labels), direction=-1)  # earlier pipelines: unchanged
+    assert off.px_to_value(76) == pytest.approx(3.0104, rel=1e-2)
 
 
 def test_no_log_fit_over_a_fraction_of_a_decade_with_odd_labels():

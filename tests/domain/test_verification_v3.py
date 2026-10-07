@@ -11,7 +11,9 @@ import numpy as np
 import pytest
 
 from real_chart_bench.domain.verification import (
+    Thresholds,
     blob_shape,
+    calibration_reasons,
     calibration_signals,
     group_pieces,
     is_stroke,
@@ -260,3 +262,24 @@ def test_log_axis_read_as_linear_is_still_flagged():
                              "x": axis([(20, 0), (200, 1), (380, 2)])},
                             {"y": marks + [20], "x": []})
     assert s["y"]["marks_on_grid"] < 0.5
+
+
+def test_step_dev_compares_the_label_step_with_the_marks():
+    # labels every 100 px, minor marks every 20 px (5 subdivisions)
+    marks = [20 + 20 * j for j in range(16)]
+    good = axis([(20, 0), (120, 1), (220, 2), (320, 3)])
+    s = calibration_signals({"x": good, "y": axis([(280, 0), (150, 1), (20, 2)])},
+                            {"x": marks, "y": []})
+    assert s["x"]["step_dev"] == pytest.approx(0, abs=0.005)
+    # a misplaced label stretches the fitted step by 4%
+    bad = axis([(20, 0), (120, 1), (220, 2), (332, 3)])
+    s = calibration_signals({"x": bad, "y": axis([(280, 0), (150, 1), (20, 2)])},
+                            {"x": marks, "y": []})
+    assert s["x"]["step_dev"] > 0.02
+
+
+def test_reversed_axis_is_a_hint_not_a_redo():
+    s = calibration_signals({"x": axis([(20, 4), (200, 2), (380, 0)]),
+                             "y": axis([(280, 0), (150, 1), (20, 2)])}, None)
+    assert not s["x"]["direction_ok"]
+    assert calibration_reasons(s, Thresholds()) == []

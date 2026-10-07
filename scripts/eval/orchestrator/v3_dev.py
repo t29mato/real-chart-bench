@@ -247,7 +247,17 @@ def cmd_compare(before: str, after: str) -> None:
     report: dict = {"bad_f1": BAD_F1, "before": before, "after": after}
     data = {t: load(t) for t in (before, after)}
     sets = sorted({r["set"] for r in data[after][0]})
-    # each run is judged by the verdict of the code it ran with
+    # "before" is judged by the verdict of the code it ran with; "after" by
+    # the score against the current threshold (no calibration is verified on
+    # these rows, so the score alone decides). Only the candidates both runs
+    # have are compared (blob_extract is new).
+    from real_chart_bench.domain.verification import Thresholds
+
+    for r in data[after][0]:
+        r["accept"] = r["score"] >= Thresholds().min_score
+    common = {r["cand"] for r in data[before][0]}
+    for t in data:
+        data[t] = ([r for r in data[t][0] if r["cand"] in common], data[t][1])
     for s in sets:
         sec: dict = {}
         for t, (rows, cals) in data.items():
@@ -271,12 +281,107 @@ def cmd_compare(before: str, after: str) -> None:
     print(json.dumps(report, indent=1))
 
 
+def cal_figure(job: dict) -> dict:
+    """The automatic calibration alone, kept whole (with the tick marks), so
+    the calibration check can be re-measured without re-reading the ticks."""
+    import verify_dev
+
+    from real_chart_bench.adapter.orchestrator_tools import ToolBox, ToolError
+
+    lab = job["label"]
+    tb = ToolBox(Path(lab["_path"]), allow_auto_calibration=True)
+    try:
+        c = tb.run("tick_calibration", {"mode": "auto"}, lambda r: {})
+    except ToolError as exc:
+        c = {"ok": False, "message": str(exc)}
+    row = {"set": job["set"], "fig": Path(lab["_path"]).name,
+           "kind": (lab.get("v3") or {}).get("axis"), "result": c}
+    if c.get("ok") and lab.get("axes"):
+        agree = {ax: verify_dev.label_agreement(c["calibration"][ax], lab["axes"][ax])
+                 for ax in ("x", "y")}
+        row["status"] = "correct" if max(agree.values()) <= 0.01 else "wrong"
+    else:
+        row["status"] = "unreadable"
+    return row
+
+
+def cmd_cal(tag: str, workers: int) -> None:
+    js = [j for j in jobs() if j["set"] != "val_real"]
+    out = DEV / "runs" / f"{tag}.cal.jsonl"
+    with out.open("w") as f, ProcessPoolExecutor(
+            workers, mp_context=mp.get_context("spawn")) as pool:
+        for r in pool.map(cal_figure, js, chunksize=2):
+            f.write(json.dumps(r) + "\n")
+    print(f"{len(js)} calibrations -> {out}")
+
+
+TUNE_SETS = ("val_synth", "v3_tune", "chartinfo")
+MAX_CAL_FALSE_ALARMS = 0.05  # fixed before measuring
+
+
+def cmd_caltune(tag: str) -> None:
+    """The calibration check (verify's calibration reasons) re-measured from
+    the stored calibrations with the current code: thresholds of the
+    tick-mark checks chosen on val_synth + v3_tune + chartinfo (the most wrong ones
+    flagged with at most 5% of the right ones flagged), reported on every set."""
+    from real_chart_bench.domain.verification import (
+        Thresholds,
+        calibration_reasons,
+        calibration_signals,
+    )
+
+    rows = [json.loads(x) for x in (DEV / "runs" / f"{tag}.cal.jsonl").read_text().splitlines()]
+    rows = [r for r in rows if r["status"] in ("correct", "wrong")]
+    for r in rows:
+        r["signals"] = calibration_signals(r["result"]["calibration"],
+                                           r["result"].get("tick_marks"))
+
+    def table(rs, th):
+        flag = [bool(calibration_reasons(r["signals"], th)) for r in rs]
+        wrong = [r["status"] == "wrong" for r in rs]
+        tp = sum(f and w for f, w in zip(flag, wrong, strict=True))
+        fp = sum(f and not w for f, w in zip(flag, wrong, strict=True))
+        nw, nc = sum(wrong), len(rs) - sum(wrong)
+        return {"calibrated": len(rs), "wrong": nw, "flag_wrong": tp, "flag_correct": fp,
+                "recall_wrong": round(tp / max(1, nw), 3),
+                "false_alarm_rate": round(fp / max(1, nc), 3),
+                "balanced": round(0.5 * (tp / max(1, nw) + (nc - fp) / max(1, nc)), 3)}
+
+    tune = [r for r in rows if r["set"] in TUNE_SETS]
+    best = None
+    for sd in (0.01, 0.015, 0.02, 0.03, 0.05, 1.0):
+        for mg in (0.0, 0.5, 0.7):
+            th = Thresholds(**{**Thresholds().as_dict(), "max_step_dev": sd,
+                               "min_marks_on_grid": mg})
+            t = table(tune, th)
+            if t["false_alarm_rate"] > MAX_CAL_FALSE_ALARMS:
+                continue  # v2's lesson: a redo of a good calibration costs a retry
+            key = (t["recall_wrong"], -t["false_alarm_rate"])
+            if best is None or key > best[0]:
+                best = (key, th)
+    th = best[1]
+    report = {"chosen_on": TUNE_SETS, "rule": f"max recall, false alarms <= "
+              f"{MAX_CAL_FALSE_ALARMS}", "max_step_dev": th.max_step_dev,
+              "min_marks_on_grid": th.min_marks_on_grid,
+              "in_code": {"max_step_dev": Thresholds().max_step_dev,
+                          "min_marks_on_grid": Thresholds().min_marks_on_grid}}
+    for s in sorted({r["set"] for r in rows}):
+        report[s] = table([r for r in rows if r["set"] == s], th)
+    path = REPORT.with_name("v3_calcheck_report.json")
+    path.write_text(json.dumps(report, indent=1) + "\n")
+    print(json.dumps(report, indent=1))
+
+
 def main() -> None:
     cmd = sys.argv[1]
     if cmd == "run":
         cmd_run(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 24)
     elif cmd == "compare":
         cmd_compare(sys.argv[2], sys.argv[3])
+    elif cmd == "cal":
+        cmd_cal(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 24)
+    elif cmd == "caltune":
+        cmd_caltune(sys.argv[2])
 
 
 if __name__ == "__main__":

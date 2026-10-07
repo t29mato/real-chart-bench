@@ -642,23 +642,36 @@ LATTICE_TOL = 0.2  # a mark spacing within this share of a whole number of minor
 LOG_TOL, LOG_SHIFT = 0.02, 0.03  # decades: a mark on d x 10^k; the labels' offset searched
 
 
-def _lattice_share(marks: Sequence[float], label_step_px: float) -> float:
-    """Linear axis: the share of consecutive mark spacings that are a whole
-    number of minor steps, the minor step being the label step divided by
-    any number of subdivisions (Origin's "10 minor ticks" makes 11). The
-    subdivision is read from the marks' own median spacing (and +-1); the
-    test uses spacings only, so a slightly wrong slope does not add up."""
+def _lattice_share(marks: Sequence[float], label_step_px: float) -> tuple[float, float | None]:
+    """Linear axis: (the share of consecutive mark spacings that are a whole
+    number of minor steps, step_dev). The minor step is the label step
+    divided by any number of subdivisions (Origin's "10 minor ticks" makes
+    11), read from the marks' own median spacing (and +-1); the share uses
+    spacings only, so a slightly wrong slope does not add up. step_dev
+    compares that minor step with the marks' own spacing (a least-squares
+    line through the marks against their lattice index): a calibration whose
+    labels sit at the wrong pixels has the wrong step."""
     gaps = [b - a for a, b in zip(marks, marks[1:], strict=False) if b - a > 0.5]
     if not gaps or label_step_px <= 0:
-        return 0.0
+        return 0.0, None
     n0 = max(1, round(label_step_px / float(np.median(gaps))))
-    best = 0.0
-    for n in {max(1, n0 - 1), n0, n0 + 1}:
+    best, best_key, best_step = 0.0, None, label_step_px / n0
+    for n in sorted({max(1, n0 - 1), n0, n0 + 1}):
         step = label_step_px / n
-        ok = sum(1 for g in gaps
-                 if round(g / step) >= 1 and abs(g / step - round(g / step)) <= LATTICE_TOL)
-        best = max(best, ok / len(gaps))
-    return best
+        devs = [abs(g / step - round(g / step)) if round(g / step) >= 1 else 1.0 for g in gaps]
+        share = sum(1 for d in devs if d <= LATTICE_TOL) / len(gaps)
+        key = (share, -float(np.mean(devs)))  # ties: the closer lattice
+        if best_key is None or key > best_key:
+            best, best_key, best_step = share, key, step
+    idx = [0]  # indexed gap by gap, so a step a few percent off does not add up
+    for a, b in zip(marks, marks[1:], strict=False):
+        idx.append(idx[-1] + max(0, round((b - a) / best_step)))
+    dev = None
+    if len(set(idx)) >= 3:
+        fitted = float(np.polyfit(idx, marks, 1)[0])
+        if fitted > 0:
+            dev = abs(best_step - fitted) / fitted
+    return best, dev
 
 
 def _log_marks_on_grid(marks: Sequence[float], slope: float, intercept: float) -> float:
@@ -713,18 +726,19 @@ def _axis_signals(axis: dict, which: str, marks: Sequence[float] | None) -> dict
     if len(marks) >= 2 and ticks:
         tol = max(3.0, 0.01 * span)
         on_marks = sum(1 for p in pxs if min(abs(p - m) for m in marks) <= tol) / len(pxs)
-    on_grid = None
+    on_grid = step_dev = None
     # v3: the detected marks speak for the scale only when they are this
     # axis's tick marks (the labels sit on them)
     if len(marks) >= 3 and base and on_marks is not None and on_marks >= MARKS_AT_LABELS:
         if scale == "log":
             on_grid = _log_marks_on_grid(marks, slope, intercept)
         else:
-            on_grid = _lattice_share(marks, abs(slope * base))
+            on_grid, step_dev = _lattice_share(marks, abs(slope * base))
     return {"ok": True, "scale": scale, "n_ticks": len(ticks), "residual": round(residual, 5),
             "grid_dev": round(grid_dev, 4), "direction_ok": direction_ok,
             "marks_on_grid": None if on_grid is None else round(on_grid, 4),
-            "labels_on_marks": None if on_marks is None else round(on_marks, 4)}
+            "labels_on_marks": None if on_marks is None else round(on_marks, 4),
+            "step_dev": None if step_dev is None else round(step_dev, 5)}
 
 
 def calibration_signals(cal: dict, tick_marks: dict | None) -> dict:
@@ -749,8 +763,9 @@ class Thresholds:
     min_score_image: float = 0.85  # score from the image signals alone (no detector cache)
     max_residual: float = 0.02  # calibration: of the labelled tick span
     max_grid_dev: float = 0.5
-    min_marks_on_grid: float = 0.5
+    min_marks_on_grid: float = 0.0  # v3: off (scripts/eval/orchestrator/v3_dev.py caltune)
     min_labels_on_marks: float = 0.0
+    max_step_dev: float = 0.02  # v3: label step against the minor marks' own spacing
     # hints
     min_contrast: float = 0.35  # per series, over its testifying points
     max_unexplained_share: float = 0.25  # missed blobs + look-alikes / (them + points)
@@ -809,6 +824,10 @@ def hints(signals: dict, th: Thresholds) -> list[str]:
     out = []
     if signals["n_points"] == 0:
         return ["no points"]
+    for ax, c in (signals.get("calibration") or {}).items():
+        if c.get("ok") and not c.get("direction_ok", True):
+            out.append(f"calibration {ax}: values run the reversed way -- check that the "
+                       "axis is printed reversed and no minus sign was lost")
     for s in signals["series"]:
         if s["n"] == 0:
             continue
@@ -845,8 +864,7 @@ def calibration_reasons(cal_signals: dict | None, th: Thresholds) -> list[str]:
         if not c.get("ok"):
             reasons.append(f"calibration {ax}: unusable")
             continue
-        if not c["direction_ok"]:
-            reasons.append(f"calibration {ax}: values run the wrong way")
+        # v3: a reversed axis is read on purpose now; the direction is a hint
         if c["residual"] > th.max_residual:
             reasons.append(f"calibration {ax}: tick labels off the fitted line "
                            f"(residual {c['residual']:.3f})")
@@ -858,6 +876,9 @@ def calibration_reasons(cal_signals: dict | None, th: Thresholds) -> list[str]:
         if c["labels_on_marks"] is not None and c["labels_on_marks"] < th.min_labels_on_marks:
             reasons.append(f"calibration {ax}: labels not at tick marks "
                            f"({c['labels_on_marks']:.2f})")
+        if c.get("step_dev") is not None and c["step_dev"] > th.max_step_dev:
+            reasons.append(f"calibration {ax}: the label spacing disagrees with the tick "
+                           f"marks by {c['step_dev']:.1%} -- a label at the wrong pixel?")
     return reasons
 
 

@@ -262,7 +262,8 @@ def calibrate_frame(
                 dec = dict(decade_readings(labels_for_axis(mw, fr, axis, ticks=ticks),
                                            direction=direction))
                 rd = [(px, rs + [r for r in dec.get(px, []) if r not in rs]) for px, rs in rd]
-            fit = fit_axis(rd, direction=direction, allow_reversed=v3, plausible_log=v3)
+            fit = fit_axis(rd, direction=direction, allow_reversed=v3, plausible_log=v3,
+                           sci=v3)
             n = len(fit.ticks) if fit else 0
             if n > best_n:
                 best, best_n = (fit, ws, len(rd)), n
