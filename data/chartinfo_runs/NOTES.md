@@ -46,3 +46,5 @@ separately instead of being prompted away.
 - batch03, batch04 / Fable 5.1: **stopped mid-run** (owner's rule: stop Claude
   agents past 80% session usage; it read 92% at 02:21 on 2026-10-07). The
   archived files are partial; empty lists are figures not yet answered and score 0.
+- batch04 / Fable 5.1: completed 2026-10-07 by a second agent that kept the
+  first run's 29 answers and added fig_30 only.
