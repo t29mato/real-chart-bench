@@ -48,3 +48,6 @@ separately instead of being prompted away.
   archived files are partial; empty lists are figures not yet answered and score 0.
 - batch04 / Fable 5.1: completed 2026-10-07 by a second agent that kept the
   first run's 29 answers and added fig_30 only.
+- batch03 / Fable 5.1: completed 2026-10-07 by a second agent that kept the
+  first run's 17 answers and added the other 13 (fig_17 dense band resampled;
+  fig_26 hidden markers at 0 inferred).
