@@ -55,3 +55,6 @@ separately instead of being prompted away.
   fitted curves; fig_19 a hand-listed subset (~190 of ~250).
 - batch08 / Sonnet 5.5: eyeballed; fig_19 synthetic points generated along
   visible streaks rather than read marker by marker.
+- batch05 / Opus 5.5: completed by a second agent (kept the first run's 10
+  answers, added 20); fig_23 overlapping series given identical/modelled values;
+  hidden points estimated in fig_11/16/30.
