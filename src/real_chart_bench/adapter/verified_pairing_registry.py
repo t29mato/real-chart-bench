@@ -15,6 +15,7 @@ from typing import Any
 
 from real_chart_bench.domain.curve import ScaleType
 from real_chart_bench.domain.verified_pairing import (
+    CropRecipe,
     FigureKind,
     GtSuspectStatus,
     RejectionCategory,
@@ -39,6 +40,22 @@ def _parse_rejection_evidence(raw: dict[str, Any] | None) -> RejectionEvidence |
         point_count_mismatch=raw.get("point_count_mismatch"),
         y_value_offset_magnitude=raw.get("y_value_offset_magnitude"),
         missing_series=raw.get("missing_series"),
+    )
+
+
+def _parse_crop(raw: dict[str, Any] | None) -> CropRecipe | None:
+    """Parse a crop recipe (scaling-verification 第0段).
+
+    ``box`` is kept as ints on purpose: CropRecipe rejects a float box, so
+    a registry edit that writes 1605.0 fails loudly rather than producing a
+    recipe that no longer slices the source the same way.
+    """
+    if raw is None:
+        return None
+    return CropRecipe(
+        source_image_path=raw["source_image_path"],
+        box=tuple(raw["box"]),
+        rotation_deg=raw.get("rotation_deg", 0),
     )
 
 
@@ -85,6 +102,8 @@ def _parse_entry(raw: dict[str, Any]) -> VerifiedPairing:
             FigureKind(raw["figure_kind"]) if raw.get("figure_kind") is not None else None
         ),
         figure_tags=tuple(raw["figure_tags"]) if "figure_tags" in raw else (),
+        crop=_parse_crop(raw.get("crop")),
+        final_sha256=raw.get("final_sha256"),
     )
 
 
@@ -192,6 +211,19 @@ def serialize_entry(
 
     if pairing.figure_tags or "figure_tags" in out:
         out["figure_tags"] = list(pairing.figure_tags)
+
+    # scaling-verification 第0段: both halves of the crop recipe, or neither --
+    # an entry whose box was never recovered keeps no crop keys at all
+    if pairing.crop is not None:
+        out["crop"] = {
+            "source_image_path": pairing.crop.source_image_path,
+            "box": [int(value) for value in pairing.crop.box],
+            "rotation_deg": pairing.crop.rotation_deg,
+        }
+        out["final_sha256"] = pairing.final_sha256
+    else:
+        out.pop("crop", None)
+        out.pop("final_sha256", None)
 
     return out
 

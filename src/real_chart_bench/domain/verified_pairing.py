@@ -134,6 +134,79 @@ class TickRangeProvenance(Enum):
     OWNER_REVIEWED = "owner_reviewed"
 
 
+_SHA256_HEX_LENGTH = 64
+_HEX_DIGITS = frozenset("0123456789abcdef")
+_QUARTER_TURNS = frozenset({0, 90, 180, 270})
+
+
+@dataclass(frozen=True)
+class CropRecipe:
+    """How the committed crop under data/verified_pairs/crops/ is cut out of
+    its source image (figure-fetch-distribution §3.2, scaling-verification
+    第0段).
+
+    Until 第0段 this was recorded nowhere: §7.21 called the crops
+    "再現不可能な手動生成物" (irreproducible manual artefacts). That is not a
+    documentation gap but a correctness one -- tick_calibration.json's
+    pixel coordinates are defined against the crop's exact bytes, so main
+    condition 2 (人が軸を校正) is only reproducible if the crop is.
+
+    - source_image_path: the image the rectangle is taken from -- the
+      figure as extracted from the paper's PDF. Recorded explicitly
+      because it is NOT derivable from the pairing's own image_path, which
+      names the crop; several crops also come from a source that no entry
+      points at directly (a two-panel image split into two crops).
+    - box: ``(x0, y0, x1, y1)`` in the source's pixel coordinates,
+      half-open on the far edge -- the numpy / PIL ``Image.crop``
+      convention, so the recipe is executable without a translation step.
+    - rotation_deg: counter-clockwise quarter turn applied *after* cutting
+      (numpy.rot90 convention). 0 for every entry recovered so far.
+      Mirrors are deliberately NOT expressible: see
+      domain/crop_recovery.py's CropOrientation for the orientation fixes
+      of paper 2.4 that fall outside this vocabulary and are reported
+      rather than recorded.
+    """
+
+    source_image_path: str
+    box: tuple[int, int, int, int]
+    rotation_deg: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.source_image_path:
+            raise ValueError("source_image_path must name the image the crop is cut from")
+        if len(self.box) != 4 or any(type(value) is not int for value in self.box):
+            raise ValueError(f"box must be four ints (x0, y0, x1, y1), got {self.box!r}")
+        x0, y0, x1, y1 = self.box
+        if x0 < 0 or y0 < 0:
+            raise ValueError(f"box origin must be non-negative, got {self.box!r}")
+        if x1 <= x0 or y1 <= y0:
+            raise ValueError(f"box must be non-empty and half-open, got {self.box!r}")
+        if self.rotation_deg not in _QUARTER_TURNS:
+            raise ValueError(
+                "rotation_deg must be one of 0/90/180/270 (a quarter turn is the "
+                f"only orientation change a crop recipe can express), got {self.rotation_deg!r}"
+            )
+
+    @property
+    def width(self) -> int:
+        """Width of the rectangle in the source image."""
+        return self.box[2] - self.box[0]
+
+    @property
+    def height(self) -> int:
+        """Height of the rectangle in the source image."""
+        return self.box[3] - self.box[1]
+
+    @property
+    def final_width(self) -> int:
+        """Width of the saved crop, i.e. after ``rotation_deg`` is applied."""
+        return self.height if self.rotation_deg in (90, 270) else self.width
+
+    @property
+    def final_height(self) -> int:
+        return self.width if self.rotation_deg in (90, 270) else self.height
+
+
 @dataclass(frozen=True)
 class RejectionEvidence:
     """Structured findings for *what* disagreed between a candidate image
@@ -258,6 +331,16 @@ class VerifiedPairing:
     # entry has been through the pass but has no tags -- mirrors
     # GroundTruthCurve.quality_flags's tuple[str, ...] convention.
     figure_tags: tuple[str, ...] = field(default_factory=tuple)
+    # scaling-verification 第0段 / figure-fetch-distribution §3.2: the
+    # deterministic recipe for a hand-made crop, and the sha256 of the crop
+    # file the recipe must reproduce. Both-or-neither, the same discipline as
+    # the y2 pair above (§7.84): a box with no hash is a claim nobody can
+    # check, and a hash with no box says the bytes matter but not how to get
+    # them. None on the 16 entries that point straight at an extracted image
+    # (no crop to reproduce) and on every crop whose source image is not in
+    # the repository, so the box could not be recovered and verified.
+    crop: CropRecipe | None = None
+    final_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -316,6 +399,43 @@ class VerifiedPairing:
             raise ValueError(
                 "tick_range_source is only allowed when x_tick_range or y_tick_range is set"
             )
+
+        # scaling-verification 第0段: the crop recipe and the hash of the file
+        # it must reproduce come as a pair, and the recipe needs an image to
+        # be a recipe *for*.
+        if self.crop is not None and self.final_sha256 is None:
+            raise ValueError(
+                "crop requires final_sha256 (the hash of the crop file the "
+                "recipe must reproduce byte for byte) -- a box nobody can "
+                "check against the committed bytes is not a recovered box"
+            )
+        if self.final_sha256 is not None and self.crop is None:
+            raise ValueError(
+                "final_sha256 requires crop (the recipe that reproduces those bytes)"
+            )
+        if self.crop is not None:
+            if self.image_path is None:
+                raise ValueError("crop requires image_path (the crop file it describes)")
+            if self.crop.source_image_path == self.image_path:
+                raise ValueError(
+                    "crop.source_image_path must differ from image_path -- a crop "
+                    "cut out of itself is not a recipe"
+                )
+        if self.final_sha256 is not None and (
+            len(self.final_sha256) != _SHA256_HEX_LENGTH
+            or not set(self.final_sha256) <= _HEX_DIGITS
+        ):
+            raise ValueError(
+                "final_sha256 must be a lowercase hex sha256 digest "
+                f"({_SHA256_HEX_LENGTH} chars), got {self.final_sha256!r}"
+            )
+
+    @property
+    def is_reproducible_crop(self) -> bool:
+        """True iff this entry's scored image is a crop whose box has been
+        recovered and whose bytes a re-cut of the source reproduces
+        (scaling-verification 第0段's acceptance bar)."""
+        return self.crop is not None and self.final_sha256 is not None
 
     @property
     def needs_rejection_classification(self) -> bool:
