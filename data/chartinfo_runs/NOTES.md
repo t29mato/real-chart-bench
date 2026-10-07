@@ -53,3 +53,5 @@ separately instead of being prompted away.
   fig_26 hidden markers at 0 inferred).
 - batch05 / Sonnet 5.5: eyeballed; fig_02, fig_23, fig_26 points generated from
   fitted curves; fig_19 a hand-listed subset (~190 of ~250).
+- batch08 / Sonnet 5.5: eyeballed; fig_19 synthetic points generated along
+  visible streaks rather than read marker by marker.
