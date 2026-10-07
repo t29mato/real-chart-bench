@@ -12,6 +12,13 @@ in dense_marker_metrics.
 per_figure[].point keeps the per-figure counts (matched / predicted / ground
 truth) alongside the ratios, so a figure subset's point_metrics block --
 macro and micro -- can be rebuilt from the rows alone, without re-scoring.
+
+per_figure[].table (design §7.85) holds the chart-as-table metrics -- RMS and
+NMS -- in the same shape and for the same reason: the dataset-level
+table_metrics block is rebuildable from the rows. They are secondary; the
+primary metric stays macro point_f1 (§7.67). Unlike point_metrics, every
+figure is in the table aggregate: RMS matches on headers, so dense markers
+(§7.72) are no more ambiguous there than sparse ones.
 """
 
 from __future__ import annotations
@@ -20,6 +27,7 @@ import math
 from collections.abc import Sequence
 
 from real_chart_bench.domain.point_metrics import PointEvaluation
+from real_chart_bench.domain.table_metrics import TABLE_METRIC_LABEL, TableMetrics
 from real_chart_bench.usecase.evaluate_dataset import FigureResult
 
 POINT_FIELDS = ("point_recall", "point_precision", "point_f1", "point_loc_error")
@@ -69,11 +77,45 @@ def point_row(points: Sequence[PointEvaluation]) -> dict:
     }
 
 
-def figure_result_row(result: FigureResult) -> dict:
+# design 7.85: the chart-as-table variants, and the key each one's F1 is
+# reported under. The order is the order they are reported in.
+TABLE_VARIANT_KEYS = {
+    "rms": ("rms_f1", "rms_precision", "rms_recall"),
+    "rms_value_only": (
+        "rms_f1_value_only",
+        "rms_precision_value_only",
+        "rms_recall_value_only",
+    ),
+    "nms": ("nms_f1", "nms_precision", "nms_recall"),
+}
+
+
+def table_row(metrics: TableMetrics) -> dict:
+    """One per_figure["table"] entry (design 7.85). ``score`` -- the summed
+    similarity of the matched triples -- is kept so the micro aggregate can be
+    pooled from the rows; the triple counts are shared by all three variants."""
+    row = {
+        "n_predicted": metrics.rms.n_predicted,
+        "n_ground_truth": metrics.rms.n_ground_truth,
+    }
+    for name in TABLE_VARIANT_KEYS:
+        value = getattr(metrics, name)
+        row[name] = {
+            "precision": value.precision,
+            "recall": value.recall,
+            "f1": value.f1,
+            "score": value.score,
+        }
+    return row
+
+
+def figure_result_row(result: FigureResult, table: TableMetrics | None = None) -> dict:
     """One per_figure entry. The first six keys are the pre-§7.67 row,
-    unchanged; "point" is added only when the figure was point-scored, and
-    "marker_density" (design 7.72) when its density was computed. An infinite
-    spacing (no series with two points) is stored as null: JSON has no inf."""
+    unchanged; "point" is added only when the figure was point-scored,
+    "marker_density" (design 7.72) when its density was computed, and "table"
+    (design 7.85) when the scorer also computed the chart-as-table metrics. An
+    infinite spacing (no series with two points) is stored as null: JSON has
+    no inf."""
     row = {
         "figure_id": result.figure_id,
         "summary_score": result.evaluation.summary_score,
@@ -90,6 +132,8 @@ def figure_result_row(result: FigureResult) -> dict:
             "median_nn_spacing": spacing if math.isfinite(spacing) else None,
             "dense": result.marker_density.dense,
         }
+    if table is not None:
+        row["table"] = table_row(table)
     return row
 
 
@@ -185,4 +229,53 @@ def aggregate_dense_marker_metrics(per_figure: Sequence[dict]) -> dict | None:
         "mean_match_rate": _mean([r["match_rate"] for r in rows]),
         "mean_curve_distance": _mean([r["mean_curve_distance"] for r in rows]),
         "mean_coverage_ratio": _mean([r["mean_coverage_ratio"] for r in rows]),
+    }
+
+
+def _table_micro(cells: Sequence[dict], name: str, n_predicted: int, n_ground_truth: int) -> dict:
+    """One variant pooled over the figures: the summed triple similarity over
+    the pooled triple counts, the same ratios ``evaluate_table`` forms per
+    figure."""
+    score = sum(c[name]["score"] for c in cells)
+    precision = score / n_predicted if n_predicted else 1.0
+    recall = score / n_ground_truth if n_ground_truth else 1.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
+    return {"precision": precision, "recall": recall, "f1": f1}
+
+
+def aggregate_table_metrics(per_figure: Sequence[dict]) -> dict | None:
+    """The payload's table_metrics block (design 7.85): the three chart-as-table
+    numbers -- rms_f1, rms_f1_value_only, nms_f1 -- macro (mean of the
+    per-figure values, as the chart-to-table literature reports RMS F1) and
+    micro (triples pooled across figures).
+
+    Every scored figure counts, dense ones included (§7.72 applies to point
+    matching, not to header matching). None when any row lacks "table" (a file
+    scored before §7.85, or derived from one): a partial aggregate would
+    silently describe fewer figures."""
+    if not per_figure or any("table" not in row for row in per_figure):
+        return None
+    cells = [row["table"] for row in per_figure]
+    n_predicted = sum(c["n_predicted"] for c in cells)
+    n_ground_truth = sum(c["n_ground_truth"] for c in cells)
+    macro: dict[str, float | None] = {}
+    micro: dict[str, float | None] = {}
+    for name, (f1_key, precision_key, recall_key) in TABLE_VARIANT_KEYS.items():
+        macro[f1_key] = _mean([c[name]["f1"] for c in cells])
+        macro[precision_key] = _mean([c[name]["precision"] for c in cells])
+        macro[recall_key] = _mean([c[name]["recall"] for c in cells])
+        pooled = _table_micro(cells, name, n_predicted, n_ground_truth)
+        micro[f1_key] = pooled["f1"]
+        micro[precision_key] = pooled["precision"]
+        micro[recall_key] = pooled["recall"]
+    return {
+        "definition": TABLE_METRIC_LABEL,
+        # which of the three the project leads with -- not the benchmark's
+        # primary metric, which stays macro point_f1 (design 7.67)
+        "lead": "macro rms_f1_value_only (design 7.85)",
+        "n_figures": len(cells),
+        "n_predicted": n_predicted,
+        "n_ground_truth": n_ground_truth,
+        "macro": macro,
+        "micro": micro,
     }

@@ -47,9 +47,11 @@ from real_chart_bench.adapter.tick_plot_areas import (  # noqa: E402
 )
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
+from real_chart_bench.domain.table_metrics import evaluate_chart_table  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     PRIMARY_POINT_TAU,
     DatasetItem,
+    axis_frame_for_task,
     evaluate_model_on_dataset,
     matcher_for_task,
 )
@@ -59,6 +61,7 @@ from real_chart_bench.usecase.result_payload import (  # noqa: E402
     POINT_METRIC_LABEL,
     aggregate_dense_marker_metrics,
     aggregate_point_metrics,
+    aggregate_table_metrics,
     figure_result_row,
 )
 
@@ -1042,6 +1045,11 @@ def parse_curves(raw, x_scale: ScaleType) -> list[Curve]:
     matters: the metric is what compares these against the ground truth, and a
     difference here would show up as a score difference that has nothing to do
     with how well the model read the chart.
+
+    `series_label` is the answer's own "label", exactly as the live LLM adapter
+    records it (adapter/llm_model_runner.py). No curve-distance or point metric
+    reads it -- it is the column header the chart-as-table metric needs
+    (design 7.85).
     """
     out = []
     for c in raw:
@@ -1052,6 +1060,7 @@ def parse_curves(raw, x_scale: ScaleType) -> list[Curve]:
             continue
         out.append(Curve(x_values=tuple(p[0] for p in pairs),
                          y_values=tuple(p[1] for p in pairs),
+                         series_label=str(c.get("label") or ""),
                          x_scale=x_scale))
     return out
 
@@ -1101,6 +1110,12 @@ def main() -> None:
     tasks = [t for t in tasks if key[t["id"]]["figure_id"] in scoreable_ids]
 
     items, order = [], []
+    # design 7.85: the chart-as-table metric needs the *series* name -- the
+    # string the legend prints -- as its column header, where the scored
+    # ground truth below carries prop_y (the same string for every curve in a
+    # figure, 3.6). No curve-distance or point metric reads series_label, so
+    # `items` is left exactly as it was and the primary metric cannot move.
+    table_gt, table_frames = [], []
     for t in tasks:
         k = key[t["id"]]
         p = reg[k["figure_id"]]
@@ -1117,7 +1132,7 @@ def main() -> None:
                 y_range=tuple(p.y_range),
                 x_scale=p.x_scale,
                 y_scale=p.y_scale,
-                # design 7.84: the right-hand y axis, for a figure that has
+                # design 7.85: the right-hand y axis, for a figure that has
                 # one. None on every entry today.
                 y2_range=tuple(p.y2_range) if p.y2_range is not None else None,
                 y2_scale=p.y2_scale if p.y2_scale is not None else ScaleType.LINEAR,
@@ -1130,6 +1145,12 @@ def main() -> None:
                                 y_axis=y_axis_of(c)) for c in gt],
         ))
         order.append(t["id"])
+        table_gt.append([
+            Curve(x_values=tuple(c["x"]), y_values=tuple(c["y"]),
+                  series_label=c.get("series_label") or "")
+            for c in gt
+        ])
+        table_frames.append(axis_frame_for_task(items[-1].task))
 
     gt_rev = ground_truth_revision(GROUND_TRUTH_SUPPLEMENT_DIR)
     if cond.get("pixel_answer"):
@@ -1218,7 +1239,13 @@ def main() -> None:
         results = evaluate_model_on_dataset(
             ReplayRunner(preds, order), items, matcher_for=matcher_for_task
         )
-        per_figure = [figure_result_row(r) for r in results]
+        # design 7.85: an unanswered figure is an empty table, the same total
+        # miss the curve and point metrics score it as
+        tables = [
+            evaluate_chart_table(preds.get(task_id, []), truth, frame)
+            for task_id, truth, frame in zip(order, table_gt, table_frames, strict=True)
+        ]
+        per_figure = [figure_result_row(r, table=t) for r, t in zip(results, tables, strict=True)]
         payload = {
             "model_id": model_id + cond["suffix"],
             "model_name": model_name + cond["name_suffix"],
@@ -1251,6 +1278,10 @@ def main() -> None:
             "point_metrics": aggregate_point_metrics(per_figure, PRIMARY_POINT_TAU),
             # design 7.72: the figures too dense for point matching, on curve distance
             "dense_marker_metrics": aggregate_dense_marker_metrics(per_figure),
+            # design 7.85: chart->table (RMS / NMS), secondary -- reported so a
+            # row can be read next to the chart-to-table literature. Every
+            # figure counts here, dense ones included.
+            "table_metrics": aggregate_table_metrics(per_figure),
             "per_figure": per_figure,
             "agent_effort": EFFORT.get(model_id) if name == "calibrated" else None,
             "condition": cond["label"],
