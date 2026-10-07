@@ -297,7 +297,7 @@ class ToolBox:
             raise ToolError("mode must be auto, given or manual")
         if not self.allow_auto_calibration:
             raise ToolError("automatic calibration is not used in this condition")
-        cal = calibrate_image(self.rgb)
+        cal = calibrate_image(self.rgb, v3=True)
         if cal is None:
             return {"kind": "calibration", "ok": False, "calibration": None, "frame": None,
                     "message": "no plot frame (axis lines) found"}

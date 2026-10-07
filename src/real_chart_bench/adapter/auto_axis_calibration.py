@@ -35,17 +35,20 @@ from real_chart_bench.domain.axis_frame import (
     detect_right_axis_frames,
     detect_ticks,
     exponent_span,
+    label_glyphs,
     mirror_frame,
     outward_tick_extent,
     split_at_widest_gaps,
 )
 from real_chart_bench.domain.tick_calibration import (
     AxisFit,
+    apply_glyphs,
     decade_readings,
     fit_axis,
     labels_for_axis,
     readings_for_axis,
     split_merged_labels,
+    touches_border,
 )
 
 DARK = 140  # frame/tick binarisation (axes are black)
@@ -165,6 +168,23 @@ def _split_line(gray: np.ndarray, words: list) -> list:
                    for p, (s0, s1) in zip(parts, spans, strict=True)]
 
 
+def _fix_glyphs(gray: np.ndarray, words: list, lo: int, hi: int) -> list:
+    """v3: a minus sign or a decimal point the OCR dropped, restored from the
+    label's own ink (domain.axis_frame.label_glyphs). The crop reaches a bit
+    left of the word (a detached minus sign), never outside the label strip
+    [lo, hi)."""
+    out = []
+    for t, a, b, c, d, conf in words:
+        if _NUMERIC.match(t.strip()):
+            hh = d - b
+            x0 = max(lo, int(a - 0.8 * hh))
+            crop = gray[max(0, int(b)) : int(d) + 1, x0 : min(hi, int(c) + 1)] < DARK
+            if crop.size:
+                t = apply_glyphs(t, label_glyphs(crop))
+        out.append((t, a, b, c, d, conf))
+    return out
+
+
 def _mirror_words(words: list, width: int) -> list:
     return [(t, width - 1 - c, b, width - 1 - a, d, conf) for t, a, b, c, d, conf in words]
 
@@ -177,26 +197,39 @@ def calibrate_frame(
     superscripts: bool = False,
     y_side: str = "left",
     split_merged: bool = False,
+    v3: bool = False,
 ) -> dict:
     """x / y AxisFit (or None) of one frame, and the OCR words used.
 
     y_side "right": the frame's y axis is its right edge (x1), its labels
     to the right of it; read in the mirrored geometry, so the left-axis
-    rules apply unchanged (the OCR itself always sees the unmirrored image)."""
+    rules apply unchanged (the OCR itself always sees the unmirrored image).
+
+    v3 (方式D「v3」, off by default so earlier pipelines are unchanged): words
+    cut by the image border are left out (unreadable rather than guessed),
+    dropped minus signs and decimal points are restored from the ink, the
+    frame's own edges count as tick positions (the corner labels), a log fit
+    must be plausible, and a reversed axis is read when nothing else fits."""
     x0, y0, x1, y1 = frame
     fw, fh = x1 - x0, y1 - y0
     h, w = gray.shape
     xt, _ = detect_ticks(dark, frame)
+    if v3:
+        xt = sorted({*xt, x0, x1})
     below, _ = outward_tick_extent(dark, frame)
     if y_side == "right":
         mdark = dark[:, ::-1]
         mframe = mirror_frame(frame, w)
         _, yt = detect_ticks(mdark, mframe)
+        if v3:
+            yt = sorted({*yt, mframe[1], mframe[3]})
         _, out_y = outward_tick_extent(mdark, mframe)
         tx0, tx1 = min(w, int(x1 + 2 + out_y)), min(w, int(x1 + 0.4 * fw))
         y_frame = mframe
     else:
         _, yt = detect_ticks(dark, frame)
+        if v3:
+            yt = sorted({*yt, y0, y1})
         _, out_y = outward_tick_extent(dark, frame)
         tx0, tx1 = max(0, int(x0 - 0.4 * fw)), max(0, int(x0 - 2 - out_y))
         y_frame = frame
@@ -215,6 +248,9 @@ def calibrate_frame(
             if superscripts:
                 raw = _exponent_rescue(strip, raw)
             ws = [(t, a + ox, b + oy, c + ox, d + oy, conf) for t, a, b, c, d, conf in raw]
+            if v3:
+                ws = [wd for wd in ws if not touches_border(wd[1:5], (w, h))]
+                ws = _fix_glyphs(gray, ws, ox, ox + strip.shape[1])
             if split_merged:
                 if axis == "x":
                     ws = _split_line(gray, ws)
@@ -226,7 +262,7 @@ def calibrate_frame(
                 dec = dict(decade_readings(labels_for_axis(mw, fr, axis, ticks=ticks),
                                            direction=direction))
                 rd = [(px, rs + [r for r in dec.get(px, []) if r not in rs]) for px, rs in rd]
-            fit = fit_axis(rd, direction=direction)
+            fit = fit_axis(rd, direction=direction, allow_reversed=v3, plausible_log=v3)
             n = len(fit.ticks) if fit else 0
             if n > best_n:
                 best, best_n = (fit, ws, len(rd)), n
@@ -262,6 +298,7 @@ def calibrate_image(
     right_axes: bool = True,
     split_merged: bool = True,
     max_frames: int = 4,
+    v3: bool = False,
 ) -> ImageCalibration | None:
     """The figure's main plot frame and its two axis fits.
 
@@ -296,7 +333,8 @@ def calibrate_image(
         sides = [side] + (["right" if side == "left" else "left"] if right_axes else [])
         for s in sides:
             cal = calibrate_frame(
-                gray, dark, f, superscripts=superscripts, y_side=s, split_merged=split_merged
+                gray, dark, f, superscripts=superscripts, y_side=s, split_merged=split_merged,
+                v3=v3,
             )
             c = ImageCalibration(f, cal["x_fit"], cal["y_fit"], len(uniq), s)
             if c.ok:
