@@ -258,7 +258,10 @@ def test_accuracy_against_hand_labelled_fixture(scs):
             line_total += 1
             line_correct += got["style"] == truth["line"]
 
-    assert marker_total == 57
+    # The fixture's size is not pinned: a figure can leave it, as 8724 did when
+    # its paper's license turned out to forbid redistributing our crop. Assert
+    # it is still big enough to mean something, and hold the RATES.
+    assert marker_total >= 50, f"fixture shrank to {marker_total} curves"
     assert marker_correct / marker_total >= 0.65, (
         f"marker accuracy (all) dropped to {marker_correct}/{marker_total}"
     )

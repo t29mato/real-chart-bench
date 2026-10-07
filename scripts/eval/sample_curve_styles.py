@@ -266,7 +266,18 @@ def styles_for_figure(entry: dict, curves: list[dict]) -> list[dict]:
     calibration = calibration_for(entry)
     image_path = REPO / entry["image_path"]
     if calibration is None or not image_path.exists():
-        return [{"color": None, "style": "unknown", "sampled": 0} for _ in curves]
+        # 校正か画像が無い図。呼び出し側が key の有無を気にしなくて済むよう、
+        # 採れたときと同じ形で返す。
+        return [
+            {
+                "color": None,
+                "style": "unknown",
+                "marker": "unknown",
+                "sampled": 0,
+                "of": len(curve.get("x") or ()),
+            }
+            for curve in curves
+        ]
     image = np.asarray(Image.open(image_path).convert("RGB"))
 
     out = []

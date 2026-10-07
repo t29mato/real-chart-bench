@@ -66,18 +66,13 @@ FIGURES: dict[tuple[str, str], str] = {
         "narrow ZT band. Data extends left of the smallest labelled tick (350 K) "
         "to ~333 K, inside the drawn frame."
     ),
-    ("446", "8725"): (
-        "Scanned raster figure on a saturated yellow background, 3 series, "
-        "x axis in degC."
-    ),
     ("10939", "1531"): "4 series of similar warm hues that converge at low temperature.",
     ("17040", "21020"): (
         "Dual y-axis figure (left G_CNP, right V_c) -- calibration below is "
         "the LEFT axis. 4 series, 220 points, x spans negative to positive."
     ),
     ("17038", "20816"): (
-        "Sparsest case: 2 series, 6 points total, with error bars drawn on "
-        "every point."
+        "Sparsest case: 2 series, 6 points total, with error bars drawn on every point."
     ),
     # --- 2026-09-11: sibling figures, so the bundle has papers carrying more
     # than one figure. Starrydata3's demo needs a multi-figure paper to
@@ -88,8 +83,6 @@ FIGURES: dict[tuple[str, str], str] = {
     ("28331", "28498"): "Paper 28331, panel 4(e) -- sibling of 4(a).",
     ("28331", "28500"): "Paper 28331, panel 5(a) -- a second figure of the same paper.",
     ("28331", "28502"): "Paper 28331, panel 5(c) -- sibling of 5(a).",
-    ("446", "8724"): "Sibling of 446 4(b): same scanned yellow figure, panel 4(a).",
-    ("446", "8726"): "Sibling of 446 4(b): same scanned yellow figure, panel 4(c).",
     ("10939", "1536"): "Sibling of 10939 4(a): panel 5(b), same 4 samples.",
     ("10939", "1537"): "Sibling of 10939 4(a): panel 5(c), 3 series.",
     ("27759", "25218"): "Sibling of 27759 fig 7: figure 8, linear y, same 4 samples.",
@@ -97,6 +90,33 @@ FIGURES: dict[tuple[str, str], str] = {
 
 # Deliberately withheld, with the reason, so the request is answered honestly.
 EXCLUDED: dict[tuple[str, str], str] = {
+    ("446", "8724"): (
+        "Withheld since 2026-10-07: paper 446 reads cc-by-nc-nd today at both "
+        "Unpaywall and OpenAlex, and the image in this bundle is a crop -- a "
+        "derivative, which ND forbids redistributing. It was recorded as cc-by "
+        "when collected, and WAS present in the 2026-09-09 bundle handed to "
+        "Starrydata3; that copy should be deleted. The figure, its ground truth "
+        "and the pairing are all correct -- only our right to redistribute is "
+        "missing, so it returns if the license does."
+    ),
+    ("446", "8725"): (
+        "Withheld since 2026-10-07: paper 446 reads cc-by-nc-nd today at both "
+        "Unpaywall and OpenAlex, and the image in this bundle is a crop -- a "
+        "derivative, which ND forbids redistributing. It was recorded as cc-by "
+        "when collected, and WAS present in the 2026-09-09 bundle handed to "
+        "Starrydata3; that copy should be deleted. The figure, its ground truth "
+        "and the pairing are all correct -- only our right to redistribute is "
+        "missing, so it returns if the license does."
+    ),
+    ("446", "8726"): (
+        "Withheld since 2026-10-07: paper 446 reads cc-by-nc-nd today at both "
+        "Unpaywall and OpenAlex, and the image in this bundle is a crop -- a "
+        "derivative, which ND forbids redistributing. It was recorded as cc-by "
+        "when collected, and WAS present in the 2026-09-09 bundle handed to "
+        "Starrydata3; that copy should be deleted. The figure, its ground truth "
+        "and the pairing are all correct -- only our right to redistribute is "
+        "missing, so it returns if the license does."
+    ),
     ("83", "9049"): (
         "Withheld: the derived pixels do not sit on the drawn markers closely "
         "enough for a pixel-level oracle -- a median 6.4 px from the nearest "
@@ -269,12 +289,18 @@ def build(out_dir: Path) -> dict:
                     },
                     "resolution": {
                         "x": _resolution(
-                            ax["x_min_label"], bbox["x_min_px"],
-                            ax["x_max_label"], bbox["x_max_px"], ax["x_scale"],
+                            ax["x_min_label"],
+                            bbox["x_min_px"],
+                            ax["x_max_label"],
+                            bbox["x_max_px"],
+                            ax["x_scale"],
                         ),
                         "y": _resolution(
-                            ax["y_min_label"], bbox["y_min_px"],
-                            ax["y_max_label"], bbox["y_max_px"], ax["y_scale"],
+                            ax["y_min_label"],
+                            bbox["y_min_px"],
+                            ax["y_max_label"],
+                            bbox["y_max_px"],
+                            ax["y_scale"],
                         ),
                         "note": "What one pixel is worth on each axis -- use it to size the "
                         "tolerance of a pixel-level assertion. Linear axes give units_per_px; "
@@ -331,7 +357,7 @@ def build(out_dir: Path) -> dict:
             "Every figure comes from an open-access paper whose license_id in this "
             "repo's registry is the bare string \"cc-by\", taken from OpenAlex's "
             "`license` field, which carries NO version (CC BY 1.0/2.0/3.0/4.0 are all "
-            "recorded identically). Attribute these as \"CC BY\" without a version "
+            'recorded identically). Attribute these as "CC BY" without a version '
             "unless you verify the specific paper's license version with the "
             "publisher. CC BY permits redistribution, including in a public "
             "repository, with attribution -- attribution.line and "

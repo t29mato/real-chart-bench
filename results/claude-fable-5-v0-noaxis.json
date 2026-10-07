@@ -2,8 +2,8 @@
   "model_id": "claude-fable-5-noaxis",
   "model_name": "Claude Fable 5（軸レンジなし）",
   "execution": "cloud",
-  "dataset_version": "v0-eval-pilot-n94-llm-subset-n8-noaxis",
-  "run_at": "2026-10-05T17:01:58.994913+00:00",
+  "dataset_version": "v0-eval-pilot-n91-llm-subset-n8-noaxis",
+  "run_at": "2026-10-07T22:06:47.953375+00:00",
   "n_figures": 8,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
@@ -21,14 +21,14 @@
           "point_recall": 0.48321678321678324,
           "point_precision": 0.48321678321678324,
           "point_f1": 0.48321678321678324,
-          "point_loc_error": 0.004540360779948629,
+          "point_loc_error": 0.0045403607799486285,
           "n_figures_with_matches": 3
         },
         "micro": {
           "point_recall": 0.483695652173913,
           "point_precision": 0.483695652173913,
           "point_f1": 0.483695652173913,
-          "point_loc_error": 0.00478332014309317,
+          "point_loc_error": 0.004783320143093169,
           "n_matched": 89,
           "n_predicted": 184,
           "n_ground_truth": 184
@@ -46,7 +46,7 @@
           "point_recall": 0.6358695652173914,
           "point_precision": 0.6358695652173914,
           "point_f1": 0.6358695652173914,
-          "point_loc_error": 0.006685704116583615,
+          "point_loc_error": 0.006685704116583616,
           "n_matched": 117,
           "n_predicted": 184,
           "n_ground_truth": 184
@@ -64,7 +64,7 @@
           "point_recall": 0.6358695652173914,
           "point_precision": 0.6358695652173914,
           "point_f1": 0.6358695652173914,
-          "point_loc_error": 0.006685704116583615,
+          "point_loc_error": 0.006685704116583616,
           "n_matched": 117,
           "n_predicted": 184,
           "n_ground_truth": 184
@@ -77,8 +77,37 @@
     "n_figures": 3,
     "mean_summary_score": 0.8683378095216456,
     "mean_match_rate": 1.0,
-    "mean_curve_distance": 0.33860243464089484,
+    "mean_curve_distance": 0.33860243464089473,
     "mean_coverage_ratio": 0.9436158632058316
+  },
+  "table_metrics": {
+    "definition": "chart-as-table similarity over (x, series, value) triples, one-to-one assignment on the header distance; rms_f1 = faithful DePlot RMS (Liu et al. 2023, header ANLS x 1 - min(1, |g-p|/|g|), text theta 0.5, number theta 0.1); rms_f1_value_only = the same with the header term neutralized (series_label is the database's name, not necessarily the printed legend); nms_f1 = value_only with the error divided by the axis range instead of |g| (PaperUnPlot's NMS, log axes in log10). Secondary metrics: the primary metric stays macro point_f1 (design 7.67/7.85)",
+    "lead": "macro rms_f1_value_only (design 7.85)",
+    "n_figures": 8,
+    "n_predicted": 772,
+    "n_ground_truth": 746,
+    "macro": {
+      "rms_f1": 0.0,
+      "rms_precision": 0.0,
+      "rms_recall": 0.0,
+      "rms_f1_value_only": 0.5519162793428921,
+      "rms_precision_value_only": 0.5518746841828166,
+      "rms_recall_value_only": 0.5577040488496682,
+      "nms_f1": 0.5940885398554873,
+      "nms_precision": 0.593546520763338,
+      "nms_recall": 0.6005435443185709
+    },
+    "micro": {
+      "rms_f1": 0.0,
+      "rms_precision": 0.0,
+      "rms_recall": 0.0,
+      "rms_f1_value_only": 0.5210071088490782,
+      "rms_precision_value_only": 0.5122336730783036,
+      "rms_recall_value_only": 0.5300863212016761,
+      "nms_f1": 0.5437537669606305,
+      "nms_precision": 0.5345972916102572,
+      "nms_recall": 0.553229368797746
+    }
   },
   "per_figure": [
     {
@@ -95,7 +124,7 @@
             "point_recall": 0.7115384615384616,
             "point_precision": 0.7115384615384616,
             "point_f1": 0.7115384615384616,
-            "point_loc_error": 0.005869629252316018,
+            "point_loc_error": 0.005869629252316016,
             "n_matched": 37,
             "n_predicted": 52,
             "n_ground_truth": 52
@@ -104,7 +133,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.00792592066107806,
+            "point_loc_error": 0.007925920661078062,
             "n_matched": 52,
             "n_predicted": 52,
             "n_ground_truth": 52
@@ -113,7 +142,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.00792592066107806,
+            "point_loc_error": 0.007925920661078062,
             "n_matched": 52,
             "n_predicted": 52,
             "n_ground_truth": 52
@@ -123,6 +152,28 @@
       "marker_density": {
         "median_nn_spacing": 0.08635495598903273,
         "dense": false
+      },
+      "table": {
+        "n_predicted": 52,
+        "n_ground_truth": 52,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.9896004195116739,
+          "recall": 0.9896004195116739,
+          "f1": 0.9896004195116739,
+          "score": 51.45922181460704
+        },
+        "nms": {
+          "precision": 0.9926085715384615,
+          "recall": 0.9926085715384615,
+          "f1": 0.9926085715384615,
+          "score": 51.615645719999996
+        }
       }
     },
     {
@@ -167,6 +218,28 @@
       "marker_density": {
         "median_nn_spacing": 0.02261102816372803,
         "dense": true
+      },
+      "table": {
+        "n_predicted": 265,
+        "n_ground_truth": 220,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "nms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        }
       }
     },
     {
@@ -174,7 +247,7 @@
       "summary_score": 0.9935180131247581,
       "match_rate": 1.0,
       "mean_curve_distance": 0.017914367822912905,
-      "mean_coverage_ratio": 0.998468407197187,
+      "mean_coverage_ratio": 0.9984684071971871,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -183,7 +256,7 @@
             "point_recall": 0.7045454545454546,
             "point_precision": 0.7045454545454546,
             "point_f1": 0.7045454545454546,
-            "point_loc_error": 0.0045758695561472235,
+            "point_loc_error": 0.004575869556147224,
             "n_matched": 31,
             "n_predicted": 44,
             "n_ground_truth": 44
@@ -211,6 +284,28 @@
       "marker_density": {
         "median_nn_spacing": 0.10231069807371156,
         "dense": false
+      },
+      "table": {
+        "n_predicted": 44,
+        "n_ground_truth": 44,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.7029035700715306,
+          "recall": 0.7029035700715306,
+          "f1": 0.7029035700715306,
+          "score": 30.927757083147345
+        },
+        "nms": {
+          "precision": 0.9943914117754189,
+          "recall": 0.9943914117754189,
+          "f1": 0.9943914117754189,
+          "score": 43.75322211811843
+        }
       }
     },
     {
@@ -255,6 +350,28 @@
       "marker_density": {
         "median_nn_spacing": 0.14403629055544878,
         "dense": false
+      },
+      "table": {
+        "n_predicted": 40,
+        "n_ground_truth": 40,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "nms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        }
       }
     },
     {
@@ -299,6 +416,28 @@
       "marker_density": {
         "median_nn_spacing": 0.1362369973694738,
         "dense": false
+      },
+      "table": {
+        "n_predicted": 27,
+        "n_ground_truth": 27,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "nms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        }
       }
     },
     {
@@ -315,7 +454,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0031755835313826445,
+            "point_loc_error": 0.0031755835313826454,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -324,7 +463,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0031755835313826445,
+            "point_loc_error": 0.0031755835313826454,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -333,7 +472,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0031755835313826445,
+            "point_loc_error": 0.0031755835313826454,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -343,6 +482,28 @@
       "marker_density": {
         "median_nn_spacing": 0.10136619778862423,
         "dense": false
+      },
+      "table": {
+        "n_predicted": 21,
+        "n_ground_truth": 21,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.9937246159185391,
+          "recall": 0.9937246159185391,
+          "f1": 0.9937246159185391,
+          "score": 20.868216934289322
+        },
+        "nms": {
+          "precision": 0.997443267857143,
+          "recall": 0.997443267857143,
+          "f1": 0.997443267857143,
+          "score": 20.946308625000004
+        }
       }
     },
     {
@@ -359,7 +520,7 @@
             "point_recall": 0.765625,
             "point_precision": 0.9289099526066351,
             "point_f1": 0.8394004282655246,
-            "point_loc_error": 0.0031357454487034443,
+            "point_loc_error": 0.0031357454487034434,
             "n_matched": 196,
             "n_predicted": 211,
             "n_ground_truth": 256
@@ -368,7 +529,7 @@
             "point_recall": 0.8125,
             "point_precision": 0.985781990521327,
             "point_f1": 0.8907922912205567,
-            "point_loc_error": 0.0038964817975298822,
+            "point_loc_error": 0.0038964817975298835,
             "n_matched": 208,
             "n_predicted": 211,
             "n_ground_truth": 256
@@ -377,7 +538,7 @@
             "point_recall": 0.8203125,
             "point_precision": 0.995260663507109,
             "point_f1": 0.8993576017130621,
-            "point_loc_error": 0.004376477721100355,
+            "point_loc_error": 0.004376477721100357,
             "n_matched": 210,
             "n_predicted": 211,
             "n_ground_truth": 256
@@ -387,6 +548,28 @@
       "marker_density": {
         "median_nn_spacing": 0.02211200730236948,
         "dense": true
+      },
+      "table": {
+        "n_predicted": 211,
+        "n_ground_truth": 256,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.9956271370989725,
+          "recall": 0.8206145544057938,
+          "f1": 0.8996887620037824,
+          "score": 210.0773259278832
+        },
+        "nms": {
+          "precision": 0.9983221635071091,
+          "recall": 0.8228358457031251,
+          "f1": 0.9021240963597431,
+          "score": 210.64597650000002
+        }
       }
     },
     {
@@ -412,7 +595,7 @@
             "point_recall": 0.9767441860465116,
             "point_precision": 0.75,
             "point_f1": 0.8484848484848485,
-            "point_loc_error": 0.0063045661188854685,
+            "point_loc_error": 0.00630456611888547,
             "n_matched": 84,
             "n_predicted": 112,
             "n_ground_truth": 86
@@ -421,7 +604,7 @@
             "point_recall": 1.0,
             "point_precision": 0.7678571428571429,
             "point_f1": 0.8686868686868687,
-            "point_loc_error": 0.0070412478561989065,
+            "point_loc_error": 0.007041247856198909,
             "n_matched": 86,
             "n_predicted": 112,
             "n_ground_truth": 86
@@ -431,13 +614,32 @@
       "marker_density": {
         "median_nn_spacing": 0.02840186439050039,
         "dense": true
+      },
+      "table": {
+        "n_predicted": 112,
+        "n_ground_truth": 86,
+        "rms": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "score": 0.0
+        },
+        "rms_value_only": {
+          "precision": 0.7331417308618169,
+          "recall": 0.954789230889808,
+          "f1": 0.8294128672376111,
+          "score": 82.11187385652349
+        },
+        "nms": {
+          "precision": 0.7656067514285716,
+          "recall": 0.9970692576744188,
+          "f1": 0.8661409713131316,
+          "score": 85.74795616000002
+        }
       }
     }
   ],
   "agent_effort": null,
   "condition": "軸レンジを与えない条件（モデルが目盛を自分で読む）",
-  "notes": "Claude Code のサブエージェントとして各モデルを起動し、図の画像と軸レンジ(ExtractionTask と同じ情報)だけを与えて抽出させた結果。採点は他のベースラインと同一(Hungarian マッチャ + 正規化Y距離)。汚染対策: 画像はリポジトリ外へ fig_NN.png という名前で複製し、正解データはプロンプトに含めず、リポジトリを探索しないよう指示した。ただしこれは緩和策でありサンドボックスではない — Bash を持つエージェントが探しにいけばリポジトリに到達しうる。実際にコピーが起きていないことは事後に確認した: モデル間で完全一致する(x,y)点は0〜1.4%で、独立に読み取った場合の水準である。重要な限界として、4モデルは同じ作業量では走っていない — agent_effort 参照。Fable は自前のCVパイプラインを書き、Opus は拡大クロップを多数作って読んだ一方、Sonnet と Haiku はツール実行15回前後で回答している。したがってこれは『どのモデルが図をよく読めるか』ではなく『ツールと時間を与えられたエージェントとしてどれだけ抽出できるか』の比較である。10図のみの試行であり、順位を確定させるには小さすぎる。112図の本評価とは別の dataset_version を持つ。",
-  "run_cost": {
-    "recorded": false
-  }
+  "notes": "Claude Code のサブエージェントとして各モデルを起動し、図の画像と軸レンジ(ExtractionTask と同じ情報)だけを与えて抽出させた結果。採点は他のベースラインと同一(Hungarian マッチャ + 正規化Y距離)。汚染対策: 画像はリポジトリ外へ fig_NN.png という名前で複製し、正解データはプロンプトに含めず、リポジトリを探索しないよう指示した。ただしこれは緩和策でありサンドボックスではない — Bash を持つエージェントが探しにいけばリポジトリに到達しうる。実際にコピーが起きていないことは事後に確認した: モデル間で完全一致する(x,y)点は0〜1.4%で、独立に読み取った場合の水準である。重要な限界として、4モデルは同じ作業量では走っていない — agent_effort 参照。Fable は自前のCVパイプラインを書き、Opus は拡大クロップを多数作って読んだ一方、Sonnet と Haiku はツール実行15回前後で回答している。したがってこれは『どのモデルが図をよく読めるか』ではなく『ツールと時間を与えられたエージェントとしてどれだけ抽出できるか』の比較である。10図のみの試行であり、順位を確定させるには小さすぎる。112図の本評価とは別の dataset_version を持つ。"
 }
