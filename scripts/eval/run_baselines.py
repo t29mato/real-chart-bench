@@ -44,6 +44,7 @@ from real_chart_bench.adapter.achromatic_cv_extractor import AchromaticCvModelRu
 from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
     ground_truth_revision,
     load_ground_truth,
+    y_axis_of,
 )
 from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # noqa: E402
 from real_chart_bench.adapter.panel_layout import PyMuPdfPanelSplitter  # noqa: E402
@@ -97,7 +98,14 @@ def _ground_truth_for(pairing: VerifiedPairing) -> list[Curve]:
         y_values = tuple(row["y"])
         if not x_values:
             continue
-        curves.append(Curve(x_values=x_values, y_values=y_values, series_label=row["prop_y"]))
+        curves.append(
+            Curve(
+                x_values=x_values,
+                y_values=y_values,
+                series_label=row["prop_y"],
+                y_axis=y_axis_of(row),  # design §7.84
+            )
+        )
     return curves
 
 
@@ -138,6 +146,9 @@ def _dataset_item_for(pairing: VerifiedPairing) -> DatasetItem:
         y_range=pairing.y_range,
         x_scale=pairing.x_scale,
         y_scale=pairing.y_scale,
+        # design §7.84: the right-hand y axis, for a figure that has one
+        y2_range=pairing.y2_range,
+        y2_scale=pairing.y2_scale if pairing.y2_scale is not None else ScaleType.LINEAR,
     )
     figure_id = f"{pairing.paper_id}-{pairing.figure_id}"
     return DatasetItem(figure_id=figure_id, task=task, ground_truth=_ground_truth_for(pairing))

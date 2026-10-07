@@ -104,3 +104,56 @@ def test_revision_changes_whenever_a_supplement_changes(tmp_path):
 
     assert first.startswith("-gtsup1-") and second.startswith("-gtsup1-")
     assert first != second
+
+
+# --- design §7.84: which y axis a series is read against ----------------------
+
+
+def test_a_starrydata_row_carrying_a_y_axis_keeps_it(tmp_path):
+    base = tmp_path / "ground_truth.json"
+    base.write_text(
+        json.dumps(
+            {
+                "200": [
+                    {"x": [1, 2], "y": [3, 4], "prop_y": "Seebeck coefficient"},
+                    {"x": [1, 2], "y": [50, 60], "prop_y": "Resistivity", "y_axis": "secondary"},
+                ]
+            }
+        )
+    )
+
+    gt = load_ground_truth(base, tmp_path / "missing_dir")
+
+    assert [row.get("y_axis") for row in gt["200"]] == [None, "secondary"]
+
+
+def test_a_supplement_curve_may_name_the_right_hand_axis(tmp_path):
+    base = _write_base(tmp_path)
+    _write_supplement(
+        tmp_path / "supplement",
+        curves=[{"series_label": "rho", "x": [1, 2], "y": [5, 6], "y_axis": "secondary"}],
+    )
+
+    gt = load_ground_truth(base, tmp_path / "supplement")
+
+    assert gt["200"][1]["y_axis"] == "secondary"
+
+
+def test_a_supplement_curve_without_an_axis_says_nothing(tmp_path):
+    base = _write_base(tmp_path)
+    _write_supplement(tmp_path / "supplement")
+
+    gt = load_ground_truth(base, tmp_path / "supplement")
+
+    assert "y_axis" not in gt["200"][1]
+
+
+def test_an_unknown_y_axis_name_is_rejected(tmp_path):
+    base = _write_base(tmp_path)
+    _write_supplement(
+        tmp_path / "supplement",
+        curves=[{"series_label": "rho", "x": [1, 2], "y": [5, 6], "y_axis": "right"}],
+    )
+
+    with pytest.raises(GroundTruthSupplementError, match="y_axis"):
+        load_ground_truth(base, tmp_path / "supplement")

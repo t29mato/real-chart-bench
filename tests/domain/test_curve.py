@@ -8,7 +8,7 @@ Boundary cases covered here map to docs/design/benchmark-architecture.md §3.3:
 
 import pytest
 
-from real_chart_bench.domain.curve import Curve, ScaleType, curves_for_curve_scoring
+from real_chart_bench.domain.curve import Curve, ScaleType, YAxis, curves_for_curve_scoring
 
 
 def test_curve_holds_points_in_construction_order():
@@ -121,3 +121,23 @@ def test_non_positive_values_are_finite_and_kept():
     c = Curve(x_values=(-1.0, 0.0, 1.0), y_values=(0.0, -2.0, 1.0), x_scale=ScaleType.LOG)
 
     assert curves_for_curve_scoring([c]) == [c]
+
+
+# --- design §7.84: which y axis the series is read against ---------------------
+
+
+def test_a_series_belongs_to_the_left_y_axis_unless_it_says_otherwise():
+    assert Curve(x_values=(1.0,), y_values=(2.0,)).y_axis is YAxis.PRIMARY
+
+
+def test_dropping_non_finite_points_keeps_the_series_on_its_own_axis():
+    c = Curve(
+        x_values=(1.0, 2.0, _INF),
+        y_values=(1.0, 2.0, 3.0),
+        series_label="rho",
+        y_axis=YAxis.SECONDARY,
+    )
+
+    (out,) = curves_for_curve_scoring([c])
+
+    assert out.y_axis is YAxis.SECONDARY

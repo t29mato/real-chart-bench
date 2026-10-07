@@ -11,7 +11,10 @@ are digitized for this benchmark and kept apart, with who/when/why, so the
 Starrydata part stays exactly what anyone can download.
 
 Every merged row carries `source`: "starrydata" or
-"real-chart-bench-supplement".
+"real-chart-bench-supplement". A row may also carry `y_axis`
+("primary" / "secondary", design §7.84) -- which y axis the series is read
+against on a figure that prints two. Absent means the left axis, which is
+every row today.
 """
 
 from __future__ import annotations
@@ -21,8 +24,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from real_chart_bench.domain.curve import YAxis
+
 SUPPLEMENT_SOURCE = "real-chart-bench-supplement"
 _REQUIRED = ("paper_id", "figure_id", "digitized_by", "digitized_at", "tool", "reason")
+# design §7.84: which y axis a curve is read against. Absent -- every row of
+# the ground truth today -- means the left axis.
+_Y_AXES = ("primary", "secondary")
 
 
 class GroundTruthSupplementError(ValueError):
@@ -48,6 +56,10 @@ def _validate(record: dict[str, Any], path: Path) -> None:
             raise GroundTruthSupplementError(
                 f"{path.name}: curve {i} needs equal-length, non-empty x and y"
             )
+        if "y_axis" in curve and curve["y_axis"] not in _Y_AXES:
+            raise GroundTruthSupplementError(
+                f"{path.name}: curve {i} has y_axis {curve['y_axis']!r}, expected one of {_Y_AXES}"
+            )
 
 
 def load_ground_truth(base_path: Path, supplement_dir: Path) -> dict[str, list[dict[str, Any]]]:
@@ -71,6 +83,7 @@ def load_ground_truth(base_path: Path, supplement_dir: Path) -> dict[str, list[d
                     "x": curve["x"],
                     "y": curve["y"],
                     "prop_y": curve.get("series_label") or "",
+                    **({"y_axis": curve["y_axis"]} if "y_axis" in curve else {}),
                     "source": SUPPLEMENT_SOURCE,
                     "digitized_by": record["digitized_by"],
                     "digitized_at": record["digitized_at"],
@@ -91,3 +104,12 @@ def ground_truth_revision(supplement_dir: Path) -> str:
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
     return f"-gtsup{len(files)}-{digest.hexdigest()[:7]}"
+
+
+def y_axis_of(row: dict[str, Any]) -> YAxis:
+    """Which y axis a merged ground-truth row is read against (design §7.84).
+
+    Absent or empty is the left axis: every row of the ground truth today says
+    nothing, and a figure with one y axis never will.
+    """
+    return YAxis(row.get("y_axis") or YAxis.PRIMARY.value)

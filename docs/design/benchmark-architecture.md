@@ -4647,3 +4647,122 @@ v2 以降の noaxis では、188軸のうち14軸に図ごとの換算ルール�
 - 同じく目測だけで答えた Sonnet 5.5(Pillow なしの診断行)は 0.965 なので、低さは目測という手法だけでは説明できない。
 - 1バッチの最終メッセージは自分のモデル名を "GPT-5" と書いた。実行時に指定したモデルは `-m gpt-5.5` で、イベントログで確認済み。
 - 作業ディレクトリの外を参照したコマンドはなかった。
+
+### 7.84 2本目の y 軸(dual-y)を採点できるようにする(2026-10-07、司令塔指示)
+
+**背景.** CHART-Infographics コーパスでの測定で、y 軸が2本ある図の点 F1 は 0.586、
+それ以外の図は約 0.917 だった。原因は採点側にある: スコアラーは図に y レンジを1つしか持たず
+(`AxisFrame.y_range`)、全系列をその1本で 0〜1 に正規化する。右側の軸で読むべき系列は
+**誤ったレンジで割られる**ので、正解とどれだけ近くても τ に入らない。採点できない図であって、
+難しい図ではない。
+
+この種の図は本ベンチマークのデータセットにまだ無い。主要モデルが 0.986 まで来ていて
+飽和に近いのは、こうした難しい図を入れられないことが一因である。2軸を採点できるようにすることが、
+難しい図を戻す道になる。
+
+#### 現状の確認(実装前に、committed なファイルから自分で確かめた)
+
+- `data/verified_pairs/ground_truth.json`: 140図・549系列。系列行のキーは
+  `x` / `y` / `prop_x` / `prop_y` / `unit_x` / `unit_y` / `series_label` / `composition` /
+  `sample_id` / `series_label_source` / `unit_y_before_printed_space` のみで、
+  **どの y 軸で読むかを表す項目は無い**。140図すべてで図内の `(prop_y, unit_y)` は1種類である
+  (x も同じ)。つまり正解側に2本目の y 軸の表現は**まだ存在しない**。
+- `data/verified_pairs/registry.json`: 157件のキーに `y2_range` / `y2_scale` に相当するものは無い。
+- `domain/axis_frame.py` の `detect_right_axis_frames` は「右にだけ軸線のある枠」を**画素から**
+  見つける関数で(方式C)、採点の正規化とは無関係である。同ファイルと local-model.md は
+  「右の第2軸は扱えない(使わない)」と明記している。
+- `data/local_orchestrator_runs/figure_categories.json` の `twin_y` 10図は、
+  `category_compare.py` の定義どおり「**クロップの右に別の目盛の y 軸が印字されている**
+  (twin 軸、または隣のパネルの軸がクロップに入っている)」の目視タグである。
+  10図とも正解は左軸1種類の物性だけで、採点上の dual-y 図は**現在0図**である。
+
+よって、この作業は既存スキーマへの追従ではなく、**新しいスキーマを1つ足す**ことになる。
+
+#### 決定: 軸の割り当ては正解側が持つ(案 (a))
+
+予測は「どの系列がどちらの軸か」を言わない。予測系列は、**対応づいた正解系列の軸のフレームで**
+正規化する。
+
+```mermaid
+flowchart TD
+  R[registry: x_range / y_range / y2_range] --> F[FigureFrames<br/>primary = x,y / secondary = x,y2]
+  G[正解系列 + y_axis] --> P
+  F --> P[系列ペア i,j ごとに<br/>正解系列 j の軸のフレームで<br/>予測 i と正解 j を正規化]
+  PR[予測系列<br/>軸の宣言なし] --> P
+  P --> M[点の1対1割当 → F1_tau]
+  M --> H[系列の1対1割当<br/>コスト 1 − F1_tau]
+  H --> S[図ごとの recall / precision / F1]
+```
+
+**なぜ (a) か.**
+
+1. **出力形式を増やさない.** 3.1 / 3.8 の原則は「同じ条件の中では全手法に同一の情報を与える」で、
+   求める出力は系列ごとの (x, y) だけである。LineFormer・CV ベースライン・チャート専用モデルは
+   軸を宣言する出口そのものを持たない。宣言を要求すると、それらは dual-y 図で構造的に0点になり、
+   測っているものが「軸を言えたか」に変わる。
+2. **値そのものが軸を含んでいる.** 回答は図に印字されたとおりの数値である(3.1)。右軸で読んだ系列は
+   右軸の数値空間にあるので、左軸のフレームで正規化すれば正解から遠く、一致しない。
+   **宣言は不要で、宣言がなくても曖昧にならない**。
+3. **既存の2段ハンガリアンにそのまま入る.** `evaluate_points` はすでに系列ペア (i, j) ごとに
+   点の割当を計算している。ペアの正規化空間を「正解系列 j の軸」に変えるだけで、
+   アルゴリズムの構造は変わらない。
+
+**却下した案.**
+
+- **(b) 予測に軸を宣言させる.** 出力形式の変更であり、上の1に反する。アーカイブ済みの全回答が
+  採点不能になり、過去の行と比較できなくなる。
+- **(c) 両方のフレームで採点して良い方を採る.** 予測が右軸の値のまま左軸の正解系列に当たりうる。
+  つまり「誤った校正で読んでも形さえ合えば点が入る」ことになり、dual-y 図で測りたい失敗を
+  ちょうど見逃す。なお「どちらの軸の正解と組むか」が曖昧な場合(2軸のレンジがたまたま重なる図)は、
+  系列割当のハンガリアン法が F1 の総和を最大にする組を選ぶ —— (c) の健全な部分は (a) に含まれている。
+
+#### スキーマ(省略可、既定は従来どおり)
+
+- `registry.json` のエントリ: `y2_range: [lo, hi]`、`y2_scale: "linear" | "log"`(いずれも省略可)。
+  x 軸は2本の y 軸で共有する(dual-y は x を共有する図形式である)。
+  `y2_scale` だけを書いて `y2_range` が無いのはエラーにする(§7.57 の目盛レンジと同じ扱い)。
+- `ground_truth.json` の系列行: `y_axis: "primary" | "secondary"`(省略時 `primary`)。
+  補足デジタイズ(`ground_truth_supplement/`)の系列行でも同じキーを受ける。
+- `secondary` の系列があるのに `y2_range` が無い図はエラーにする。黙って左軸で正規化すると、
+  まさに今回直そうとしている「誤ったレンジで割る」状態に戻るので、大きく失敗させる。
+
+#### 層ごとの変更
+
+- ドメイン `domain/curve.py`: `YAxis` enum(`PRIMARY` / `SECONDARY`)と `Curve.y_axis`(既定 `PRIMARY`)。
+  系列が「どちらの y 軸で読むか」は系列自身の性質なので Curve に置く。予測側の `y_axis` は
+  採点では**使わない**((a) の帰結)。
+- ドメイン `domain/point_metrics.py`: `FigureFrames`(`primary` と省略可の `secondary`)。
+  `evaluate_points` と `median_nearest_neighbor_spacing` の `frame` 引数が
+  `AxisFrame | FigureFrames` を受ける。`AxisFrame` を渡したときの挙動は**1文字も変わらない**。
+- ユースケース `usecase/model_runner.py`: `ExtractionTask` に `y2_range` / `y2_scale`。
+- ユースケース `usecase/evaluate_dataset.py`: `figure_frames_for_task(task) -> FigureFrames` を足す。
+  `axis_frame_for_task` は主軸を返すまま残す(他の呼び出し元があるため)。
+- アダプタ `adapter/verified_pairing_registry.py` と `domain/verified_pairing.py`: `y2_range` / `y2_scale` の
+  読み書きと検証。アダプタ `adapter/ground_truth_store.py`: 系列行の `y_axis` を通す。
+- スクリプト `scripts/eval/score_llm_predictions.py` / `scripts/eval/run_baselines.py`:
+  registry の y2 を `ExtractionTask` に、正解行の `y_axis` を `Curve` に渡す。
+
+#### 後方互換の確認
+
+2本目の軸を持たない図では `FigureFrames(primary=frame, secondary=None)` になり、全系列が
+これまでと同じ1つのフレームで正規化される。採点対象の94図はいずれも dual-y ではないので、
+**既存の結果ファイルの点指標は1ビットも動かないはず**である。これは議論ではなく、
+アーカイブ済みの実行(`score_llm_predictions.py v3-noaxis`)を再採点して確かめる。
+
+**確認済み(2026-10-07).** 実装の前後で `score_llm_predictions.py v3-noaxis` を実行し、
+4モデル分の結果ファイルを比べた。`run_at` を除いて**バイト単位で同一**である
+(claude-opus-5-5 / claude-sonnet-5-5 / claude-fable-5-1 / claude-haiku-4-5)。
+
+#### これで足りないもの(dual-y 図を実際にデータセットへ入れるために、まだ必要な作業)
+
+1. **正解データの2本目.** Starrydata は図ごとに1組の `(prop_x, prop_y)` しか持たない
+   (local-model.md「右側の第2軸の系列は使わない」)。右軸の系列は §7.65 の補足デジタイズと
+   同じ枠組みで足すことになる。
+2. **registry への `y2_range` の記入と目視検証.** 現行の軸レビュー(§7.45 の Web UI、
+   `pairing_checks.py`)は y 軸1本を前提にしているので、2本目を同じ精度で検証する経路が要る。
+3. **主条件2(pixcal)の渡し方.** 「各軸の目盛2本のピクセル位置と値」に右軸の2本を足す。
+   人が WebPlotDigitizer で2軸を校正するのと同じ情報なので、原則(3.1)には反しない。
+4. **参考指標(曲線距離)の扱い.** `matcher_for_task` のスパン下限(§7.66)は図に1つの y レンジ
+   しか見ていない。dual-y 図では主軸のレンジが右軸の系列にも当たる。主指標ではないので今回は
+   触らず、dual-y 図を入れる際に決める。
+5. **リーダーボードの内訳.** 図タイプ別内訳(§7.38)に dual-y の列を足すかどうか。

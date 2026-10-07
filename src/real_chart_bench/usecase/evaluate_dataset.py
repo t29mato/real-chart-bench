@@ -18,6 +18,7 @@ from real_chart_bench.domain.matching import CurveMatcher, HungarianCurveMatcher
 from real_chart_bench.domain.metrics import NormalizedYDistanceMetric
 from real_chart_bench.domain.point_metrics import (
     AxisFrame,
+    FigureFrames,
     PointEvaluation,
     evaluate_points,
     is_dense_marker_figure,
@@ -77,9 +78,29 @@ POINT_NORM = "euclidean"
 
 
 def axis_frame_for_task(task: ExtractionTask) -> AxisFrame:
-    """The axis extent a figure's points are normalized by (design §7.67)."""
+    """The axis extent a figure's points are normalized by (design §7.67).
+
+    The *left* y axis when the figure has two -- see ``figure_frames_for_task``.
+    """
     return AxisFrame(
         x_range=task.x_range, y_range=task.y_range, x_scale=task.x_scale, y_scale=task.y_scale
+    )
+
+
+def figure_frames_for_task(task: ExtractionTask) -> FigureFrames:
+    """Both of a figure's axis frames (design §7.84). The second one exists
+    only when the task carries a second y range; the two share the x axis,
+    which is what a twin y axis means."""
+    if task.y2_range is None:
+        return FigureFrames(primary=axis_frame_for_task(task))
+    return FigureFrames(
+        primary=axis_frame_for_task(task),
+        secondary=AxisFrame(
+            x_range=task.x_range,
+            y_range=task.y2_range,
+            x_scale=task.x_scale,
+            y_scale=task.y2_scale,
+        ),
     )
 
 
@@ -125,13 +146,13 @@ def _point_evaluations(
     taus: Sequence[float],
     norm: str,
 ) -> tuple[PointEvaluation, ...]:
-    frame = axis_frame_for_task(item.task)
-    return tuple(evaluate_points(predicted, item.ground_truth, frame, tau, norm) for tau in taus)
+    frames = figure_frames_for_task(item.task)
+    return tuple(evaluate_points(predicted, item.ground_truth, frames, tau, norm) for tau in taus)
 
 
 def marker_density_for(item: DatasetItem, tau: float) -> MarkerDensity:
     """design §7.72: the figure's marker spacing and whether it is dense at ``tau``."""
-    spacing = median_nearest_neighbor_spacing(item.ground_truth, axis_frame_for_task(item.task))
+    spacing = median_nearest_neighbor_spacing(item.ground_truth, figure_frames_for_task(item.task))
     return MarkerDensity(
         median_nn_spacing=spacing, dense=is_dense_marker_figure(spacing, tau), tau=tau
     )

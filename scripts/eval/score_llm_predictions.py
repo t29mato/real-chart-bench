@@ -33,6 +33,7 @@ from real_chart_bench.adapter.agent_run_archive import (  # noqa: E402
 from real_chart_bench.adapter.ground_truth_store import (  # noqa: E402
     ground_truth_revision,
     load_ground_truth,
+    y_axis_of,
 )
 from real_chart_bench.adapter.local_vlm_run import load_local_vlm_run  # noqa: E402
 from real_chart_bench.adapter.printed_space import (  # noqa: E402
@@ -1116,12 +1117,17 @@ def main() -> None:
                 y_range=tuple(p.y_range),
                 x_scale=p.x_scale,
                 y_scale=p.y_scale,
+                # design 7.84: the right-hand y axis, for a figure that has
+                # one. None on every entry today.
+                y2_range=tuple(p.y2_range) if p.y2_range is not None else None,
+                y2_scale=p.y2_scale if p.y2_scale is not None else ScaleType.LINEAR,
             ),
             # Built exactly as run_baselines.py's _ground_truth_for does --
             # no scale arguments, series_label from prop_y -- so these figures
             # are scored against the same ground truth the CV baselines face.
             ground_truth=[Curve(x_values=tuple(c["x"]), y_values=tuple(c["y"]),
-                                series_label=c.get("prop_y")) for c in gt],
+                                series_label=c.get("prop_y"),
+                                y_axis=y_axis_of(c)) for c in gt],
         ))
         order.append(t["id"])
 
