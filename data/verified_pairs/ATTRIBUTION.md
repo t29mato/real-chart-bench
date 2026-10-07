@@ -56,7 +56,7 @@ underlying data (curve values) is unchanged either way.
 | [10.1007/s40243-014-0026-5](https://doi.org/10.1007/s40243-014-0026-5) | cc-by | `data/verified_pairs/crops/3733/fig3a.png` | yes |
 | [10.1007/s40243-014-0026-5](https://doi.org/10.1007/s40243-014-0026-5) | cc-by | `data/verified_pairs/crops/3733/fig3b.png` | yes |
 | [10.1007/s40820-022-00967-6](https://doi.org/10.1007/s40820-022-00967-6) | cc-by | `data/verified_pairs/crops/47998/fig3c.png` | yes |
-| [10.1021/acsami.0c19341](https://doi.org/10.1021/acsami.0c19341) | cc-by | `data/verified_pairs/images/32593/p02_embedded_3.jpg` | no |
+| [10.1021/acsami.0c19341](https://doi.org/10.1021/acsami.0c19341) | cc-by | `data/verified_pairs/crops/32593/fig1a.png` | yes |
 | [10.1038/ncomms10892](https://doi.org/10.1038/ncomms10892) | cc-by | `data/verified_pairs/crops/34286/fig4c.png` | yes |
 | [10.1038/ncomms10892](https://doi.org/10.1038/ncomms10892) | cc-by | `data/verified_pairs/crops/34286/fig4d.png` | yes |
 | [10.1038/s41467-018-04958-3](https://doi.org/10.1038/s41467-018-04958-3) | cc-by | `data/verified_pairs/crops/18869/fig3a.png` | yes |
@@ -110,11 +110,8 @@ underlying data (curve values) is unchanged either way.
 | [10.12693/aphyspola.127.287](https://doi.org/10.12693/aphyspola.127.287) | cc-by | `data/verified_pairs/crops/5902/corrected_fig1.png` | yes |
 | [10.12693/aphyspola.127.287](https://doi.org/10.12693/aphyspola.127.287) | cc-by | `data/verified_pairs/crops/5902/corrected_fig2.png` | yes |
 | [10.12693/aphyspola.127.287](https://doi.org/10.12693/aphyspola.127.287) | cc-by | `data/verified_pairs/crops/5902/corrected_fig3.png` | yes |
-| [10.12693/aphyspola.127.382](https://doi.org/10.12693/aphyspola.127.382) | cc-by | `data/verified_pairs/crops/5904/corrected_fig5.png` | yes |
+| [10.12693/aphyspola.127.382](https://doi.org/10.12693/aphyspola.127.382) | cc-by | `data/verified_pairs/crops/5904/deskewed_fig5.png` | yes |
 | [10.1371/journal.pone.0095287](https://doi.org/10.1371/journal.pone.0095287) | cc-by | `data/verified_pairs/images/4965/p04_embedded_6.jpg` | no |
-| [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4a.png` | yes |
-| [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4b.png` | yes |
-| [10.1515/amm-2015-0104](https://doi.org/10.1515/amm-2015-0104) | cc-by | `data/verified_pairs/crops/446/fig4c.png` | yes |
 | [10.15826/chimtech.2023.10.1.13](https://doi.org/10.15826/chimtech.2023.10.1.13) | cc-by | `data/verified_pairs/images/48032/p05_embedded_6.jpg` | no |
 | [10.3389/fchem.2014.00106](https://doi.org/10.3389/fchem.2014.00106) | cc-by | `data/verified_pairs/crops/44283/fig1a.png` | yes |
 | [10.3389/fchem.2014.00106](https://doi.org/10.3389/fchem.2014.00106) | cc-by | `data/verified_pairs/crops/44283/fig2_inset.png` | yes |
@@ -146,8 +143,8 @@ underlying data (curve values) is unchanged either way.
 | [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig8a.png` | yes |
 | [10.3389/fmats.2020.569723](https://doi.org/10.3389/fmats.2020.569723) | cc-by | `data/verified_pairs/crops/29352/fig8b.png` | yes |
 | [10.3390/ma12162545](https://doi.org/10.3390/ma12162545) | cc-by | `data/verified_pairs/crops/47367/fig8_p15_crop.png` | yes |
-| [10.3390/ma13092164](https://doi.org/10.3390/ma13092164) | cc-by | `data/verified_pairs/images/28020/p06_embedded_11.jpg` | no |
-| [10.3390/ma14185264](https://doi.org/10.3390/ma14185264) | cc-by | `data/verified_pairs/images/36305/p09_embedded_12.jpg` | no |
+| [10.3390/ma13092164](https://doi.org/10.3390/ma13092164) | cc-by | `data/verified_pairs/crops/28020/fig7a.png` | yes |
+| [10.3390/ma14185264](https://doi.org/10.3390/ma14185264) | cc-by | `data/verified_pairs/crops/36305/fig5a.png` | yes |
 | [10.3390/ma15124126](https://doi.org/10.3390/ma15124126) | cc-by | `data/verified_pairs/images/45914/p07_embedded_20.jpg` | no |
 | [10.3390/ma15124126](https://doi.org/10.3390/ma15124126) | cc-by | `data/verified_pairs/images/45914/p07_embedded_21.jpg` | no |
 | [10.3390/ma15228268](https://doi.org/10.3390/ma15228268) | cc-by | `data/verified_pairs/images/45906/p12_embedded_41.jpg` | no |

@@ -57,6 +57,13 @@ def main() -> None:
             continue
         if "/" not in pairing.image_path:
             continue  # not committed under data/verified_pairs/ -- nothing to attribute yet
+        # The file is what gets redistributed, so the list follows the files on
+        # disk, not the registry. A figure dropped for a license term has its
+        # image deleted (exclude_license_restricted.py); attributing it here
+        # would keep claiming we ship it, under the license we recorded before
+        # the term changed.
+        if not (REPO_ROOT / pairing.image_path).exists():
+            continue
         paper = papers_by_id.get(pairing.paper_id)
         doi = paper["doi"] if paper else "unknown"
         doi_link = f"[{doi}](https://doi.org/{doi})" if paper else doi
