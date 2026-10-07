@@ -66,3 +66,5 @@ separately instead of being prompted away.
   sum scores, fig_22 one decimal, fig_16 mostly zeros); only fig_19 is identical
   as a whole. Read as both models snapping to the same grid, not copying; the
   sealed directories of different models are siblings, so this is not proof.
+- batch15 / Sonnet 5.5: mostly eyeballed; fig_04, fig_06 interpolated on a
+  regular grid from key values.
