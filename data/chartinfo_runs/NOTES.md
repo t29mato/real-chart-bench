@@ -68,3 +68,5 @@ separately instead of being prompted away.
   sealed directories of different models are siblings, so this is not proof.
 - batch15 / Sonnet 5.5: mostly eyeballed; fig_04, fig_06 interpolated on a
   regular grid from key values.
+- batch18 / Sonnet 5.5: fig_14, 16, 19, 22 sampled along curves (fig_22 S_3
+  extrapolated by scaling S_2; fig_16 two series identical).
