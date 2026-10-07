@@ -17,9 +17,11 @@ import json
 import math
 import pathlib
 import sys
+from collections import Counter
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 sys.path.insert(0, "src")
 
@@ -122,14 +124,61 @@ def _is_color(pixel: np.ndarray, target: tuple[int, int, int]) -> bool:
 
 
 # マーカーの形を見る窓。図のマーカーはおおむね 6〜16 px。
+# 窓を広げれば大きいマーカーも拾えるが、tests/fixtures/curve_style_ground_truth.json
+# (12図57曲線)で測ると窓を広げるほど正解率が下がる(隣のマーカーや線を
+# 拾いやすくなるため)。11px が実測で最も良かったので変えていない。
 MARKER_WINDOW = 11
+# 形の分類のしきい値。同じ fixture で測って決めた値(元は 0.88 / 0.66 の勘)。
+# 丸と三角は外接箱に対する塗りの割合が重なる(丸 0.5〜0.9、三角 0.6〜0.7)ので、
+# 重心のずれ(三角)を塗り割合より先に見る必要がある。
+FILL_SQUARE = 0.88
+FILL_CIRCLE = 0.48
+CENTROID_OFFSET = 0.10
+# マーカーの塊を線や隣のマーカーから切り離す開き処理の構造要素(8近傍、半径1)。
+_BLOB_STRUCT = np.ones((3, 3), dtype=bool)
+
+
+def _isolate_marker_blob(mask: np.ndarray, seed: tuple[int, int]) -> np.ndarray | None:
+    """窓内の色マスクから、中心のマーカー1個だけの塊を取り出す。
+
+    窓内の色が合う画素を全部使うと、隣のマーカー・文字・別の曲線が同じ窓に
+    入ったときに紛れ込んで塗りの割合や外接箱が壊れる(21283 や 15452 の密な
+    データで顕著)。まず中心画素を含む連結成分だけに絞り、次に開き処理
+    (収縮してから膨張)で線の太さ(2〜3px)だけの細い部分を削ぎ、マーカー
+    本体の塊だけを残す。線が太くてマーカーごと消えてしまったとき
+    (小さいマーカーや細い菱形)は、削る前の連結成分に戻す。中空(縁取りだけ)
+    のマーカーは穴埋めして、塗りつぶしマーカーと同じ基準で形を測れるようにする。
+    """
+    if mask.sum() < 6:
+        return None
+    labeled, _ = ndimage.label(mask, structure=_BLOB_STRUCT)
+    seed_r = min(max(seed[0], 0), mask.shape[0] - 1)
+    seed_c = min(max(seed[1], 0), mask.shape[1] - 1)
+    seed_label = labeled[seed_r, seed_c]
+    if seed_label == 0:
+        rows, cols = np.nonzero(mask)
+        nearest = int(np.argmin((rows - seed_r) ** 2 + (cols - seed_c) ** 2))
+        seed_label = labeled[rows[nearest], cols[nearest]]
+    blob = labeled == seed_label
+
+    opened = ndimage.binary_opening(blob, structure=_BLOB_STRUCT)
+    if opened.sum() >= max(6, 0.25 * blob.sum()):
+        labeled2, _ = ndimage.label(opened, structure=_BLOB_STRUCT)
+        if labeled2[seed_r, seed_c] != 0:
+            blob = labeled2 == labeled2[seed_r, seed_c]
+        else:
+            rows, cols = np.nonzero(opened)
+            nearest = int(np.argmin((rows - seed_r) ** 2 + (cols - seed_c) ** 2))
+            blob = labeled2 == labeled2[rows[nearest], cols[nearest]]
+    return ndimage.binary_fill_holes(blob)
 
 
 def marker_shape(image: np.ndarray, px: float, py: float, color: tuple[int, int, int]) -> str:
-    """マーカー1個の形。塗りの割合と重心の偏りで分ける。
+    """マーカー1個の形。重心の偏りと、塗りの割合で分ける。
 
-    外接箱に対する塗りの割合が、丸 ~0.79、四角 ~1.0、菱形と三角 ~0.5 になる。
-    菱形と三角は、重心が箱の中心から縦にずれるかで分ける(三角はずれる)。
+    中心の連結成分だけを取り出し(_isolate_marker_blob)、三角は重心が外接箱の
+    縦の中心から大きくずれる性質を先に見る。残りは外接箱に対する塗りの割合で
+    四角(高い)・丸(中)・菱形(低い)に分ける。
     """
     h, w = image.shape[:2]
     cx, cy = int(round(px)), int(round(py))
@@ -144,21 +193,22 @@ def marker_shape(image: np.ndarray, px: float, py: float, color: tuple[int, int,
             for r in range(patch.shape[0])
         ]
     )
-    if mask.sum() < 6:
+    blob = _isolate_marker_blob(mask, (cy - y0, cx - x0))
+    if blob is None or blob.sum() < 6:
         return "unknown"
-    rows, cols = np.nonzero(mask)
+    rows, cols = np.nonzero(blob)
     height, width = int(np.ptp(rows)) + 1, int(np.ptp(cols)) + 1
-    if height < 3 or width < 3 or max(height, width) > 2 * MARKER_WINDOW:
+    if height < 3 or width < 3:
         return "unknown"
-    fill = mask.sum() / float(height * width)
     # 重心が外接箱の縦の中心からどれだけずれているか(0 = 中心、0.5 = 端)
     offset = abs((rows.mean() - rows.min()) / max(height - 1, 1) - 0.5)
-    if fill >= 0.88:
-        return "square"
-    if fill >= 0.66:
-        return "circle"
-    if offset >= 0.08:
+    if offset >= CENTROID_OFFSET:
         return "triangle-down" if rows.mean() - rows.min() < (height - 1) / 2 else "triangle-up"
+    fill = blob.sum() / float(height * width)
+    if fill >= FILL_SQUARE:
+        return "square"
+    if fill >= FILL_CIRCLE:
+        return "circle"
     return "diamond"
 
 
@@ -197,6 +247,20 @@ def line_style(duties: list[float]) -> str:
     return "none"
 
 
+def majority_marker(shapes: list[str]) -> str:
+    """曲線沿いの点ごとの形から、曲線全体の形を多数決で決める。
+
+    1点1点は滲みで形が揺れるので多数決を採る。同率のときは set() 経由の
+    max だとハッシュ乱択のせいで実行ごとに答えが変わりうる(再現性がない)。
+    Counter.most_common は同率のとき曲線に沿って最初に出てきた形を安定して
+    返す。
+    """
+    known = [s for s in shapes if s != "unknown"]
+    if not known:
+        return "unknown"
+    return Counter(known).most_common(1)[0][0]
+
+
 def styles_for_figure(entry: dict, curves: list[dict]) -> list[dict]:
     """図の1枚について、曲線ごとの色と線種。"""
     calibration = calibration_for(entry)
@@ -221,13 +285,11 @@ def styles_for_figure(entry: dict, curves: list[dict]) -> list[dict]:
                 if duty is not None:
                     duties.append(duty)
             shapes = [marker_shape(image, px, py, color) for px, py in pixels]
-        known = [s for s in shapes if s != "unknown"]
         out.append(
             {
                 "color": f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" if color else None,
                 "style": line_style(duties) if color else "unknown",
-                # 1つ1つは滲みで揺れるので、曲線全体の多数決を採る
-                "marker": max(set(known), key=known.count) if known else "unknown",
+                "marker": majority_marker(shapes),
                 "sampled": len(colors),
                 "of": len(pixels),
             }
