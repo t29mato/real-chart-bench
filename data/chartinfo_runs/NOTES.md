@@ -74,3 +74,9 @@ separately instead of being prompted away.
   63/1082 (9 off a 0.1 grid) and checked for batch07 -- no sign of copying.
 - batch07 / Opus 5.5: fig_15 red series copied from green peak positions
   (hidden under them); fig_02 all series read on the left axis.
+- batch07 overlap detail: 214/1927 Opus points equal Fable's exactly; 118 of
+  them in fig_16 (x on a 0.1 grid, y ~1e-6 i.e. zero), the rest scattered
+  (fig_26: 4 points to 4 decimals). Both read marker centroids in pixels
+  through the same ticks, so identical pixels give identical values; not
+  treated as copying. Later batches' sealed directories should be separated
+  per model.
