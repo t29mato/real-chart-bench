@@ -21,6 +21,28 @@ class ScaleType(Enum):
     LOG = "log"
 
 
+class YAxis(Enum):
+    """Which y axis a series is read against (design §7.84).
+
+    A figure may print a second y axis on the right with its own range and
+    scale, and draw some of its series against it. The axis belongs to the
+    series, so it is carried here rather than looked up per figure.
+
+    PRIMARY is the left axis and the default: every series of a figure with
+    one y axis is PRIMARY, which is every figure of the dataset today.
+
+    On the *predicted* side this is never read. A prediction is not asked to
+    declare an axis (that would change the task's output format, and no
+    dedicated model could answer it) -- the point metric normalizes a
+    predicted series by the frame of the ground-truth series it was matched
+    with, and the printed values a prediction returns already say which axis
+    it was read against. See domain/point_metrics.FigureFrames.
+    """
+
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
+
+
 def _as_float_tuple(values, field_name: str) -> tuple[float, ...]:
     try:
         return tuple(float(v) for v in values)
@@ -50,6 +72,7 @@ class Curve:
     y_values: tuple[float, ...]
     series_label: str = ""
     x_scale: ScaleType = ScaleType.LINEAR
+    y_axis: YAxis = YAxis.PRIMARY  # design §7.84
     x_min: float = field(init=False, repr=False)
     x_max: float = field(init=False, repr=False)
     y_min: float = field(init=False, repr=False)
@@ -110,6 +133,7 @@ def curves_for_curve_scoring(curves: Sequence[Curve]) -> list[Curve]:
                     y_values=tuple(curve.y_values[i] for i in keep),
                     series_label=curve.series_label,
                     x_scale=curve.x_scale,
+                    y_axis=curve.y_axis,
                 )
             )
     return out

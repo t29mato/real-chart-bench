@@ -55,6 +55,12 @@ def _parse_entry(raw: dict[str, Any]) -> VerifiedPairing:
         evidence=raw["evidence"],
         x_scale=ScaleType(raw["x_scale"]) if "x_scale" in raw else ScaleType.LINEAR,
         y_scale=ScaleType(raw["y_scale"]) if "y_scale" in raw else ScaleType.LINEAR,
+        # design §7.84: linear unless the entry says otherwise, but only for a
+        # figure that has a second y axis at all
+        y2_range=_parse_range(raw.get("y2_range")),
+        y2_scale=(
+            ScaleType(raw.get("y2_scale", "linear")) if raw.get("y2_range") is not None else None
+        ),
         excluded_reason=raw.get("excluded_reason"),
         license_id=raw.get("license_id"),
         rejection_category=(
@@ -140,6 +146,15 @@ def serialize_entry(
     out["status"] = pairing.status.value
     out["verified_at"] = pairing.verified_at
     out["evidence"] = pairing.evidence
+
+    # design §7.84: both halves of the second axis, or neither -- an entry
+    # without one keeps no y2 keys at all
+    if pairing.y2_range is not None:
+        out["y2_range"] = _serialize_range(pairing.y2_range)
+        out["y2_scale"] = pairing.y2_scale.value
+    else:
+        out.pop("y2_range", None)
+        out.pop("y2_scale", None)
 
     for key, value in (
         ("license_id", pairing.license_id),

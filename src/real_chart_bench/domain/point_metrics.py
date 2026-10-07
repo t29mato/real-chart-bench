@@ -20,6 +20,13 @@ A value that cannot be placed on the axis -- non-finite, or non-positive on a
 log axis -- never matches, but still counts as a point on its side (in
 precision's denominator when predicted, recall's when ground truth).
 
+A figure may print a second y axis on the right (design §7.84). Then there are
+two frames, sharing the x axis, and a ground-truth series says which one it is
+read against (``Curve.y_axis``). A *predicted* series declares nothing: it is
+normalized by the frame of whatever ground-truth series it is matched with, so
+a series read against the right axis -- whose printed values live in the right
+axis's numeric space -- can only match a right-axis series.
+
 Pure: numpy and scipy only, like ``matching.py``.
 """
 
@@ -32,7 +39,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from real_chart_bench.domain.curve import Curve, ScaleType
+from real_chart_bench.domain.curve import Curve, ScaleType, YAxis
 
 NORMS = ("euclidean", "chebyshev")
 
@@ -64,6 +71,41 @@ class AxisFrame:
         xs = _normalize_axis(curve.x_values, self.x_range, self.x_scale)
         ys = _normalize_axis(curve.y_values, self.y_range, self.y_scale)
         return np.column_stack([xs, ys])
+
+
+@dataclass(frozen=True)
+class FigureFrames:
+    """One figure's axis frames (design §7.84): the left y axis, and the right
+    one when the figure prints a second y axis. The two share the x axis.
+
+    A bare ``AxisFrame`` is accepted anywhere ``FigureFrames`` is, and means a
+    figure with one y axis -- which is every figure of the dataset today, and
+    is scored exactly as it was before this existed.
+    """
+
+    primary: AxisFrame
+    secondary: AxisFrame | None = None
+
+    @staticmethod
+    def of(frame: AxisFrame | FigureFrames) -> FigureFrames:
+        return frame if isinstance(frame, FigureFrames) else FigureFrames(primary=frame)
+
+    def for_curve(self, curve: Curve) -> AxisFrame:
+        """The frame ``curve`` is normalized by.
+
+        A series on the second axis of a figure that has none is a dataset
+        error, not a scoring decision: normalizing it by the left axis would
+        be exactly the wrong-range normalization §7.84 removes, so it raises
+        instead.
+        """
+        if curve.y_axis is YAxis.PRIMARY:
+            return self.primary
+        if self.secondary is None:
+            raise ValueError(
+                f"series {curve.series_label!r} is on the secondary y axis but the "
+                "figure has no secondary frame (registry y2_range missing?)"
+            )
+        return self.secondary
 
 
 def _axis_value(v: float, scale: ScaleType) -> float:
@@ -167,7 +209,7 @@ def _match_points(pred: np.ndarray, gt: np.ndarray, tau: float, norm: str) -> _P
 def evaluate_points(
     predicted: Sequence[Curve],
     ground_truth: Sequence[Curve],
-    frame: AxisFrame,
+    frame: AxisFrame | FigureFrames,
     tau: float,
     norm: str = "euclidean",
 ) -> PointEvaluation:
@@ -176,6 +218,12 @@ def evaluate_points(
     ``norm`` is the point distance in the normalized space: "euclidean"
     (design §7.67) or "chebyshev" (max(|dx|, |dy|) -- Scatteract's per-axis
     criterion).
+
+    ``frame`` is the figure's axis extent: one ``AxisFrame``, or
+    ``FigureFrames`` for a figure with a second y axis (design §7.84). With
+    two frames, each (predicted, ground-truth) series pair is compared in the
+    frame of its *ground-truth* series -- the prediction is not asked which
+    axis it read.
 
     Empty sides: no ground-truth points -> recall 1 (nothing to find); no
     predicted points -> precision 0 unless there was also nothing to find
@@ -187,14 +235,24 @@ def evaluate_points(
     if norm not in NORMS:
         raise ValueError(f"norm must be one of {NORMS}, got {norm!r}")
 
-    pred_pts = [frame.normalize(c) for c in predicted]
-    gt_pts = [frame.normalize(c) for c in ground_truth]
+    frames = FigureFrames.of(frame)
+    gt_frames = [frames.for_curve(c) for c in ground_truth]
+    gt_pts = [f.normalize(c) for f, c in zip(gt_frames, ground_truth, strict=True)]
+    # a predicted series is normalized once per frame it is compared against:
+    # whichever frame the ground-truth series of the pair uses
+    pred_pts = {f: [f.normalize(c) for c in predicted] for f in dict.fromkeys(gt_frames)}
     n_pred_total = sum(len(c) for c in predicted)
     n_gt_total = sum(len(c) for c in ground_truth)
 
     series: list[PointMatchResult] = []
     if predicted and ground_truth:
-        pair = [[_match_points(p, g, tau, norm) for g in gt_pts] for p in pred_pts]
+        pair = [
+            [
+                _match_points(pred_pts[gt_frames[j]][i], gt_pts[j], tau, norm)
+                for j in range(len(ground_truth))
+            ]
+            for i in range(len(predicted))
+        ]
         cost = np.array(
             [
                 [
@@ -255,7 +313,9 @@ def evaluate_points(
 DENSE_SPACING_TAU_FACTOR = 2.0
 
 
-def median_nearest_neighbor_spacing(ground_truth: Sequence[Curve], frame: AxisFrame) -> float:
+def median_nearest_neighbor_spacing(
+    ground_truth: Sequence[Curve], frame: AxisFrame | FigureFrames
+) -> float:
     """Median, over every ground-truth point, of the Euclidean distance to the
     nearest other point of the *same* series, in the axis-normalized space
     (log axes in log10) -- design §7.72.
@@ -263,10 +323,14 @@ def median_nearest_neighbor_spacing(ground_truth: Sequence[Curve], frame: AxisFr
     A point that cannot be placed on the axis is neither a neighbour nor
     counted. A series with fewer than two placeable points contributes
     nothing; ``inf`` when no series has two.
+
+    Each series is measured in its own axis's frame (design §7.84), so a
+    right-axis series' spacing is a distance on the plot box like any other.
     """
+    frames = FigureFrames.of(frame)
     nearest: list[float] = []
     for curve in ground_truth:
-        pts = frame.normalize(curve)
+        pts = frames.for_curve(curve).normalize(curve)
         pts = pts[np.isfinite(pts).all(axis=1)]
         if len(pts) < 2:
             continue

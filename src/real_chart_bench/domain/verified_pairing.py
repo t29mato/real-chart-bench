@@ -185,6 +185,12 @@ class VerifiedPairing:
     evidence: str
     x_scale: ScaleType = ScaleType.LINEAR
     y_scale: ScaleType = ScaleType.LINEAR  # design §7.25
+    # design §7.84: the second y axis, printed on the right, for a figure that
+    # draws some of its series against it. The x axis is shared, so only the y
+    # extent and scale are recorded. None on every entry today -- the dataset
+    # has no dual-y figure yet. y2_scale is None exactly when y2_range is.
+    y2_range: tuple[float, float] | None = None
+    y2_scale: ScaleType | None = None
     # design §7.30 (HQ license audit request 2026-08-22): the paper-level
     # license is already recorded in data/manifest/v0/papers.json, but a
     # pairing's own license basis (needed to justify committing a derived
@@ -276,6 +282,17 @@ class VerifiedPairing:
                 "gt_suspect_status is only allowed when rejection_category is GT_SUSPECT "
                 f"(got rejection_category={self.rejection_category})"
             )
+
+        # design §7.84: the second y axis is a second axis of the same figure,
+        # so it needs the first one to exist; and its range and scale come as
+        # a pair -- a scale alone describes an axis that is not there, and a
+        # range alone would leave the scale to be guessed.
+        if self.y2_range is not None and self.y_range is None:
+            raise ValueError("y2_range requires y_range (the first y axis) to be set")
+        if self.y2_scale is not None and self.y2_range is None:
+            raise ValueError("y2_scale requires y2_range (the second axis's extent)")
+        if self.y2_range is not None and self.y2_scale is None:
+            raise ValueError("y2_range requires y2_scale (linear or log, never guessed)")
 
         # design §7.57: a tick range is a refinement of the frame range for
         # the same axis, so it cannot exist for an axis that has no frame
