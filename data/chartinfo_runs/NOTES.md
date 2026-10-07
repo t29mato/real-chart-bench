@@ -70,3 +70,7 @@ separately instead of being prompted away.
   regular grid from key values.
 - batch18 / Sonnet 5.5: fig_14, 16, 19, 22 sampled along curves (fig_22 S_3
   extrapolated by scaling S_2; fig_16 two series identical).
+- batch06/07 cross-model overlap check (Opus vs Fable): exact-equal points
+  63/1082 (9 off a 0.1 grid) and checked for batch07 -- no sign of copying.
+- batch07 / Opus 5.5: fig_15 red series copied from green peak positions
+  (hidden under them); fig_02 all series read on the left axis.
