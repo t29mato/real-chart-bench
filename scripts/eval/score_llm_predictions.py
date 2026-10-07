@@ -1174,7 +1174,17 @@ def main() -> None:
             if not model_dir.is_dir():
                 print(f"  {model_id}: 予測ファイルがない → スキップ")
                 continue
-            answers = load_agent_run_parts(model_dir, cond.get("pred_parts", OFFICIAL_PARTS))
+            try:
+                answers = load_agent_run_parts(
+                    model_dir, cond.get("pred_parts", OFFICIAL_PARTS)
+                )
+            except FileNotFoundError as exc:
+                # まだ走り終えていない実行(pilot だけ置いてあるなど)。
+                # 揃っていない回答を採点するのは誤りなので飛ばすが、ここで
+                # 止めると rescore_all.py の後続(chart2table / リーダーボード)
+                # まで道連れになる。欠けていることを言って先へ進む。
+                print(f"  {model_id}: 回答が揃っていない → スキップ({exc})")
+                continue
             raw = {f"{name}:{k}": v for k, v in answers.items()}
         for part in [] if cond.get("v2") else parts:
             c = CONDITIONS[part]
