@@ -60,3 +60,9 @@ separately instead of being prompted away.
   hidden points estimated in fig_11/16/30.
 - batch10 / Sonnet 5.5: eyeballed; fig_05 reconstructed from fitted curves;
   fig_23 values guessed on an integer grid.
+- batch05 / Fable 5.1: completed by a second agent (kept 6, added 24). Its
+  per-figure counts were close to Opus's, so the answers were compared: 369 of
+  1,792 points equal Opus's exactly, all of them on round grids (fig_19 integer
+  sum scores, fig_22 one decimal, fig_16 mostly zeros); only fig_19 is identical
+  as a whole. Read as both models snapping to the same grid, not copying; the
+  sealed directories of different models are siblings, so this is not proof.
