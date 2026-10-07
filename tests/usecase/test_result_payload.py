@@ -1,18 +1,22 @@
 """Per-figure rows and the dataset-level point_metrics block (design §7.67):
-macro (mean of per-figure values) is primary, micro (pooled points) alongside."""
+macro (mean of per-figure values) is primary, micro (pooled points) alongside.
+The secondary table_metrics block (design §7.84) is built the same way."""
 
 import pytest
 
 from real_chart_bench.domain.curve import Curve
 from real_chart_bench.domain.point_metrics import AxisFrame, evaluate_points
+from real_chart_bench.domain.table_metrics import TABLE_METRIC_LABEL, evaluate_chart_table
 from real_chart_bench.usecase.evaluate_dataset import DatasetItem, evaluate_model_on_dataset
 from real_chart_bench.usecase.model_runner import ExtractionTask
 from real_chart_bench.usecase.result_payload import (
     DENSE_MARKER_CRITERION,
     aggregate_dense_marker_metrics,
     aggregate_point_metrics,
+    aggregate_table_metrics,
     figure_result_row,
     point_row,
+    table_row,
 )
 
 UNIT = AxisFrame(x_range=(0.0, 1.0), y_range=(0.0, 1.0))
@@ -260,3 +264,86 @@ def test_dense_marker_metrics_with_no_dense_figure_has_zero_figures_and_no_means
 
 def test_dense_marker_metrics_is_none_when_a_row_lacks_marker_density():
     assert aggregate_dense_marker_metrics([{"figure_id": "old", "summary_score": 1.0}]) is None
+
+
+# --- chart-as-table metrics (design §7.84) -----------------------------------
+
+
+def _table(predicted, ground_truth):
+    return evaluate_chart_table(predicted, ground_truth, UNIT)
+
+
+def _labelled(points, label):
+    return Curve(
+        x_values=tuple(float(p[0]) for p in points),
+        y_values=tuple(float(p[1]) for p in points),
+        series_label=label,
+    )
+
+
+def _table_figure_row(metrics):
+    return {"figure_id": "f", "summary_score": 1.0, "table": table_row(metrics)}
+
+
+def test_table_row_keeps_the_three_variants_and_the_shared_triple_counts():
+    gt = [_labelled([(0.2, 0.4), (0.6, 0.8)], "HP680")]
+
+    row = table_row(_table(gt, gt))
+
+    assert set(row) == {"n_predicted", "n_ground_truth", "rms", "rms_value_only", "nms"}
+    assert (row["n_predicted"], row["n_ground_truth"]) == (2, 2)
+    assert row["rms"] == {"precision": 1.0, "recall": 1.0, "f1": 1.0, "score": 2.0}
+    assert row["nms"]["f1"] == 1.0
+
+
+def test_figure_result_row_adds_table_only_when_the_scorer_passes_it():
+    gt = [_labelled([(0.2, 0.2), (0.6, 0.6)], "a")]
+    task = ExtractionTask(image_bytes=b"i", x_range=(0.0, 1.0), y_range=(0.0, 1.0))
+    (result,) = evaluate_model_on_dataset(
+        _Replay(gt), [DatasetItem("f1", task, gt)], matcher_for=_matcher_for
+    )
+
+    assert "table" not in figure_result_row(result)
+    assert figure_result_row(result, table=_table(gt, gt))["table"]["rms"]["f1"] == 1.0
+
+
+def test_table_aggregate_names_the_three_numbers_and_averages_the_figures():
+    gt = [_labelled([(0.2, 0.4)], "HP680")]
+    # the printed legend differs from the database label, and the value is 20%
+    # of |g| off -- which only the axis-range denominator can still see
+    wrong = [_labelled([(0.2, 0.48)], "printed legend")]
+    rows = [_table_figure_row(_table(gt, gt)), _table_figure_row(_table(wrong, gt))]
+
+    block = aggregate_table_metrics(rows)
+
+    assert block["n_figures"] == 2
+    assert block["definition"] == TABLE_METRIC_LABEL
+    assert block["macro"]["rms_f1"] == pytest.approx(0.5)  # 1.0 and 0.0
+    assert block["macro"]["rms_f1_value_only"] == pytest.approx(0.5)
+    assert block["macro"]["nms_f1"] == pytest.approx((1.0 + 0.92) / 2)
+    assert set(block["macro"]) == set(block["micro"])
+
+
+def test_table_aggregate_pools_triples_in_the_micro_average():
+    gt_small = [_labelled([(0.2, 0.4)], "a")]
+    gt_big = [_labelled([(0.1 * i, 0.5) for i in range(1, 5)], "b")]
+    rows = [
+        _table_figure_row(_table(gt_small, gt_small)),  # 1 triple, perfect
+        _table_figure_row(_table([], gt_big)),  # 4 triples, all missed
+    ]
+
+    block = aggregate_table_metrics(rows)
+
+    assert (block["n_predicted"], block["n_ground_truth"]) == (1, 5)
+    # macro averages the figures (1.0 and 0.0), micro the five triples
+    assert block["macro"]["rms_f1"] == pytest.approx(0.5)
+    assert block["micro"]["rms_recall"] == pytest.approx(0.2)
+    assert block["micro"]["rms_precision"] == pytest.approx(1.0)
+
+
+def test_table_aggregate_is_none_when_a_row_predates_the_table_metrics():
+    gt = [_labelled([(0.2, 0.4)], "a")]
+    rows = [_table_figure_row(_table(gt, gt)), {"figure_id": "old", "summary_score": 1.0}]
+
+    assert aggregate_table_metrics(rows) is None
+    assert aggregate_table_metrics([]) is None
