@@ -9,5 +9,6 @@ for f in events.jsonl last_message.txt; do
   [ -f "$W/$B/$M.$f" ] && cp "$W/$B/$M.$f" "$D/$M.$f"
 done
 "$R/.venv/bin/python" "$R/scripts/eval/score_chartinfo_pilot.py" "$D/$M.predictions.json" \
-  "$D/ground_truth.json" --key "$D/_key.json" > "$D/$M.score.txt" 2>/dev/null
+  "$D/ground_truth.json" --key "$D/_key.json" \
+  --zip ~/.cache/real-chart-bench/chartinfo/CHARTINFO_2024_Train.zip > "$D/$M.score.txt" 2>/dev/null
 grep "全" "$D/$M.score.txt" | head -1

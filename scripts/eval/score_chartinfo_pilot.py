@@ -123,12 +123,21 @@ def main() -> None:
     ap.add_argument("predictions")
     ap.add_argument("ground_truth")
     ap.add_argument("--key")
+    ap.add_argument(
+        "--zip",
+        help="CHART-Info ZIP: read each figure's annotation (by the key's source) so the "
+        "point F1 normalises by the axis range recovered from it (chartinfo_axis_range)",
+    )
     args = ap.parse_args()
 
     preds = json.loads(pathlib.Path(args.predictions).read_text())
     gts = json.loads(pathlib.Path(args.ground_truth).read_text())
     key = json.loads(pathlib.Path(args.key).read_text()) if args.key else {}
 
+    import zipfile
+
+    zf = zipfile.ZipFile(args.zip) if args.zip else None
+    spans: dict[str, int] = {}
     rows = []
     header = (f"{'図':<12}{'正解':>5}{'予測':>5}{'総合':>8}{'名前':>7}{'データ':>8}"
               f"{'点F1':>7}{'再現':>7}{'適合':>7}  出典")
@@ -137,7 +146,11 @@ def main() -> None:
         gt = gts[name]
         pred = preds.get(name, [])
         combined, nm, data = their_score(pred, gt) if pred else (0.0, 0.0, 0.0)
-        ours = our_score(pred, gt)
+        annotation = None
+        if zf is not None and key.get(name, {}).get("source"):
+            annotation = json.loads(zf.read(key[name]["source"]))
+        ours = our_score(pred, gt, annotation=annotation)
+        spans[ours.get("span_source", "?")] = spans.get(ours.get("span_source", "?"), 0) + 1
         src = key.get(name, {}).get("source", "").split("/")[-1][:-5].split("___")[-1][:28]
         rows.append((name, combined, nm, data, ours))
         print(
@@ -145,6 +158,7 @@ def main() -> None:
             f"{nm:>7.3f}{data:>8.3f}{ours['f1']:>7.3f}{ours['recall']:>7.3f}"
             f"{ours['precision']:>7.3f}  {src}"
         )
+    print(f"\n軸レンジの出どころ: {spans}")
     answered = [r for r in rows if r[4].get("n_pred", 0) > 0]
     print(
         f"\n全{len(rows)}図      総合 {st.mean(r[1] for r in rows):.4f}  "
