@@ -13,6 +13,12 @@ in writing, in the repo, before any message leaves it.
 - [`plotpick.md`](plotpick.md) — draft GitHub issue for the PlotPick author
   (no public email exists for this recipient, so it's an issue, not an
   email)
+- [`starrydata3-bundle-deletion.md`](starrydata3-bundle-deletion.md) —
+  **highest priority, and not blocked by the private repo**: ask the
+  Starrydata3 team to delete three figures from the e2e fixture bundle
+  handed over on 2026-09-09. Their paper now reads `cc-by-nc-nd`, and the
+  bundle embeds our crops of it, which ND forbids redistributing. This one
+  is our own error and should go out as soon as the owner can send it
 
 ## Current blocker: the repository is private
 
