@@ -147,6 +147,7 @@ def build_entries() -> list[dict]:
                     {
                         "label": info.get("label"),
                         "source": info.get("source"),
+                        "ambiguous": bool(info.get("ambiguous")),
                         "composition": info.get("composition", ""),
                         "sample_id": info.get("sample_id", ""),
                         "n_points": len(curve["x"]),

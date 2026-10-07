@@ -82,11 +82,14 @@
   <div class="eyebrow">real-chart-bench · 正解データの確認</div>
   <h1>系列名(試料)の確認</h1>
   <div class="how">
-    各曲線に Starrydata の <b>composition</b>(試料の化学式)を機械的に付けました。
-    どの曲線がどの試料かは<b>形の一致で機械が決めています</b>。
+    各曲線に Starrydata の <b>sample_name</b>(試料名)を機械的に付けました。
+    <code>HP680</code> <code>SPS760</code> のように、<b>図の凡例に印字されている名前</b>です。
+    どの曲線がどの試料かは<b>形の一致で機械が決めている</b>ので、取り違えがありえます。<br><br>
     <b>元の図の凡例と、右のプロットの凡例を見比べて</b>ください。色は両者で対応しています。<br><br>
-    <b style="color:var(--warn)">▌</b> が付いた図は、名前が付かなかったか重複している図です。先に見てください。
-    判定は自動保存され、下の「書き出す」で JSON をコピーできます。
+    <b style="color:var(--warn)">▌</b> が付いた図は、名前が付かなかった・重複した・<b>形が同じで機械には
+    決められなかった</b>図です。先に見てください。<br><br>
+    判定は<b>サーバに保存されるので、そのまま私が読めます</b>。書き出しボタンは不要ですが、
+    手元に残したいときは使えます。
   </div>
 </header>
 
@@ -95,6 +98,7 @@
   <button id="only-todo">未判定のみ</button>
   <button id="show-all">全部</button>
   <span class="count" id="count"></span>
+  <span class="count" id="sync" style="margin-left:0">保存先を確認中…</span>
 </div>
 
 <div id="list"></div>
@@ -111,8 +115,22 @@ const KEY = "series-label-review-v1";
 let verdicts = {};
 try { verdicts = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { verdicts = {}; }
 
-function save() {
+// 判定はサーバにも保存する。クリップボード経由だと受け取れないため。
+let db = null;
+const status = document.getElementById("sync");
+function note(text, bad) {
+  if (status) { status.textContent = text; status.style.color = bad ? "var(--bad)" : "var(--muted)"; }
+}
+function saveOne(id) {
+  if (!db) return;
+  const v = verdicts[id] || {};
+  db.doc("verdicts/" + id).set({
+    status: v.status || null, note: v.note || "", saved_at: new Date().toISOString(),
+  }).then(() => note("保存済み")).catch(err => note("保存できません: " + (err?.code || "不明"), true));
+}
+function save(id) {
   try { localStorage.setItem(KEY, JSON.stringify(verdicts)); } catch (e) { /* private mode */ }
+  if (id) saveOne(id);
   progress();
 }
 function progress() {
@@ -139,10 +157,13 @@ ENTRIES.forEach(e => {
       ? `<span class="lbl">${c.label}</span>`
       : `<span class="lbl none">名前なし</span>`;
     const isDup = c.label && dup[c.label] > 1;
-    const src = isDup ? `${c.source} · 重複` : c.source;
+    const marks = [c.source];
+    if (isDup) marks.push("重複");
+    if (c.ambiguous) marks.push("形が同じで機械には決められない");
+    const src = marks.join(" · ");
     return `<tr>
       <td style="width:1%"><span class="swatch" style="background:${c.color}"></span></td>
-      <td>${label}<div class="src${isDup ? " dup" : ""}">${src}</div></td>
+      <td>${label}<div class="src${isDup || c.ambiguous ? " dup" : ""}">${src}</div></td>
       <td style="width:1%;text-align:right;color:var(--muted);font-family:'JetBrains Mono',monospace">${c.n_points}点</td>
     </tr>`;
   }).join("");
@@ -156,7 +177,7 @@ ENTRIES.forEach(e => {
       <div class="pic"><img loading="lazy" src="${e.plot}" alt="正解データ">
         <div class="cap">正解データ + 付けた試料名</div></div>
     </div>
-    <table><thead><tr><th></th><th>試料名(composition)</th><th>点数</th></tr></thead>
+    <table><thead><tr><th></th><th>試料名(sample_name)</th><th>点数</th></tr></thead>
       <tbody>${rows}</tbody></table>
     <div class="verdict">
       <button data-v="ok">名前は正しい</button>
@@ -166,23 +187,26 @@ ENTRIES.forEach(e => {
     <textarea placeholder="メモ(任意)"></textarea>`;
 
   const buttons = card.querySelectorAll(".verdict button");
-  const note = card.querySelector("textarea");
+  const noteBox = card.querySelector("textarea");
   const paint = () => {
     const v = verdicts[e.id] || {};
     buttons.forEach(b => b.classList.toggle("on", b.dataset.v === v.status));
-    if (note.value !== (v.note || "")) note.value = v.note || "";
+    if (noteBox.value !== (v.note || "")) noteBox.value = v.note || "";
     card.dataset.done = v.status ? "1" : "0";
   };
   buttons.forEach(b => b.addEventListener("click", () => {
     const cur = verdicts[e.id] || {};
     verdicts[e.id] = { ...cur, status: cur.status === b.dataset.v ? null : b.dataset.v };
-    paint(); save();
+    paint(); save(e.id);
   }));
-  note.addEventListener("input", () => {
-    verdicts[e.id] = { ...(verdicts[e.id] || {}), note: note.value };
-    save();
+  let timer = null;
+  noteBox.addEventListener("input", () => {
+    verdicts[e.id] = { ...(verdicts[e.id] || {}), note: noteBox.value };
+    clearTimeout(timer);
+    timer = setTimeout(() => save(e.id), 700);
   });
   paint();
+  card.addEventListener("rehydrate", paint);
   list.appendChild(card);
 });
 
@@ -220,6 +244,32 @@ document.getElementById("export").addEventListener("click", async () => {
   }
 });
 
-filter("attn");
+// 要確認が無ければ全部出す(既定の絞り込みで空にならないように)
+filter(ENTRIES.some(e => e.needs_attention) ? "attn" : "all");
 progress();
+
+// サーバに保存済みの判定を読み込み、表示に反映する
+(async () => {
+  db = await claude.use("db");
+  if (!db) { note("この表示では保存できません(手元にだけ残ります)", true); return; }
+  try {
+    const snap = await db.collection("verdicts").get();
+    let loaded = 0;
+    snap.docs.forEach(d => {
+      const v = d.data() || {};
+      if (!v.status && !v.note) return;
+      verdicts[d.id] = { status: v.status || null, note: v.note || "" };
+      loaded++;
+    });
+    if (loaded) {
+      document.querySelectorAll(".card").forEach(c => c.dispatchEvent(new Event("rehydrate")));
+      note(`保存済み ${loaded} 件を読み込みました`);
+    } else {
+      note("保存の準備ができました");
+    }
+    progress();
+  } catch (err) {
+    note("読み込めません: " + (err?.code || "不明"), true);
+  }
+})();
 </script>

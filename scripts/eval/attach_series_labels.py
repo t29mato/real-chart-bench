@@ -1,8 +1,13 @@
-"""正解データの曲線に、Starrydata の試料名(composition / sample_id)を付ける。
+"""正解データの曲線に、Starrydata の試料名(sample_name)を付ける。
 
 これまで `ground_truth.json` の曲線は `prop_y` しか持っておらず、1図内の全曲線が
-同じ文字列になっていた(論文 3.6 / 7.2)。原因は取り込みの欠落で、公開 CSV には
-`composition` と `sample_id` がある(docs/experiments/2026-10-07-series-labels-available.md)。
+同じ文字列になっていた(論文 3.6 / 7.2)。原因は取り込みの欠落である。
+
+**名前は `*_samples.csv` の `sample_name` を使う。** `*_curves.csv` の `composition` では
+足りない。採点対象 94 図のうち 45 図は全曲線が同じ公称組成で、違うのは合成条件だけである
+(例 1527: Pb 系が4本、違いはホットプレス温度)。`composition` では区別できず、
+`sample_id` は DB の内部番号なので図のどこにも現れない。`sample_name` は
+`HP680` `SPS760` のように**図の凡例に印字されている文字列**で、45 図すべてを区別できた。
 
 対応づけは figure_id の中で行う。2段階:
 
@@ -18,11 +23,11 @@
 フィールドを足すだけである。足した後に採点を回して確かめること。
 
 使い方:
-    python3 scripts/eval/attach_series_labels.py <curves.csv>          # 下書きを書く
-    python3 scripts/eval/attach_series_labels.py <curves.csv> --apply  # ground_truth.json を更新
+    python3 scripts/eval/attach_series_labels.py <curves.csv> <samples.csv>
+    python3 scripts/eval/attach_series_labels.py <curves.csv> <samples.csv> --apply
 
-CSV は公開データセットのもの:
-  github.com/starrydata/starrydata_datasets/releases/download/latest/ThermoelectricMaterials_curves.csv.gz
+CSV は公開データセットのもの(github.com/starrydata/starrydata_datasets、release latest):
+  ThermoelectricMaterials_curves.csv.gz / ThermoelectricMaterials_samples.csv.gz
 """
 
 from __future__ import annotations
@@ -70,6 +75,14 @@ def _shape(values: tuple[float, ...]) -> tuple[float, ...]:
     return tuple((v - low) / (high - low) for v in values)
 
 
+def _ambiguous(curve: dict, siblings: list, chosen) -> bool:
+    """選んだ行以外にも形が一致する行があるか。あれば割り当ては任意で、人の確認が要る。"""
+    others = [
+        r for r in siblings if r is not chosen and _shape_distance(curve, r) <= SHAPE_TOLERANCE
+    ]
+    return bool(others)
+
+
 def _max_shape_gap(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     return max((abs(p - q) for p, q in zip(_shape(a), _shape(b), strict=True)), default=0.0)
 
@@ -94,8 +107,10 @@ def _shape_distance(curve: dict, row) -> float:
     return max(dx, dy)
 
 
-# 形の一致とみなす上限。同じ数値に単位係数が掛かっただけなら丸め誤差しか出ない。
-SHAPE_TOLERANCE = 1e-6
+# 形の一致とみなす上限。94 図で実測した: 正しい組の形距離は中央値 1e-16、p90 が 4e-16 で、
+# 次に大きいのは 0.24 まで飛ぶ。間に桁の空白があるので、正解側の丸め
+# (29160 の y は 6 桁に丸められていて 2.4e-6 ずれる)を吸収できる 1e-5 に置く。
+SHAPE_TOLERANCE = 1e-5
 
 
 def match_curves(curves: list[dict], rows: list) -> list:
@@ -137,26 +152,43 @@ def match_curves(curves: list[dict], rows: list) -> list:
     return matched
 
 
-def label_for(row, siblings: list) -> tuple[str, str]:
+def read_samples(path: pathlib.Path) -> dict[str, dict[str, str]]:
+    """sample_id -> その試料の名前と組成(*_samples.csv)。"""
+    opener = gzip.open if path.suffix == ".gz" else open
+    out: dict[str, dict[str, str]] = {}
+    with opener(path, mode="rt", newline="", encoding="utf-8-sig") as handle:
+        for raw in csv.DictReader(handle):
+            sample_id = (raw.get("sample_id") or "").strip()
+            if sample_id:
+                out[sample_id] = {
+                    "sample_name": (raw.get("sample_name") or "").strip(),
+                    "composition": (raw.get("composition") or "").strip(),
+                }
+    return out
+
+
+def label_for(row, samples: dict[str, dict[str, str]]) -> tuple[str, str]:
     """表示用のラベルと、その出どころ。
 
-    composition が同じ図では、同じ公称組成の別試料が並んでいることがある
-    (例 figure_id 1527: Ba8Cu4.8Si41.2 が3本、sample_id だけが違う)。
-    その場合は sample_id を添えないと系列を指せない。
+    sample_name を第一候補にする。図の凡例に印字されている文字列なので、
+    図を読んでいる抽出手法の出力と突き合わせられる唯一の名前である。
+    無い場合だけ composition に落ちる。
     """
-    same = [s for s in siblings if s.composition == row.composition]
-    if row.composition and len(same) == 1:
+    sample = samples.get(row.sample_id, {})
+    name = sample.get("sample_name") or ""
+    if name:
+        return name, "sample_name"
+    if row.composition:
         return row.composition, "composition"
-    if row.composition and row.sample_id:
-        return f"{row.composition} #{row.sample_id}", "composition+sample_id"
     if row.sample_id:
         return f"sample {row.sample_id}", "sample_id"
     return "", "none"
 
 
-def build(csv_path: pathlib.Path) -> dict:
+def build(csv_path: pathlib.Path, samples_path: pathlib.Path) -> dict:
     ground_truth = json.loads(GROUND_TRUTH.read_text())
     rows = read_rows(csv_path, set(ground_truth))
+    samples = read_samples(samples_path)
 
     out: dict[str, list] = {}
     unmatched = 0
@@ -168,13 +200,17 @@ def build(csv_path: pathlib.Path) -> dict:
                 unmatched += 1
                 labelled.append({"label": None, "source": "unmatched"})
                 continue
-            label, source = label_for(row, siblings)
+            label, source = label_for(row, samples)
             labelled.append(
                 {
                     "label": label or None,
                     "source": source,
-                    "composition": row.composition,
+                    "composition": samples.get(row.sample_id, {}).get(
+                        "composition", row.composition
+                    ),
                     "sample_id": row.sample_id,
+                    # 形だけで決めた組なので、2番目の候補も許容内なら人が見るべき
+                    "ambiguous": _ambiguous(curve, siblings, row),
                 }
             )
         out[figure_id] = labelled
@@ -191,6 +227,8 @@ def report(draft: dict) -> None:
     for source, n in sorted(sources.items(), key=lambda kv: -kv[1]):
         print(f"  {source:<22}{n:>6}  ({n / len(curves):.1%})")
 
+    ambiguous = sum(1 for c in curves if c.get("ambiguous"))
+    print(f"  {'(形が曖昧で人の確認が要る)':<22}{ambiguous:>6}")
     multi = {f: cs for f, cs in figures.items() if len(cs) > 1}
     unique = sum(1 for cs in multi.values() if len({c["label"] for c in cs}) == len(cs))
     share = unique / max(len(multi), 1)
@@ -208,6 +246,7 @@ def apply_to_ground_truth(draft: dict) -> None:
                 curve["series_label"] = info["label"]
                 curve["composition"] = info["composition"]
                 curve["sample_id"] = info["sample_id"]
+                curve["series_label_source"] = info["source"]
     GROUND_TRUTH.write_text(json.dumps(ground_truth, ensure_ascii=False, indent=2) + "\n")
     print(f"更新: {GROUND_TRUTH}")
 
@@ -215,10 +254,11 @@ def apply_to_ground_truth(draft: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("csv_path", type=pathlib.Path, help="Starrydata の *_curves.csv(.gz)")
+    parser.add_argument("samples_path", type=pathlib.Path, help="Starrydata の *_samples.csv(.gz)")
     parser.add_argument("--apply", action="store_true", help="ground_truth.json を更新する")
     args = parser.parse_args()
 
-    draft = build(args.csv_path)
+    draft = build(args.csv_path, args.samples_path)
     report(draft)
     DRAFT.write_text(json.dumps(draft, ensure_ascii=False, indent=2) + "\n")
     print(f"\n下書き: {DRAFT}")
