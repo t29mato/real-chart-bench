@@ -37,6 +37,9 @@
   .card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;
     padding:14px;margin-bottom:18px;box-shadow:var(--shadow);scroll-margin-top:70px}
   .card.flag{border-left:4px solid var(--warn)}
+  .card.stale{border-left:4px solid var(--bad)}
+  .card.stale h2::after{content:" — 前回から図が変わりました。もう一度見てください";
+    color:var(--bad);font-family:inherit;font-size:12.5px;font-weight:400}
   .card h2{font-size:15px;margin:0 0 3px;font-family:"JetBrains Mono",monospace}
   .meta{font-size:12px;color:var(--muted);margin-bottom:12px}
   .pics{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:14px}
@@ -114,6 +117,7 @@
 
 <script>
 const ENTRIES = __ENTRIES_JSON__;
+const BY_ID = new Map(ENTRIES.map(e => [e.id, e]));
 const KEY = "series-label-review-v1";
 let verdicts = {};
 try { verdicts = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { verdicts = {}; }
@@ -127,8 +131,15 @@ function note(text, bad) {
 function saveOne(id) {
   if (!db) return;
   const v = verdicts[id] || {};
+  const entry = BY_ID.get(id);
   db.doc("verdicts/" + id).set({
-    status: v.status || null, note: v.note || "", saved_at: new Date().toISOString(),
+    status: v.status || null,
+    note: v.note || "",
+    // 「何を見せたか」に紐付ける。次に絵が変わったときだけ再確認に回すため
+    shown_sha: entry ? entry.shown_sha : null,
+    // 1件あたりの滞在時間。次の見積りを推定ではなく測定にする
+    dwell_ms: v.dwell_ms || null,
+    saved_at: new Date().toISOString(),
   }).then(() => note("保存済み")).catch(err => note("保存できません: " + (err?.code || "不明"), true));
 }
 function save(id) {
@@ -196,17 +207,32 @@ ENTRIES.forEach(e => {
     </div>
     <textarea placeholder="メモ(任意)"></textarea>`;
 
+  // この図を見始めた時刻。画面に入った時点から数える
+  let seenAt = null;
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(([hit]) => {
+      if (hit.isIntersecting && seenAt === null) seenAt = performance.now();
+      if (!hit.isIntersecting) seenAt = null;
+    }, { threshold: 0.4 }).observe(card);
+  }
+
   const buttons = card.querySelectorAll(".verdict button");
   const noteBox = card.querySelector("textarea");
   const paint = () => {
     const v = verdicts[e.id] || {};
+    card.classList.toggle("stale", !!v.stale);
     buttons.forEach(b => b.classList.toggle("on", b.dataset.v === v.status));
     if (noteBox.value !== (v.note || "")) noteBox.value = v.note || "";
     card.dataset.done = v.status ? "1" : "0";
   };
   buttons.forEach(b => b.addEventListener("click", () => {
     const cur = verdicts[e.id] || {};
-    verdicts[e.id] = { ...cur, status: cur.status === b.dataset.v ? null : b.dataset.v };
+    const dwell = seenAt === null ? cur.dwell_ms : Math.round(performance.now() - seenAt);
+    verdicts[e.id] = {
+      ...cur,
+      status: cur.status === b.dataset.v ? null : b.dataset.v,
+      dwell_ms: dwell,
+    };
     paint(); save(e.id);
   }));
   let timer = null;
@@ -265,15 +291,28 @@ progress();
   try {
     const snap = await db.collection("verdicts").get();
     let loaded = 0;
+    let stale = 0;
     snap.docs.forEach(d => {
       const v = d.data() || {};
       if (!v.status && !v.note) return;
-      verdicts[d.id] = { status: v.status || null, note: v.note || "" };
+      const entry = BY_ID.get(d.id);
+      // 絵が変わっていたら判定を持ち越さない。採点や規則だけが変わった図は
+      // ハッシュが動かないので、そのまま有効のまま残る
+      const changed = entry && v.shown_sha && v.shown_sha !== entry.shown_sha;
+      verdicts[d.id] = {
+        status: changed ? null : (v.status || null),
+        note: v.note || "",
+        dwell_ms: v.dwell_ms || null,
+        stale: !!changed,
+      };
       loaded++;
+      if (changed) stale++;
     });
     if (loaded) {
       document.querySelectorAll(".card").forEach(c => c.dispatchEvent(new Event("rehydrate")));
-      note(`保存済み ${loaded} 件を読み込みました`);
+      note(stale
+        ? `保存済み ${loaded} 件を読み込みました(うち ${stale} 件は図が変わったので要再確認)`
+        : `保存済み ${loaded} 件を読み込みました`);
     } else {
       note("保存の準備ができました");
     }

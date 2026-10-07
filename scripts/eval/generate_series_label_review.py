@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import pathlib
@@ -222,6 +223,33 @@ def annotated_figure(
     return data_uri(buf.getvalue(), "image/jpeg")
 
 
+def shown_hash(entry, curves: list[dict], labels: list[dict], styles: list[dict]) -> str:
+    """この図で人に見せた判断材料のハッシュ(design scaling-verification §4.4)。
+
+    判定を「何を見せたか」に紐付けるためのもの。規則や採点が変わっても絵が
+    変わらなければハッシュは動かず、**再レビューに回す必要がない**。
+    逆に単位移行や軸校正のやり直しでハッシュが変われば、その図だけが再キューに入る。
+    設計の見積りでは、過去7回の全件見直しのうち人が見る必要があったのは実質3回・
+    計55図だった。
+
+    材料に入れるのは、人が実際に判断に使うものだけである。点の値、付けた名前、
+    図から読んだ色とマーカー、そして元画像。採点の仕様や指標は入れない — それらが
+    変わっても絵は1画素も動かないからである。
+    """
+    parts: list[str] = [entry["image_path"]]
+    image = REPO / entry["image_path"]
+    if image.exists():
+        parts.append(hashlib.sha256(image.read_bytes()).hexdigest())
+    for axis in ("x", "y"):
+        parts += [f"{t['px']}:{t['value']}" for t in entry.get(axis) or []]
+    for curve, info, style in zip(curves, labels, styles, strict=True):
+        parts.append(str(info.get("label")))
+        parts.append(f"{style.get('color')}/{style.get('marker')}/{style.get('style')}")
+        parts.append(repr([round(float(v), 6) for v in curve.get("x") or ()]))
+        parts.append(repr([round(float(v), 6) for v in curve.get("y") or ()]))
+    return hashlib.sha256("\u0000".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
 def build_entries() -> list[dict]:
     ground_truth = json.loads(GROUND_TRUTH.read_text())
     draft = json.loads(DRAFT.read_text())["figures"]
@@ -248,6 +276,9 @@ def build_entries() -> list[dict]:
                 "figure_id": figure_id,
                 "paper_id": entry.paper_id,
                 "panel_label": entry.panel_label or "",
+                "shown_sha": shown_hash(
+                    tick_entry or {"image_path": entry.image_path}, curves, labels, styles
+                ),
                 "image": source_image(entry),
                 "annotated": (
                     annotated_figure(tick_entry, entry, curves, labels, styles)
