@@ -1,0 +1,225 @@
+<title>系列名の確認</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  :root {
+    --paper:#f6f7f9; --panel:#fff; --ink:#16212e; --muted:#5f6b7a; --rule:#c8d2dd;
+    --hair:#e3e8ee; --ok:#0d7a6f; --bad:#b3261e; --warn:#b45309;
+    --shadow:0 1px 2px rgba(22,33,46,.06), 0 6px 20px rgba(22,33,46,.06);
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --paper:#0f1621; --panel:#16202c; --ink:#e4eaf1; --muted:#93a1b1; --rule:#2d3d4f;
+    --hair:#22303f; --ok:#3fc9b6; --bad:#ff6b60; --warn:#e0a83e;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35); } }
+  :root[data-theme="dark"]{
+    --paper:#0f1621; --panel:#16202c; --ink:#e4eaf1; --muted:#93a1b1; --rule:#2d3d4f;
+    --hair:#22303f; --ok:#3fc9b6; --bad:#ff6b60; --warn:#e0a83e;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35); }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);line-height:1.75;
+    font-family:"Zen Kaku Gothic New",-apple-system,BlinkMacSystemFont,sans-serif;font-size:15px}
+  .wrap{max-width:860px;margin:0 auto;padding:20px 14px 140px}
+  header{margin-bottom:18px}
+  .eyebrow{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--warn);margin-bottom:8px}
+  h1{font-size:22px;margin:0 0 10px;line-height:1.35}
+  .how{background:var(--panel);border:1px solid var(--rule);border-radius:10px;
+    padding:14px 16px;font-size:13.5px;color:var(--muted);box-shadow:var(--shadow)}
+  .how b{color:var(--ink)}
+
+  .bar{position:sticky;top:0;z-index:9;background:var(--paper);padding:10px 0 8px;
+    border-bottom:1px solid var(--rule);margin-bottom:16px;
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .bar button,.bar select{font-family:inherit;font-size:13px;padding:7px 12px;border-radius:7px;
+    border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+  .bar .count{font-family:"JetBrains Mono",monospace;font-size:12.5px;color:var(--muted);margin-left:auto}
+
+  .card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;
+    padding:14px;margin-bottom:18px;box-shadow:var(--shadow);scroll-margin-top:70px}
+  .card.flag{border-left:4px solid var(--warn)}
+  .card h2{font-size:15px;margin:0 0 3px;font-family:"JetBrains Mono",monospace}
+  .meta{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .pics{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:14px}
+  @media(min-width:720px){.pics{grid-template-columns:1fr 1fr}}
+  .pic{border:1px solid var(--hair);border-radius:8px;overflow:hidden;background:#fff}
+  .pic img{display:block;width:100%;height:auto}
+  .pic .cap{font-size:11px;color:var(--muted);padding:5px 8px;background:var(--panel);
+    border-top:1px solid var(--hair);font-family:"JetBrains Mono",monospace}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+    font-weight:500;text-align:left;padding:5px 7px;border-bottom:1px solid var(--rule)}
+  td{padding:7px;border-bottom:1px solid var(--hair);vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px;
+    vertical-align:-1px;flex:none}
+  .lbl{font-family:"JetBrains Mono",monospace;font-size:12.5px;word-break:break-all}
+  .lbl.none{color:var(--bad);font-weight:700}
+  .src{font-size:10.5px;color:var(--muted);font-family:"JetBrains Mono",monospace}
+  .src.dup{color:var(--warn);font-weight:700}
+
+  .verdict{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+  .verdict button{flex:1;min-width:92px;font-family:inherit;font-size:13.5px;padding:10px 8px;
+    border-radius:8px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+  .verdict button.on[data-v="ok"]{background:var(--ok);border-color:var(--ok);color:#fff}
+  .verdict button.on[data-v="wrong"]{background:var(--bad);border-color:var(--bad);color:#fff}
+  .verdict button.on[data-v="unsure"]{background:var(--warn);border-color:var(--warn);color:#fff}
+  textarea{width:100%;margin-top:8px;font-family:inherit;font-size:13.5px;padding:9px;
+    border-radius:8px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);
+    min-height:46px;resize:vertical}
+
+  .foot{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--rule);
+    padding:10px 14px;display:flex;gap:8px;align-items:center;box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+  .foot button{font-family:inherit;font-size:14px;padding:10px 16px;border-radius:8px;
+    border:1px solid var(--ok);background:var(--ok);color:#fff;cursor:pointer;font-weight:700}
+  .foot .p{font-family:"JetBrains Mono",monospace;font-size:12.5px;color:var(--muted)}
+  .hidden{display:none}
+  :focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">real-chart-bench · 正解データの確認</div>
+  <h1>系列名(試料)の確認</h1>
+  <div class="how">
+    各曲線に Starrydata の <b>composition</b>(試料の化学式)を機械的に付けました。
+    どの曲線がどの試料かは<b>形の一致で機械が決めています</b>。
+    <b>元の図の凡例と、右のプロットの凡例を見比べて</b>ください。色は両者で対応しています。<br><br>
+    <b style="color:var(--warn)">▌</b> が付いた図は、名前が付かなかったか重複している図です。先に見てください。
+    判定は自動保存され、下の「書き出す」で JSON をコピーできます。
+  </div>
+</header>
+
+<div class="bar">
+  <button id="only-attn">要確認のみ</button>
+  <button id="only-todo">未判定のみ</button>
+  <button id="show-all">全部</button>
+  <span class="count" id="count"></span>
+</div>
+
+<div id="list"></div>
+</div>
+
+<div class="foot">
+  <span class="p" id="prog"></span>
+  <button id="export" style="margin-left:auto">書き出す</button>
+</div>
+
+<script>
+const ENTRIES = __ENTRIES_JSON__;
+const KEY = "series-label-review-v1";
+let verdicts = {};
+try { verdicts = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { verdicts = {}; }
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(verdicts)); } catch (e) { /* private mode */ }
+  progress();
+}
+function progress() {
+  const done = ENTRIES.filter(e => verdicts[e.id]?.status).length;
+  document.getElementById("prog").textContent = `${done} / ${ENTRIES.length} 判定済み`;
+}
+
+const list = document.getElementById("list");
+const dupLabels = e => {
+  const seen = {};
+  e.curves.forEach(c => { const k = c.label || "∅"; seen[k] = (seen[k] || 0) + 1; });
+  return seen;
+};
+
+ENTRIES.forEach(e => {
+  const dup = dupLabels(e);
+  const card = document.createElement("section");
+  card.className = "card" + (e.needs_attention ? " flag" : "");
+  card.id = "c-" + e.id;
+  card.dataset.attn = e.needs_attention ? "1" : "0";
+
+  const rows = e.curves.map(c => {
+    const label = c.label
+      ? `<span class="lbl">${c.label}</span>`
+      : `<span class="lbl none">名前なし</span>`;
+    const isDup = c.label && dup[c.label] > 1;
+    const src = isDup ? `${c.source} · 重複` : c.source;
+    return `<tr>
+      <td style="width:1%"><span class="swatch" style="background:${c.color}"></span></td>
+      <td>${label}<div class="src${isDup ? " dup" : ""}">${src}</div></td>
+      <td style="width:1%;text-align:right;color:var(--muted);font-family:'JetBrains Mono',monospace">${c.n_points}点</td>
+    </tr>`;
+  }).join("");
+
+  card.innerHTML = `
+    <h2>${e.id}</h2>
+    <div class="meta">論文 ${e.paper_id} · パネル ${e.panel_label || "—"} · ${e.curves.length} 曲線</div>
+    <div class="pics">
+      <div class="pic">${e.image ? `<img loading="lazy" src="${e.image}" alt="元の図">` : ""}
+        <div class="cap">元の図(凡例を見る)</div></div>
+      <div class="pic"><img loading="lazy" src="${e.plot}" alt="正解データ">
+        <div class="cap">正解データ + 付けた試料名</div></div>
+    </div>
+    <table><thead><tr><th></th><th>試料名(composition)</th><th>点数</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    <div class="verdict">
+      <button data-v="ok">名前は正しい</button>
+      <button data-v="wrong">対応が違う</button>
+      <button data-v="unsure">判断できない</button>
+    </div>
+    <textarea placeholder="メモ(任意)"></textarea>`;
+
+  const buttons = card.querySelectorAll(".verdict button");
+  const note = card.querySelector("textarea");
+  const paint = () => {
+    const v = verdicts[e.id] || {};
+    buttons.forEach(b => b.classList.toggle("on", b.dataset.v === v.status));
+    if (note.value !== (v.note || "")) note.value = v.note || "";
+    card.dataset.done = v.status ? "1" : "0";
+  };
+  buttons.forEach(b => b.addEventListener("click", () => {
+    const cur = verdicts[e.id] || {};
+    verdicts[e.id] = { ...cur, status: cur.status === b.dataset.v ? null : b.dataset.v };
+    paint(); save();
+  }));
+  note.addEventListener("input", () => {
+    verdicts[e.id] = { ...(verdicts[e.id] || {}), note: note.value };
+    save();
+  });
+  paint();
+  list.appendChild(card);
+});
+
+function filter(mode) {
+  let shown = 0;
+  list.querySelectorAll(".card").forEach(c => {
+    const keep = mode === "all"
+      || (mode === "attn" && c.dataset.attn === "1")
+      || (mode === "todo" && c.dataset.done !== "1");
+    c.classList.toggle("hidden", !keep);
+    if (keep) shown++;
+  });
+  document.getElementById("count").textContent = `${shown} 図を表示`;
+}
+document.getElementById("only-attn").addEventListener("click", () => filter("attn"));
+document.getElementById("only-todo").addEventListener("click", () => filter("todo"));
+document.getElementById("show-all").addEventListener("click", () => filter("all"));
+
+document.getElementById("export").addEventListener("click", async () => {
+  const out = ENTRIES.filter(e => verdicts[e.id]?.status || verdicts[e.id]?.note)
+    .map(e => ({
+      id: e.id, figure_id: e.figure_id, paper_id: e.paper_id,
+      status: verdicts[e.id].status || null, note: verdicts[e.id].note || "",
+      labels: e.curves.map(c => c.label),
+    }));
+  const text = JSON.stringify(out, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    alert(`${out.length} 件をクリップボードにコピーしました。貼り付けて渡してください。`);
+  } catch (err) {
+    const w = window.open("", "_blank");
+    if (w) { w.document.body.style.whiteSpace = "pre-wrap"; w.document.body.textContent = text; }
+    else alert("コピーできませんでした。コンソールに出します。");
+    console.log(text);
+  }
+});
+
+filter("attn");
+progress();
+</script>

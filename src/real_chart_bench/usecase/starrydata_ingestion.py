@@ -21,3 +21,9 @@ class ParsedCurveRow:
     series_label: str
     x_values: tuple[float, ...]
     y_values: tuple[float, ...]
+    # The only fields that distinguish curves within one figure -- prop_y is the
+    # same string for every curve, so series_label is too. composition is the
+    # database's canonical formula, NOT the legend text printed in the figure;
+    # see docs/experiments/2026-10-07-series-labels-available.md.
+    composition: str = ""
+    sample_id: str = ""

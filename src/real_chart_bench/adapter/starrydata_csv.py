@@ -42,6 +42,8 @@ def parse_curve_row(row: dict[str, str]) -> ParsedCurveRow:
         figure_id=row["figure_id"],
         figure_name=row.get("figure_name", ""),
         series_label=series_label,
+        composition=(row.get("composition") or "").strip(),
+        sample_id=(row.get("sample_id") or "").strip(),
         x_values=x_values,
         y_values=y_values,
     )
