@@ -83,6 +83,42 @@ def axis_frame_for_task(task: ExtractionTask) -> AxisFrame:
     )
 
 
+def ground_truth_frame(
+    ground_truth: Sequence[Curve],
+    *,
+    x_scale: ScaleType,
+    y_scale: ScaleType,
+    fallback_x_range: tuple[float, float] | None = None,
+    fallback_y_range: tuple[float, float] | None = None,
+) -> AxisFrame:
+    """The frame that normalizes by the span of the *true points* rather than by
+    the axis range — Scatteract's choice (paper §3.5.1).
+
+    Not used by the benchmark's own metric. It exists so the comparison against
+    Scatteract's criterion can be measured instead of argued: the benchmark
+    normalizes by the axis range, which is the same thing as normalizing by the
+    plot box in pixels, and is therefore identical in x and y and independent of
+    the ground truth. Dividing by the span of the true points is neither.
+
+    An axis whose true points are all equal has no span; pass a ``fallback_``
+    range (the figure's axis range) for that case.
+    """
+    if not ground_truth:
+        raise ValueError("ground_truth_frame needs at least one curve")
+    extents = {}
+    for axis, values, fallback in (
+        ("x", [v for c in ground_truth for v in c.x_values], fallback_x_range),
+        ("y", [v for c in ground_truth for v in c.y_values], fallback_y_range),
+    ):
+        low, high = min(values), max(values)
+        if low == high:
+            if fallback is None:
+                raise ValueError(f"the ground truth has no {axis} span; pass fallback_{axis}_range")
+            low, high = fallback
+        extents[axis] = (low, high)
+    return AxisFrame(x_range=extents["x"], y_range=extents["y"], x_scale=x_scale, y_scale=y_scale)
+
+
 def _point_evaluations(
     predicted: Sequence[Curve],
     item: DatasetItem,
