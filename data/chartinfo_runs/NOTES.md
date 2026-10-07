@@ -51,3 +51,5 @@ separately instead of being prompted away.
 - batch03 / Fable 5.1: completed 2026-10-07 by a second agent that kept the
   first run's 17 answers and added the other 13 (fig_17 dense band resampled;
   fig_26 hidden markers at 0 inferred).
+- batch05 / Sonnet 5.5: eyeballed; fig_02, fig_23, fig_26 points generated from
+  fitted curves; fig_19 a hand-listed subset (~190 of ~250).
