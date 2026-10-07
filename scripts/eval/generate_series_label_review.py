@@ -32,14 +32,22 @@ sys.path.insert(0, "src")
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import select_verified_pairings  # noqa: E402
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from sample_curve_styles import (  # noqa: E402
+    calibration_for,
+    load_entries,
+    styles_for_figure,
+)
+
 REPO = pathlib.Path(__file__).resolve().parents[2]
 GROUND_TRUTH = REPO / "data/verified_pairs/ground_truth.json"
 REGISTRY = REPO / "data/verified_pairs/registry.json"
 DRAFT = REPO / "data/verified_pairs/series_labels_draft.json"
 DEFAULT_OUT = REPO / "build/series_label_review.html"
 
-# 図のプロットと凡例で同じ色を使う。色覚に配慮した並び。
-COLORS = [
+# 図から色が採れなかったときだけ使う控えの並び
+FALLBACK_COLORS = [
     "#0d7a6f",
     "#d14310",
     "#6b4de6",
@@ -51,6 +59,16 @@ COLORS = [
     "#00838f",
     "#ef6c00",
 ]
+# 図から読んだマーカーの形を matplotlib の記号に移す
+MARKERS = {
+    "circle": "o",
+    "square": "s",
+    "diamond": "D",
+    "triangle-up": "^",
+    "triangle-down": "v",
+    "unknown": "o",
+}
+LINE_STYLES = {"solid": "-", "dashed": "--", "none": "", "unknown": "-"}
 
 
 def data_uri(raw: bytes, mime: str) -> str:
@@ -59,8 +77,12 @@ def data_uri(raw: bytes, mime: str) -> str:
 
 # ページ全体を1枚の HTML に埋め込むので、元画像はそのままだと大きすぎる
 # (94図で 21MB)。凡例の文字が読めれば足りるので、長辺を抑えて JPEG にする。
-MAX_EDGE = 1100
-JPEG_QUALITY = 82
+MAX_EDGE = 1000
+JPEG_QUALITY = 74
+# ラベルを書き込んだ図は元図より小さくてよい(凡例ではなく位置関係を見るため)
+ANNOTATED_EDGE = 820
+# 名前の札を置くために画像の右に足す余白(画像幅に対する割合)
+LABEL_MARGIN = 0.22
 
 
 def source_image(entry) -> str | None:
@@ -80,8 +102,12 @@ def source_image(entry) -> str | None:
     return data_uri(buf.getvalue(), "image/jpeg")
 
 
-def plot_curves(entry, curves: list[dict], labels: list[dict]) -> str:
-    """正解データを系列名で色分けして描く。正解は既に図の印字単位なので変換しない。"""
+def plot_curves(entry, curves: list[dict], labels: list[dict], styles: list[dict]) -> str:
+    """正解データを、元の図から読んだ色・マーカー・線種で描き直す。
+
+    正解は既に図の印字単位なので値の変換はしない。色が図と揃っていれば、
+    凡例を見比べるだけで対応が確かめられる。
+    """
     fig, ax = plt.subplots(figsize=(5.0, 3.7), dpi=110)
     x_log = entry.x_scale.value == "log"
     y_log = entry.y_scale.value == "log"
@@ -94,13 +120,16 @@ def plot_curves(entry, curves: list[dict], labels: list[dict]) -> str:
         if x_log:
             kept = [(x, y) for x, y in zip(xs, ys, strict=True) if x > 0]
             xs, ys = [p[0] for p in kept], [p[1] for p in kept]
+        style = styles[i] if i < len(styles) else {}
+        line = LINE_STYLES.get(style.get("style"), "-")
         ax.plot(
             xs,
             ys,
-            marker="o",
-            markersize=3.5,
-            linewidth=1.1,
-            color=COLORS[i % len(COLORS)],
+            marker=MARKERS.get(style.get("marker"), "o"),
+            markersize=4.5,
+            linewidth=1.3,
+            linestyle=line or "None",
+            color=style.get("color") or FALLBACK_COLORS[i % len(FALLBACK_COLORS)],
             label=info.get("label") or f"(unnamed #{i + 1})",
         )
     ax.set_xscale(entry.x_scale.value)
@@ -122,10 +151,82 @@ def plot_curves(entry, curves: list[dict], labels: list[dict]) -> str:
     return data_uri(buf.getvalue(), "image/png")
 
 
+def annotated_figure(
+    entry, pairing, curves: list[dict], labels: list[dict], styles: list[dict]
+) -> str | None:
+    """元の図の上に、曲線ごとの試料名をその曲線の位置に書き込む。
+
+    凡例と色で突き合わせる手間を省く。どの曲線がどの名前かが図の上で直接読める。
+    """
+    calibration = calibration_for(entry)
+    path = REPO / entry["image_path"]
+    if calibration is None or not path.exists():
+        return None
+    image = Image.open(path).convert("RGB")
+    scale = min(1.0, ANNOTATED_EDGE / max(image.size))
+    width, height = round(image.width * scale), round(image.height * scale)
+    # 名前は曲線の右端に置くので、画像の右に札の分の余白を作る
+    margin = round(width * LABEL_MARGIN)
+    fig, ax = plt.subplots(figsize=((width + margin) / 110, height / 110), dpi=110)
+    ax.imshow(image.resize((width, height), Image.LANCZOS))
+    ax.set_xlim(0, width + margin)
+    ax.set_ylim(height, 0)
+    ax.axis("off")
+
+    for i, (curve, info) in enumerate(zip(curves, labels, strict=True)):
+        style = styles[i] if i < len(styles) else {}
+        color = style.get("color") or FALLBACK_COLORS[i % len(FALLBACK_COLORS)]
+        points = [
+            calibration.to_pixel(float(x), float(y))
+            for x, y in zip(curve.get("x") or (), curve.get("y") or (), strict=True)
+        ]
+        if not points:
+            continue
+        ax.plot(
+            [p[0] * scale for p in points],
+            [p[1] * scale for p in points],
+            marker="o",
+            markersize=3.0,
+            linewidth=0.0,
+            color=color,
+            markerfacecolor="none",
+            markeredgewidth=1.0,
+        )
+        anchor = max(points, key=lambda p: p[0])
+        ax.annotate(
+            info.get("label") or f"#{i + 1}",
+            xy=(anchor[0] * scale, anchor[1] * scale),
+            xytext=(6, 0),
+            textcoords="offset points",
+            fontsize=6.5,
+            color="white",
+            va="center",
+            bbox={
+                "boxstyle": "round,pad=0.22",
+                "facecolor": color,
+                "edgecolor": "none",
+                "alpha": 0.92,
+            },
+            clip_on=False,
+        )
+    fig.tight_layout(pad=0.1)
+    buf = io.BytesIO()
+    fig.savefig(
+        buf,
+        format="jpeg",
+        pil_kwargs={"quality": JPEG_QUALITY},
+        bbox_inches="tight",
+        pad_inches=0.02,
+    )
+    plt.close(fig)
+    return data_uri(buf.getvalue(), "image/jpeg")
+
+
 def build_entries() -> list[dict]:
     ground_truth = json.loads(GROUND_TRUTH.read_text())
     draft = json.loads(DRAFT.read_text())["figures"]
     pairings = {p.figure_id: p for p in select_verified_pairings(load_registry(REGISTRY))}
+    tick_entries = load_entries()
 
     entries = []
     for figure_id, entry in sorted(pairings.items()):
@@ -135,6 +236,12 @@ def build_entries() -> list[dict]:
             continue
         labels = labels[: len(curves)]
         names = [info.get("label") for info in labels]
+        tick_entry = tick_entries.get(figure_id)
+        styles = (
+            styles_for_figure(tick_entry, curves)
+            if tick_entry
+            else [{"color": None, "style": "unknown", "marker": "unknown"} for _ in curves]
+        )
         entries.append(
             {
                 "id": f"{entry.paper_id}-{figure_id}",
@@ -142,7 +249,12 @@ def build_entries() -> list[dict]:
                 "paper_id": entry.paper_id,
                 "panel_label": entry.panel_label or "",
                 "image": source_image(entry),
-                "plot": plot_curves(entry, curves, labels),
+                "annotated": (
+                    annotated_figure(tick_entry, entry, curves, labels, styles)
+                    if tick_entry
+                    else None
+                ),
+                "plot": plot_curves(entry, curves, labels, styles),
                 "curves": [
                     {
                         "label": info.get("label"),
@@ -151,7 +263,12 @@ def build_entries() -> list[dict]:
                         "composition": info.get("composition", ""),
                         "sample_id": info.get("sample_id", ""),
                         "n_points": len(curve["x"]),
-                        "color": COLORS[i % len(COLORS)],
+                        "color": (
+                            styles[i].get("color") or FALLBACK_COLORS[i % len(FALLBACK_COLORS)]
+                        ),
+                        "color_from_figure": bool(styles[i].get("color")),
+                        "marker": styles[i].get("marker", "unknown"),
+                        "line": styles[i].get("style", "unknown"),
                     }
                     for i, (curve, info) in enumerate(zip(curves, labels, strict=True))
                 ],

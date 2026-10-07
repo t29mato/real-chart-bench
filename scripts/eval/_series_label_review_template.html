@@ -40,7 +40,8 @@
   .card h2{font-size:15px;margin:0 0 3px;font-family:"JetBrains Mono",monospace}
   .meta{font-size:12px;color:var(--muted);margin-bottom:12px}
   .pics{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:14px}
-  @media(min-width:720px){.pics{grid-template-columns:1fr 1fr}}
+  @media(min-width:860px){.pics{grid-template-columns:1fr 1fr}}
+  .pics .wide{grid-column:1/-1}
   .pic{border:1px solid var(--hair);border-radius:8px;overflow:hidden;background:#fff}
   .pic img{display:block;width:100%;height:auto}
   .pic .cap{font-size:11px;color:var(--muted);padding:5px 8px;background:var(--panel);
@@ -85,7 +86,9 @@
     各曲線に Starrydata の <b>sample_name</b>(試料名)を機械的に付けました。
     <code>HP680</code> <code>SPS760</code> のように、<b>図の凡例に印字されている名前</b>です。
     どの曲線がどの試料かは<b>形の一致で機械が決めている</b>ので、取り違えがありえます。<br><br>
-    <b>元の図の凡例と、右のプロットの凡例を見比べて</b>ください。色は両者で対応しています。<br><br>
+    <b>一番上の図を見てください。</b> 元の図の上に、正解点(○)と付けた名前を直接重ねてあります。
+    名前の色・マーカー・線種は<b>元の図から画素を読んで決めた</b>ものなので、凡例とそのまま照らせます。
+    色は図と一致しますが、<b>マーカーの形は推定なので外れることがあります</b>(約4分の3の精度)。<br><br>
     <b style="color:var(--warn)">▌</b> が付いた図は、名前が付かなかった・重複した・<b>形が同じで機械には
     決められなかった</b>図です。先に見てください。<br><br>
     判定は<b>サーバに保存されるので、そのまま私が読めます</b>。書き出しボタンは不要ですが、
@@ -158,12 +161,17 @@ ENTRIES.forEach(e => {
       : `<span class="lbl none">名前なし</span>`;
     const isDup = c.label && dup[c.label] > 1;
     const marks = [c.source];
+    if (!c.color_from_figure) marks.push("色は図から採れず");
     if (isDup) marks.push("重複");
     if (c.ambiguous) marks.push("形が同じで機械には決められない");
     const src = marks.join(" · ");
+    const shape = { circle: "丸", square: "四角", diamond: "菱形",
+                    "triangle-up": "△", "triangle-down": "▽", unknown: "?" }[c.marker] || "?";
+    const line = { solid: "実線", dashed: "破線", none: "線なし", unknown: "?" }[c.line] || "?";
     return `<tr>
       <td style="width:1%"><span class="swatch" style="background:${c.color}"></span></td>
       <td>${label}<div class="src${isDup || c.ambiguous ? " dup" : ""}">${src}</div></td>
+      <td style="width:1%;white-space:nowrap;color:var(--muted);font-size:11.5px">${shape} / ${line}</td>
       <td style="width:1%;text-align:right;color:var(--muted);font-family:'JetBrains Mono',monospace">${c.n_points}点</td>
     </tr>`;
   }).join("");
@@ -172,12 +180,14 @@ ENTRIES.forEach(e => {
     <h2>${e.id}</h2>
     <div class="meta">論文 ${e.paper_id} · パネル ${e.panel_label || "—"} · ${e.curves.length} 曲線</div>
     <div class="pics">
+      ${e.annotated ? `<div class="pic wide"><img loading="lazy" src="${e.annotated}" alt="図の上に名前">
+        <div class="cap">元の図に、正解点と付けた試料名を重ねたもの ← まずここを見る</div></div>` : ""}
       <div class="pic">${e.image ? `<img loading="lazy" src="${e.image}" alt="元の図">` : ""}
-        <div class="cap">元の図(凡例を見る)</div></div>
+        <div class="cap">元の図(凡例の原本)</div></div>
       <div class="pic"><img loading="lazy" src="${e.plot}" alt="正解データ">
-        <div class="cap">正解データ + 付けた試料名</div></div>
+        <div class="cap">正解データを、図から読んだ色・マーカー・線種で描き直したもの</div></div>
     </div>
-    <table><thead><tr><th></th><th>試料名(sample_name)</th><th>点数</th></tr></thead>
+    <table><thead><tr><th></th><th>試料名(sample_name)</th><th>図の描き方</th><th>点数</th></tr></thead>
       <tbody>${rows}</tbody></table>
     <div class="verdict">
       <button data-v="ok">名前は正しい</button>
