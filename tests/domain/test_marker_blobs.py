@@ -120,3 +120,29 @@ def test_size_limits_and_a_given_diameter():
 def test_no_ink():
     pts, info = marker_centres(blank())
     assert pts == [] and info["diameter_px"] is None
+
+
+def test_fragments_of_covered_markers_do_not_set_the_marker_size():
+    m = blank()
+    for c in ISOLATED[:3]:
+        disc(m, *c, 10)
+    for cx, cy in [(60, 140), (140, 140), (220, 140)]:  # covered in the middle
+        disc(m, cx, cy, 10)
+        m[cy - 6:cy + 7, cx - 6:cx + 7] = False
+    pts, info = marker_centres(m)
+    assert info["diameter_px"] >= 19
+    assert info["n_split"] == 0
+
+
+def test_markers_joined_by_a_line_are_found_on_the_line():
+    m = blank()
+    pts = [(30, 150), (90, 110), (150, 130), (210, 80), (270, 100)]
+    for (ax, ay), (bx, by) in zip(pts, pts[1:], strict=False):
+        for t in np.linspace(0, 1, 300):
+            y, x = int(round(ay + t * (by - ay))), int(round(ax + t * (bx - ax)))
+            m[y - 1:y + 1, x - 1:x + 1] = True
+    for c in pts:
+        disc(m, *c, 6)
+    found, info = marker_centres(m)
+    assert near(found, pts, 1.5)
+    assert info["n_unjoined"] == 1

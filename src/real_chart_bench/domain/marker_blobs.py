@@ -31,15 +31,22 @@ CORE = 0.6  # the core: pixels at least this share of a marker radius inside the
 MERGE_GAP = 0.35  # of the typical piece's side (>= 3 px): pieces of one split marker
 MAX_CLUSTER = 4.0  # x the unit diameter: larger blobs are not marker clusters
 MAX_K = 12
+UNJOIN_MAX_R = 6  # px: the widest joining line removed by opening is about 2r
 
 
 def unit_marker(sizes: Sequence[tuple[float, float, float]]) -> tuple[float, float]:
     """(diameter, area) of a single marker from the blobs of a series, each
-    (width, height, area): the median of the blobs no larger than 1.3x the
-    median area and roughly as wide as tall (merged blobs are the larger,
-    elongated ones)."""
+    (width, height, area): among the blobs of at least half the median area
+    of the larger half (not fragments of covered markers), the median of those no larger than 1.3x
+    their median area and roughly as wide as tall (merged blobs are the
+    larger, elongated ones)."""
     if not sizes:
         raise ValueError("no blobs")
+    # fragments (markers cut by others on top) are not the unit: only blobs
+    # of at least half the large ones count
+    areas = [a for _, _, a in sizes]
+    big = float(np.median([a for a in areas if a >= np.median(areas)]))
+    sizes = [s for s in sizes if s[2] >= 0.5 * big] or list(sizes)
     med = float(np.median([a for _, _, a in sizes]))
     keep = [(w, h, a) for w, h, a in sizes
             if a <= 1.3 * med and max(w, h) <= 1.4 * min(w, h)] or list(sizes)
@@ -90,6 +97,43 @@ def split_blob(blob: np.ndarray, unit_d: float, unit_area: float) -> list[tuple[
     return [(float(x), float(y)) for x, y in _kmeans(pts, k)]
 
 
+def _disc(r: int) -> np.ndarray:
+    yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
+    return xx * xx + yy * yy <= r * r
+
+
+def unjoin_lines(mask: np.ndarray, min_diameter: float = 3,
+                 max_radius: int = UNJOIN_MAX_R) -> tuple[np.ndarray, int]:
+    """Markers joined by a line of their own colour form one long piece. Each
+    such piece (a line piece by its shape, verification.is_stroke) is opened
+    with the smallest disc that leaves only marker-like pieces: the line goes,
+    filled markers stay. Pieces where no disc does that are kept as they
+    are. Returns the new mask and how many pieces were opened."""
+    lab, _ = ndimage.label(mask, structure=np.ones((3, 3), bool))
+    out = mask.copy()
+    done = 0
+    for k, sl in enumerate(ndimage.find_objects(lab), start=1):
+        comp = lab[sl] == k
+        shp = blob_shape(comp)
+        if not is_stroke(shp) or shp["thickness"] < 2 * min_diameter / 2 + 2:
+            continue  # a plain line (no marker in it) or a small piece
+        for r in range(1, max_radius + 1):
+            opened = ndimage.binary_opening(np.pad(comp, r + 1), structure=_disc(r))
+            opened = opened[r + 1:-(r + 1), r + 1:-(r + 1)]
+            sub, n = ndimage.label(opened, structure=np.ones((3, 3), bool))
+            if n == 0:
+                break
+            shapes = [blob_shape(sub[s2] == j)
+                      for j, s2 in enumerate(ndimage.find_objects(sub), start=1)]
+            if all(not is_stroke(s) for s in shapes):
+                region = out[sl]
+                region[comp] = False
+                region[opened] = True
+                done += 1
+                break
+    return out, done
+
+
 def marker_centres(
     mask: np.ndarray,
     *,
@@ -104,7 +148,7 @@ def marker_centres(
     {"diameter_px", "n_merged", "n_split", "n_markers"}. `diameter` fixes
     the marker size (else taken from the series); `min_diameter` /
     `max_diameter` bound a single marker's side."""
-    mask = np.asarray(mask, bool)
+    mask, unjoined = unjoin_lines(np.asarray(mask, bool), min_diameter)
     lab, n = ndimage.label(mask, structure=np.ones((3, 3), bool))
     slices = ndimage.find_objects(lab)
     pieces = []
@@ -115,7 +159,8 @@ def marker_centres(
             continue
         box = (sl[1].start, sl[0].start, sl[1].stop - 1, sl[0].stop - 1)
         pieces.append((k, box, shp["area"], shp["side"]))
-    info = {"diameter_px": None, "n_merged": 0, "n_split": 0, "n_markers": 0}
+    info = {"diameter_px": None, "n_merged": 0, "n_split": 0, "n_markers": 0,
+            "n_unjoined": unjoined}
     if not pieces:
         return [], info
     if merge:

@@ -244,17 +244,10 @@ def status_table(cals: list[dict]) -> dict:
 
 
 def cmd_compare(before: str, after: str) -> None:
-    from real_chart_bench.domain.verification import verdict
-
     report: dict = {"bad_f1": BAD_F1, "before": before, "after": after}
     data = {t: load(t) for t in (before, after)}
     sets = sorted({r["set"] for r in data[after][0]})
-    for t, (rows, cals) in data.items():
-        if t == before:  # "before" judged with the code it ran with
-            pass
-        else:
-            for r in rows:  # re-judge with the code's current thresholds
-                r["accept"] = verdict(r["signals"])["accept"]
+    # each run is judged by the verdict of the code it ran with
     for s in sets:
         sec: dict = {}
         for t, (rows, cals) in data.items():
