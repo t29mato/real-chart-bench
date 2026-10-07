@@ -6166,5 +6166,15 @@
     "runtime_errors": [],
     "accepted_with_parser_warning": []
   },
-  "notes": "Qwen3.5-9B (bf16) を RTX 4090 + vLLM で、量子化行(local-cuda-*)と同じ設定(単発プロンプト・JSON スキーマ・温度0・thinking 無効・max_tokens 8192)で実行した。差分は条件ブロックだけで、Claude の pixcal 行と同じ校正情報(scripts/eval/local_vlm/prompt_v3/condition_pixcal.md)を与えた。生出力は data/local_vlm_run_cuda_pixcal/。"
+  "notes": "Qwen3.5-9B (bf16) を RTX 4090 + vLLM で、量子化行(local-cuda-*)と同じ設定(単発プロンプト・JSON スキーマ・温度0・thinking 無効・max_tokens 8192)で実行した。差分は条件ブロックだけで、Claude の pixcal 行と同じ校正情報(scripts/eval/local_vlm/prompt_v3/condition_pixcal.md)を与えた。生出力は data/local_vlm_run_cuda_pixcal/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_vlm_run_cuda_pixcal/qwen3.5-9b-bf16/pixcal.jsonl",
+    "n_figures": 91,
+    "seconds_total": 784.1,
+    "prompt_tokens": 116297,
+    "generation_tokens": 110977,
+    "note": "vLLM batches of 16: seconds are chunk time / chunk size, comparable between rows on this machine only",
+    "seconds_per_figure": 8.62
+  }
 }

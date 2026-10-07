@@ -6158,5 +6158,14 @@
     "runtime_errors": [],
     "accepted_with_parser_warning": []
   },
-  "notes": "ローカル実行(ノート PC: Apple M3 Max 128GB、mlx-vlm 0.7.4 / mlx 0.32.3、2026-10-04〜05)。1図1回の推論で、エージェントではない(ツールなし)。プロンプトは LLM run v3 (scripts/eval/llm_run_v3_prompt.md、測定点(マーカー)のみ)からエージェント向けの文を除いた単発版(scripts/eval/local_vlm/prompt_v3/、v2 単発版との差分は single_shot_v2_to_v3.diff)。図・タスク・軸レンジ・正解は Claude の v3 実行と同一(data/llm_run_v3 の tasks/_key、単位換算なし)。設定は v2 のローカル実行と同じ: greedy(温度0)、enable_thinking=False、JSON スキーマでの制約付きデコード、max_tokens 8192、HF_HUB_OFFLINE=1、画像は元ファイルのまま、Gemma 4 は画像トークン予算 1120。パースできなかった図・実行時エラーの図は回答なし(全図ミス)として採点する(local_run を参照)。今回は3モデルを1つずつ順に実行した(Qwen3.5-9B → Qwen3.8-27B → Gemma 4 31B、scripts/eval/local_vlm/run_v3_chain.sh)ので、1図あたりの秒数(local_run.seconds_per_figure)はモデル間で比較できる。生出力(raw テキストを含む)と実行ログは data/local_vlm_run_v3/、推論コードは scripts/eval/local_vlm/。"
+  "notes": "ローカル実行(ノート PC: Apple M3 Max 128GB、mlx-vlm 0.7.4 / mlx 0.32.3、2026-10-04〜05)。1図1回の推論で、エージェントではない(ツールなし)。プロンプトは LLM run v3 (scripts/eval/llm_run_v3_prompt.md、測定点(マーカー)のみ)からエージェント向けの文を除いた単発版(scripts/eval/local_vlm/prompt_v3/、v2 単発版との差分は single_shot_v2_to_v3.diff)。図・タスク・軸レンジ・正解は Claude の v3 実行と同一(data/llm_run_v3 の tasks/_key、単位換算なし)。設定は v2 のローカル実行と同じ: greedy(温度0)、enable_thinking=False、JSON スキーマでの制約付きデコード、max_tokens 8192、HF_HUB_OFFLINE=1、画像は元ファイルのまま、Gemma 4 は画像トークン予算 1120。パースできなかった図・実行時エラーの図は回答なし(全図ミス)として採点する(local_run を参照)。今回は3モデルを1つずつ順に実行した(Qwen3.5-9B → Qwen3.8-27B → Gemma 4 31B、scripts/eval/local_vlm/run_v3_chain.sh)ので、1図あたりの秒数(local_run.seconds_per_figure)はモデル間で比較できる。生出力(raw テキストを含む)と実行ログは data/local_vlm_run_v3/、推論コードは scripts/eval/local_vlm/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_vlm_run_v3/qwen3.8-27b-8bit/noaxis.jsonl",
+    "n_figures": 91,
+    "seconds_total": 6167.6,
+    "prompt_tokens": 108818,
+    "generation_tokens": 67518,
+    "seconds_per_figure": 67.78
+  }
 }

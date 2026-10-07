@@ -6141,5 +6141,12 @@
     "n_scored_figures_without_answer": 0,
     "runtime_errors": []
   },
-  "notes": "方式A(docs/design/local-model.md「方式A: 検出器」)。学習したマーカー検出器(MarkerNet: ResNet-34 (ImageNet) + U-Net decoder to stride 2, CenterNet heatmap + offset + shape class + associative embedding)がマーカー中心の画素位置と系列の振り分けを出し、値への変換は採点側で、Claude の pixcal 行と同じ目盛校正(data/verified_pairs/tick_calibration.json)で行った。学習データ: 合成(PlotQA 24,521 枚 + synth-materials 20,000 枚)で学習した重み(markernet-r34-synth)から、Starrydata × CC-BY 実図(89 枚・35 論文、ベンチマーク論文は除外、目盛はローカル OCR で校正)のうち論文単位 20% を検証に回した 76 枚を40倍に重複させて合成データに加え、8,000 step 追加学習(実図の検証 F1 最良の step 4000 を採用)。Starrydata は一部の系列しかデジタイズされていないため、実図の背景損失は 0.25 倍。しきい値などの設定は学習データから切り出した検証分割で決め、ベンチマークでは調整していない。生出力は data/local_model_runs/markernet-r34-synth-real/。"
+  "notes": "方式A(docs/design/local-model.md「方式A: 検出器」)。学習したマーカー検出器(MarkerNet: ResNet-34 (ImageNet) + U-Net decoder to stride 2, CenterNet heatmap + offset + shape class + associative embedding)がマーカー中心の画素位置と系列の振り分けを出し、値への変換は採点側で、Claude の pixcal 行と同じ目盛校正(data/verified_pairs/tick_calibration.json)で行った。学習データ: 合成(PlotQA 24,521 枚 + synth-materials 20,000 枚)で学習した重み(markernet-r34-synth)から、Starrydata × CC-BY 実図(89 枚・35 論文、ベンチマーク論文は除外、目盛はローカル OCR で校正)のうち論文単位 20% を検証に回した 76 枚を40倍に重複させて合成データに加え、8,000 step 追加学習(実図の検証 F1 最良の step 4000 を採用)。Starrydata は一部の系列しかデジタイズされていないため、実図の背景損失は 0.25 倍。しきい値などの設定は学習データから切り出した検証分割で決め、ベンチマークでは調整していない。生出力は data/local_model_runs/markernet-r34-synth-real/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_model_runs/markernet-r34-synth-real/pixpts_px.jsonl",
+    "n_figures": 91,
+    "seconds_total": 1.6,
+    "seconds_per_figure": 0.02
+  }
 }

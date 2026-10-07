@@ -6155,5 +6155,13 @@
     ],
     "accepted_with_parser_warning": []
   },
-  "notes": "ローカル実行(ノート PC: Apple M3 Max 128GB、mlx-vlm 0.7.4 / mlx 0.32.3、2026-10-03〜04)。1図1回の推論で、エージェントではない(ツールなし)。プロンプトは LLM run v2 (scripts/eval/llm_run_v2_prompt.md)からエージェント向けの文を除いた単発版(scripts/eval/local_vlm/prompt/、差分は diff_vs_v2.diff)。図・タスク・軸レンジ・正解は Claude の v2 実行と同一。設定: greedy(温度0)、enable_thinking=False、JSON スキーマでの制約付きデコード、max_tokens 8192、HF_HUB_OFFLINE=1(ネットワークなしで実行)、画像は元ファイルをそのまま渡す。Gemma 4 は画像トークン予算を 1120 に上げた(processor.image_processor.max_soft_tokens、既定 280)。パースできなかった図・実行時エラーの図は回答なし(全図ミス)として採点する(LLM と同じ規則)。件数は local_run を参照。3モデルを同時に並列実行したため、1図あたりの秒数はモデル間でも単独実行とも比較できない(記録はしているが使わない)。生出力(raw テキストを含む)は data/local_vlm_run_v2/、推論コードは scripts/eval/local_vlm/。"
+  "notes": "ローカル実行(ノート PC: Apple M3 Max 128GB、mlx-vlm 0.7.4 / mlx 0.32.3、2026-10-03〜04)。1図1回の推論で、エージェントではない(ツールなし)。プロンプトは LLM run v2 (scripts/eval/llm_run_v2_prompt.md)からエージェント向けの文を除いた単発版(scripts/eval/local_vlm/prompt/、差分は diff_vs_v2.diff)。図・タスク・軸レンジ・正解は Claude の v2 実行と同一。設定: greedy(温度0)、enable_thinking=False、JSON スキーマでの制約付きデコード、max_tokens 8192、HF_HUB_OFFLINE=1(ネットワークなしで実行)、画像は元ファイルをそのまま渡す。Gemma 4 は画像トークン予算を 1120 に上げた(processor.image_processor.max_soft_tokens、既定 280)。パースできなかった図・実行時エラーの図は回答なし(全図ミス)として採点する(LLM と同じ規則)。件数は local_run を参照。3モデルを同時に並列実行したため、1図あたりの秒数はモデル間でも単独実行とも比較できない(記録はしているが使わない)。生出力(raw テキストを含む)は data/local_vlm_run_v2/、推論コードは scripts/eval/local_vlm/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_vlm_run_v2/qwen3.5-9b-8bit/noaxis.jsonl",
+    "n_figures": 91,
+    "seconds_total": 9391.0,
+    "note": "ran concurrently with other models: seconds are not comparable",
+    "seconds_per_figure": 103.2
+  }
 }

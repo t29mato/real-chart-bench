@@ -6173,5 +6173,15 @@
     "runtime_errors": [],
     "accepted_with_parser_warning": []
   },
-  "notes": "量子化の影響を測る行(design 7.75 (2))。Qwen3.5-9B を RTX 4090 + vLLM で、Mac の v3 ローカル実行と同じ単発プロンプト・JSON スキーマ・温度0・thinking 無効・max_tokens 8192 で実行した(プロンプト組み立てとスキーマは worker_v3.py の関数をそのまま使う)。精度だけを変え、すべて同じ公開重みから作った: bf16 はそのまま、fp8 は vLLM の変換、w8a16 / w4a16 は scripts/eval/local_vlm/quantize_rtn.py の四捨五入量子化(キャリブレーションなし、group 128)。16図ずつまとめて推論したので、1図あたりの秒数はこのマシンの精度間でのみ比べられる。生出力は data/local_vlm_run_cuda/。"
+  "notes": "量子化の影響を測る行(design 7.75 (2))。Qwen3.5-9B を RTX 4090 + vLLM で、Mac の v3 ローカル実行と同じ単発プロンプト・JSON スキーマ・温度0・thinking 無効・max_tokens 8192 で実行した(プロンプト組み立てとスキーマは worker_v3.py の関数をそのまま使う)。精度だけを変え、すべて同じ公開重みから作った: bf16 はそのまま、fp8 は vLLM の変換、w8a16 / w4a16 は scripts/eval/local_vlm/quantize_rtn.py の四捨五入量子化(キャリブレーションなし、group 128)。16図ずつまとめて推論したので、1図あたりの秒数はこのマシンの精度間でのみ比べられる。生出力は data/local_vlm_run_cuda/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_vlm_run_cuda/qwen3.5-9b-w4a16/noaxis.jsonl",
+    "n_figures": 91,
+    "seconds_total": 424.7,
+    "prompt_tokens": 108818,
+    "generation_tokens": 87326,
+    "note": "vLLM batches of 16: seconds are chunk time / chunk size, comparable between rows on this machine only",
+    "seconds_per_figure": 4.67
+  }
 }

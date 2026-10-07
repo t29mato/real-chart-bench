@@ -6162,5 +6162,15 @@
     "runtime_errors": [],
     "accepted_with_parser_warning": []
   },
-  "notes": "pixcal の2段階版(design 7.79)。単発の VLM は校正式で値に換算できないため、モデルにはマーカー中心の画像内の位置だけを出させ(幅・高さを 0〜1000 とする相対座標、Qwen-VL のグラウンディングの慣習)、値への変換は採点側で、Claude の pixcal 行に渡したのと同じ目盛校正(data/verified_pairs/tick_calibration.json)で行った。プロンプトは v3 単発版の条件ブロックを scripts/eval/local_vlm/prompt_v3/condition_pixpts_norm.md に替えたもの。生出力は data/local_vlm_run_cuda_pixcal/。"
+  "notes": "pixcal の2段階版(design 7.79)。単発の VLM は校正式で値に換算できないため、モデルにはマーカー中心の画像内の位置だけを出させ(幅・高さを 0〜1000 とする相対座標、Qwen-VL のグラウンディングの慣習)、値への変換は採点側で、Claude の pixcal 行に渡したのと同じ目盛校正(data/verified_pairs/tick_calibration.json)で行った。プロンプトは v3 単発版の条件ブロックを scripts/eval/local_vlm/prompt_v3/condition_pixpts_norm.md に替えたもの。生出力は data/local_vlm_run_cuda_pixcal/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_vlm_run_cuda_pixcal/qwen3.5-9b-bf16/pixpts_norm.jsonl",
+    "n_figures": 91,
+    "seconds_total": 506.2,
+    "prompt_tokens": 100566,
+    "generation_tokens": 89548,
+    "note": "vLLM batches of 16: seconds are chunk time / chunk size, comparable between rows on this machine only",
+    "seconds_per_figure": 5.56
+  }
 }

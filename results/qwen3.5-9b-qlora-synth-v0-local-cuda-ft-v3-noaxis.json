@@ -3,7 +3,7 @@
   "model_name": "Qwen3.5-9B + QLoRA (合成データ)（軸レンジなし、ローカル RTX 4090、方式B 追加学習）",
   "execution": "local",
   "dataset_version": "v0-eval-pilot-n91-noaxis",
-  "run_at": "2026-10-07T21:59:29.989046+00:00",
+  "run_at": "2026-10-07T22:24:34.837024+00:00",
   "n_figures": 91,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
@@ -6206,5 +6206,15 @@
     "runtime_errors": [],
     "accepted_with_parser_warning": []
   },
-  "notes": "方式B(docs/design/local-model.md「方式B: VLM 追加学習」)。Qwen3.5-9B を QLoRA(NF4、視覚塔は凍結・非量子化、言語側の全線形層に LoRA)で追加学習し、v3 単発プロンプトに値の表を直接答えさせた。教師はベンチマーク外の合成図・既存データセット・Starrydata の人手デジタイズのみ(Claude / GPT の出力は使わない)。ベンチマークの論文は論文単位で学習から除外し、調整は学習データの検証分割だけで行った。推論は bf16 の公開重み + LoRA を vLLM で(local-cuda の bf16 行と同じ設定)、画像は学習と同じ 1.6MP 上限に縮小。生出力・設定(adapter と学習状態)は data/local_vlm_run_ft/。"
+  "notes": "方式B(docs/design/local-model.md「方式B: VLM 追加学習」)。Qwen3.5-9B を QLoRA(NF4、視覚塔は凍結・非量子化、言語側の全線形層に LoRA)で追加学習し、v3 単発プロンプトに値の表を直接答えさせた。教師はベンチマーク外の合成図・既存データセット・Starrydata の人手デジタイズのみ(Claude / GPT の出力は使わない)。ベンチマークの論文は論文単位で学習から除外し、調整は学習データの検証分割だけで行った。推論は bf16 の公開重み + LoRA を vLLM で(local-cuda の bf16 行と同じ設定)、画像は学習と同じ 1.6MP 上限に縮小。生出力・設定(adapter と学習状態)は data/local_vlm_run_ft/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "per-figure log data/local_vlm_run_ft/qwen3.5-9b-qlora-synth/noaxis.jsonl",
+    "n_figures": 91,
+    "seconds_total": 1478.5,
+    "prompt_tokens": 100324,
+    "generation_tokens": 173149,
+    "note": "vLLM batches of 16: seconds are chunk time / chunk size, comparable between rows on this machine only",
+    "seconds_per_figure": 16.25
+  }
 }

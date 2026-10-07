@@ -6120,5 +6120,14 @@
   "agent_effort": null,
   "condition": "目盛のピクセル位置を与えた条件(人が軸を校正し AI が点を取る、採点対象全図)",
   "prompt": "scripts/eval/llm_run_pixcal_prompt.md",
-  "notes": "Claude Code のサブエージェントとして起動(2026-10-05〜06、Linux 機)。プロンプトは scripts/eval/llm_run_pixcal_prompt.md: v3 プロンプトの条件ブロックだけを『軸ごとに目盛2本のピクセル位置と値・スケール・画像サイズ』(WebPlotDigitizer の軸校正と同じ情報、data/verified_pairs/tick_calibration.json)に置き換えた。軸レンジは与えない。図・正解は v3 と同じ採点対象94図、2バッチ(47図/47図)、封印ディレクトリと INSTRUCTIONS.md は v3 と同じ運用で、乱数シードのみ変更。4モデル8バッチを並列に実行した。実行記録は design §7.78。生の回答は data/llm_run_pixcal/。"
+  "notes": "Claude Code のサブエージェントとして起動(2026-10-05〜06、Linux 機)。プロンプトは scripts/eval/llm_run_pixcal_prompt.md: v3 プロンプトの条件ブロックだけを『軸ごとに目盛2本のピクセル位置と値・スケール・画像サイズ』(WebPlotDigitizer の軸校正と同じ情報、data/verified_pairs/tick_calibration.json)に置き換えた。軸レンジは与えない。図・正解は v3 と同じ採点対象94図、2バッチ(47図/47図)、封印ディレクトリと INSTRUCTIONS.md は v3 と同じ運用で、乱数シードのみ変更。4モデル8バッチを並列に実行した。実行記録は design §7.78。生の回答は data/llm_run_pixcal/。",
+  "run_cost": {
+    "recorded": true,
+    "basis": "Claude Code subagent reports",
+    "n_batches": 2,
+    "seconds_total": 220.6,
+    "subagent_tokens": 84642,
+    "tool_uses": 23,
+    "seconds_per_figure": 2.42
+  }
 }

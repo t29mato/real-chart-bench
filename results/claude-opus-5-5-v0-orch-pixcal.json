@@ -3,7 +3,7 @@
   "model_name": "Claude Opus 5.5（司令塔 + 道具のみ、目盛のピクセル位置あり）",
   "execution": "cloud",
   "dataset_version": "v0-eval-pilot-n91-pixcal",
-  "run_at": "2026-10-07T22:01:09.993836+00:00",
+  "run_at": "2026-10-07T22:26:13.200673+00:00",
   "n_figures": 91,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
@@ -6119,5 +6119,8 @@
   ],
   "agent_effort": null,
   "condition": "目盛のピクセル位置を与えた条件・Claude が司令塔、決まった道具だけを使う(方式D の上限、採点対象全図)",
-  "notes": "方式D(docs/design/local-model.md「方式D: 司令塔 + 道具」)の上限を測る行。Claude Code のサブエージェントを封印ディレクトリで起動し、用意した道具コマンド(starry-digitizer の Symbol Extract / Line Extract の移植、方式A の検出器、方式C の目盛 OCR、色の候補、マスク、重ね描き)と画像・重ね描きを見ることだけを許した。自分で画像処理のコードを書くことと、答えの数値を手で打つことは指示で禁止した(scripts/eval/orchestrator/claude_prompt.md)。答えは道具の answer コマンドが保存済みの道具の結果から書く。答えは画素座標で、値への変換は採点側で人の目盛校正で行った。推論時の利用だけで、学習には使わない。回答は data/llm_run_orchestrator/。"
+  "notes": "方式D(docs/design/local-model.md「方式D: 司令塔 + 道具」)の上限を測る行。Claude Code のサブエージェントを封印ディレクトリで起動し、用意した道具コマンド(starry-digitizer の Symbol Extract / Line Extract の移植、方式A の検出器、方式C の目盛 OCR、色の候補、マスク、重ね描き)と画像・重ね描きを見ることだけを許した。自分で画像処理のコードを書くことと、答えの数値を手で打つことは指示で禁止した(scripts/eval/orchestrator/claude_prompt.md)。答えは道具の answer コマンドが保存済みの道具の結果から書く。答えは画素座標で、値への変換は採点側で人の目盛校正で行った。推論時の利用だけで、学習には使わない。回答は data/llm_run_orchestrator/。",
+  "run_cost": {
+    "recorded": false
+  }
 }
