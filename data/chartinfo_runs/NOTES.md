@@ -58,3 +58,5 @@ separately instead of being prompted away.
 - batch05 / Opus 5.5: completed by a second agent (kept the first run's 10
   answers, added 20); fig_23 overlapping series given identical/modelled values;
   hidden points estimated in fig_11/16/30.
+- batch10 / Sonnet 5.5: eyeballed; fig_05 reconstructed from fitted curves;
+  fig_23 values guessed on an integer grid.
