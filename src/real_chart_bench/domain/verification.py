@@ -60,6 +60,17 @@ LOOKALIKE_NCC = 0.7  # a place this similar to a series' median patch looks like
 LOOKALIKE_HALF = 0.6  # template half-size, x the marker diameter
 DET_SUPPORT, DET_CONFIDENT = 0.2, 0.5  # detector peak scores: supports a point / is a marker
 DET_RADIUS = 0.015  # of the frame's long side: a peak this close is the same marker
+# v3 (docs/design/local-model.md「v3: 検証の誤検知と道具の追加」): what is not a marker
+ELONG_STROKE = 2.5  # a piece this elongated (sqrt of its moments' ratio) is a line piece
+ELONG_THIN = 1.8  # ... or this elongated and thin
+THIN_STROKE = 0.35  # thin: stroke width (after filling holes) <= this x its side
+GROUP_GAP = 0.008  # of the frame's short side (>= 3 px): pieces of one split marker
+GROUP_MAX_ASPECT, GROUP_MIN_FILL = 1.5, 0.6  # a split marker's pieces fill a round box
+GROUP_MIN_FILL_MANY = 0.4  # ... three or more pieces (quarters)
+CAP_ALIGN = 4.0  # a thin piece within this many diameters of a point, on its row or column
+LOOKALIKE_DENSITY = 0.6  # a look-alike carries at least this share of the points' ink
+HOLLOW_REACH = 0.03  # of the frame's short side: the marker under a point, for its size
+ASYMMETRY_STROKE = 0.15  # a thin piece whose ink centre is off its box centre (T, L)
 
 
 # ------------------------------------------------------------------ ink
@@ -160,14 +171,20 @@ def _cross_run(lab: np.ndarray, k: int, x: float, y: float, limit: int) -> int |
     return min(runs)
 
 
-def _marker_diameter(lab, slices, points, r: int, frame) -> float:
+def _marker_diameter(lab, slices, points, r: int, frame, pieces=None, groups=None,
+                     owner=None) -> float:
     fx0, fy0, fx1, fy1 = frame
     short = min(fx1 - fx0, fy1 - fy0)
     sizes = []
     limit = MARKER_MAX_FRACTION * short
     for x, y in points:
-        k = _label_near(lab, x, y, r)
+        # v3: a hollow marker's ring may lie farther than the ink radius
+        k = _label_near(lab, x, y, max(r, int(round(HOLLOW_REACH * short))))
         if not k:
+            continue
+        if owner is not None and k in owner and len(groups[owner[k]]) > 1:
+            gx0, gy0, gx1, gy1 = _group_box(pieces, groups[owner[k]])
+            sizes.append(max(gx1 - gx0 + 1, gy1 - gy0 + 1))  # a split marker: all of it
             continue
         sl = slices[k - 1]
         side = max(sl[0].stop - sl[0].start, sl[1].stop - sl[1].start)
@@ -182,6 +199,139 @@ def _marker_diameter(lab, slices, points, r: int, frame) -> float:
     if sizes:
         return float(np.median(sizes))
     return max(4.0, DEFAULT_MARKER_FRACTION * short)
+
+
+# ------------------------------------------------------------------ shapes (v3)
+
+
+def blob_shape(comp: np.ndarray) -> dict:
+    """Shape of one connected piece of ink (a boolean crop): its side (longer
+    bbox side), area, elongation (sqrt of the ratio of its second moments; 1
+    for a disc, a square or a "+", large for a line piece) and thickness
+    (twice the largest inscribed radius after filling holes: about the side
+    for a filled or hollow marker, the stroke width for lines, "+" and "x")."""
+    comp = np.asarray(comp, bool)
+    ys, xs = np.nonzero(comp)
+    if len(ys) == 0:
+        return {"side": 0, "area": 0, "elongation": 1.0, "thickness": 0.0}
+    h, w = int(ys.max() - ys.min() + 1), int(xs.max() - xs.min() + 1)
+    cov = np.cov(np.vstack([xs, ys]).astype(float)) if len(ys) > 1 else np.zeros((2, 2))
+    cov = cov + np.eye(2) / 12.0  # a pixel's own extent
+    ev = np.linalg.eigvalsh(cov)
+    filled = ndimage.binary_fill_holes(np.pad(comp, 1))
+    thick = 2.0 * float(ndimage.distance_transform_edt(filled).max())
+    side = int(max(h, w))
+    off = math.hypot(xs.mean() - (xs.min() + xs.max()) / 2, ys.mean() - (ys.min() + ys.max()) / 2)
+    return {"side": side, "area": int(len(ys)),
+            "elongation": float(math.sqrt(ev[1] / max(ev[0], 1e-9))), "thickness": thick,
+            "asymmetry": float(off / side)}
+
+
+def is_stroke(shape: dict) -> bool:
+    """A piece of a line (a connecting segment, an error bar or its cap, a
+    fit-curve fragment), not a marker: clearly elongated, or thin and
+    somewhat elongated, or thin and lopsided (a bar with its cap: a T or an
+    L). "+" / "x" markers are thin but neither elongated nor lopsided."""
+    e, side = shape["elongation"], max(1, shape["side"])
+    thin = shape["thickness"] <= THIN_STROKE * side
+    # a row of touching markers is elongated too, but as thick as a marker
+    return ((e >= ELONG_STROKE and shape["thickness"] <= 0.25 * side)
+            or (thin and e >= ELONG_THIN)
+            or (thin and shape.get("asymmetry", 0.0) >= ASYMMETRY_STROKE))
+
+
+def _box_gap(a, b) -> float:
+    dx = max(0.0, b[0] - a[2] - 1, a[0] - b[2] - 1)
+    dy = max(0.0, b[1] - a[3] - 1, a[1] - b[3] - 1)
+    return max(dx, dy)
+
+
+def group_pieces(pieces: Sequence[tuple[Sequence[float], int]], gap: float) -> list[list[int]]:
+    """Pieces ((x0, y0, x1, y1) inclusive box, ink area) that are one marker
+    split by a white cross or bar: pieces at most `gap` px apart whose union
+    is a round box (aspect <= GROUP_MAX_ASPECT) mostly filled with their ink
+    (>= GROUP_MIN_FILL). Other pieces stay alone. Groups of indices, in the
+    order of their first piece."""
+    n = len(pieces)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if _box_gap(pieces[i][0], pieces[j][0]) <= gap:
+                parent[find(i)] = find(j)
+    comps: dict[int, list[int]] = {}
+    for i in range(n):
+        comps.setdefault(find(i), []).append(i)
+    out: list[list[int]] = []
+    for members in comps.values():
+        if len(members) == 1:
+            out.append(members)
+            continue
+        x0 = min(pieces[k][0][0] for k in members)
+        y0 = min(pieces[k][0][1] for k in members)
+        x1 = max(pieces[k][0][2] for k in members)
+        y1 = max(pieces[k][0][3] for k in members)
+        bw, bh = x1 - x0 + 1, y1 - y0 + 1
+        fill = sum(pieces[k][1] for k in members) / (bw * bh)
+        # two pieces: halves (fill ~0.75), not two markers touching corner to
+        # corner (<= 0.5); three or four: quarters of a disc fill about half
+        need = GROUP_MIN_FILL if len(members) == 2 else GROUP_MIN_FILL_MANY
+        if max(bw, bh) / min(bw, bh) <= GROUP_MAX_ASPECT and fill >= need:
+            out.append(sorted(members))
+        else:
+            out += [[k] for k in members]
+    return sorted(out, key=lambda g: g[0])
+
+
+def _pieces(lab, slices, short: float):
+    """Marker-candidate pieces (components no larger than a quarter of the
+    frame's short side) with their shape, and the groups of split markers
+    among the pieces that are not line pieces. Returns (pieces, groups,
+    owner): pieces[k-1] for label k (None when too large), groups as lists
+    of labels, owner[label] = group index."""
+    limit = 0.25 * short
+    pieces: list[dict | None] = []
+    for k, sl in enumerate(slices, start=1):
+        if sl is None:
+            pieces.append(None)
+            continue
+        h, w = sl[0].stop - sl[0].start, sl[1].stop - sl[1].start
+        if max(h, w) > limit:
+            pieces.append(None)
+            continue
+        shp = blob_shape(lab[sl] == k)
+        shp["box"] = (sl[1].start, sl[0].start, sl[1].stop - 1, sl[0].stop - 1)
+        shp["stroke"] = is_stroke(shp)
+        pieces.append(shp)
+    cand = [k for k, p in enumerate(pieces, start=1) if p is not None and not p["stroke"]]
+    gap = max(3.0, GROUP_GAP * short)
+    grouped = group_pieces([(pieces[k - 1]["box"], pieces[k - 1]["area"]) for k in cand], gap)
+    groups = [[cand[i] for i in g] for g in grouped]
+    owner = {k: gi for gi, g in enumerate(groups) for k in g}
+    return pieces, groups, owner
+
+
+def _group_box(pieces, g):
+    boxes = [pieces[k - 1]["box"] for k in g]
+    return (min(b[0] for b in boxes), min(b[1] for b in boxes),
+            max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
+def _is_cap(shape: dict, cx: float, cy: float, pts, d: float, r: int) -> bool:
+    """A thin piece on a point's column or row, a few diameters away: an
+    error bar's cap (or a detached piece of the bar)."""
+    if shape["thickness"] > THIN_STROKE * max(1, shape["side"]) or shape["elongation"] < 1.4:
+        return False  # not thin, or as round as a "+" / "x" marker
+    tol = max(r, 0.25 * d)
+    reach = CAP_ALIGN * d
+    return any((abs(cx - x) <= tol and abs(cy - y) <= reach)
+               or (abs(cy - y) <= tol and abs(cx - x) <= reach) for x, y in pts)
 
 
 def _near_text(bx0, by0, bx1, by1, boxes, d) -> bool:
@@ -234,6 +384,13 @@ def _templates(diff: np.ndarray, pts, half: int) -> np.ndarray | None:
     return np.median(np.stack(patches), axis=0)
 
 
+def _ink_share(ink: np.ndarray, x: float, y: float, half: int) -> float:
+    h, w = ink.shape
+    cx, cy = int(round(x)), int(round(y))
+    win = ink[max(0, cy - half):min(h, cy + half + 1), max(0, cx - half):min(w, cx + half + 1)]
+    return float(win.mean()) if win.size else 0.0
+
+
 def lookalikes(diff: np.ndarray, clean_ink: np.ndarray, series_pts: list, all_pts: list,
                frame, band: int, d: float, r: int, region: np.ndarray | None,
                text_boxes) -> tuple[list[float | None], list[dict]]:
@@ -247,6 +404,7 @@ def lookalikes(diff: np.ndarray, clean_ink: np.ndarray, series_pts: list, all_pt
     ya, yb = max(0, int(fy0) - half), min(h, int(fy1) + half + 1)
     sub = diff[ya:yb, xa:xb]
     nms = max(3, int(round(d)))
+    hd = max(2, int(round(0.5 * d)))
     selfs: list[float | None] = []
     found: list[dict] = []
     for si, pts in enumerate(series_pts[:12]):
@@ -261,6 +419,9 @@ def lookalikes(diff: np.ndarray, clean_ink: np.ndarray, series_pts: list, all_pt
             win = ncc[max(0, cy - r):cy + r + 1, max(0, cx - r):cx + r + 1]
             own += bool(win.size) and float(win.max()) >= LOOKALIKE_NCC
         selfs.append(own / len(pts))
+        # v3: a look-alike carries about as much ink as the series' points (a
+        # line or a fit curve through the template window carries less)
+        own_ink = float(np.median([_ink_share(clean_ink, x, y, hd) for x, y in pts]))
         peaks = (ncc >= LOOKALIKE_NCC) & (ncc == ndimage.maximum_filter(ncc, size=nms))
         for py, px in zip(*np.nonzero(peaks), strict=True):
             x, y = float(px + xa), float(py + ya)
@@ -276,6 +437,8 @@ def lookalikes(diff: np.ndarray, clean_ink: np.ndarray, series_pts: list, all_pt
             if any(math.hypot(x - f["x"], y - f["y"]) < d for f in found):
                 continue
             if _near_text(x - half, y - half, x + half, y + half, text_boxes, d):
+                continue
+            if _ink_share(clean_ink, x, y, hd) < LOOKALIKE_DENSITY * own_ink:
                 continue
             found.append({"x": round(x, 1), "y": round(y, 1), "series": si,
                           "ncc": round(float(ncc[py, px]), 3)})
@@ -314,7 +477,8 @@ def verify(
     clean = without_frame_lines(ink, frame, band)
     lab, _, slices = _components(clean)
     all_pts = [p for s in series for p in _points(s)]
-    d = _marker_diameter(lab, slices, all_pts, r, frame)
+    pieces, groups, gowner = _pieces(lab, slices, min(fx1 - fx0, fy1 - fy0))
+    d = _marker_diameter(lab, slices, all_pts, r, frame, pieces, groups, gowner)
     dup_r = max(2.0, 0.5 * d)
     mx, my = OUTSIDE_MARGIN * (fx1 - fx0), OUTSIDE_MARGIN * (fy1 - fy0)
     shift = null_shift(frame, r)
@@ -356,21 +520,27 @@ def verify(
     series_cols = [np.array([int(c["color"][k:k + 2], 16) for k in (1, 3, 5)], float)
                    for c in out_series if c["color"]]
     blobs = []
-    for k, sl in enumerate(slices, start=1):
-        if sl is None:
-            continue
-        by0, by1, bx0, bx1 = sl[0].start, sl[0].stop - 1, sl[1].start, sl[1].stop - 1
+    # v3: line pieces (segments, error bars and caps, fit-curve fragments)
+    # are not markers; the pieces of a marker split by a white cross are one
+    for g in groups:
+        bx0, by0, bx1, by1 = _group_box(pieces, g)
         bw, bh = bx1 - bx0 + 1, by1 - by0 + 1
         if not (BLOB_MIN * d <= max(bw, bh) <= BLOB_MAX * d and min(bw, bh) >= BLOB_THIN * d):
             continue
-        comp = lab[sl] == k
-        ys, xs = np.nonzero(comp)
-        cx, cy = float(xs.mean() + bx0), float(ys.mean() + by0)
+        sl = (slice(by0, by1 + 1), slice(bx0, bx1 + 1))
+        comp = np.isin(lab[sl], g)
+        if len(g) > 1:
+            cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
+        else:
+            ys, xs = np.nonzero(comp)
+            cx, cy = float(xs.mean() + bx0), float(ys.mean() + by0)
         if not (fx0 + band < cx < fx1 - band and fy0 + band < cy < fy1 - band):
             continue
         if region is not None and not region[int(round(cy)), int(round(cx))]:
             continue
         if any(bx0 - r <= x <= bx1 + r and by0 - r <= y <= by1 + r for x, y in all_pts):
+            continue
+        if len(g) == 1 and _is_cap(pieces[g[0] - 1], cx, cy, all_pts, d, r):
             continue
         if _near_text(bx0, by0, bx1, by1, text_boxes, d):
             continue
@@ -467,6 +637,59 @@ def _one_digit(v: float) -> bool:
     return abs(m - round(m)) <= 1e-6 * max(1.0, m)
 
 
+MARKS_AT_LABELS = 0.5  # share of the labels on detected marks for the marks to count
+LATTICE_TOL = 0.2  # a mark spacing within this share of a whole number of minor steps
+LOG_TOL, LOG_SHIFT = 0.02, 0.03  # decades: a mark on d x 10^k; the labels' offset searched
+
+
+def _lattice_share(marks: Sequence[float], label_step_px: float) -> tuple[float, float | None]:
+    """Linear axis: (the share of consecutive mark spacings that are a whole
+    number of minor steps, step_dev). The minor step is the label step
+    divided by any number of subdivisions (Origin's "10 minor ticks" makes
+    11), read from the marks' own median spacing (and +-1); the share uses
+    spacings only, so a slightly wrong slope does not add up. step_dev
+    compares that minor step with the marks' own spacing (a least-squares
+    line through the marks against their lattice index): a calibration whose
+    labels sit at the wrong pixels has the wrong step."""
+    gaps = [b - a for a, b in zip(marks, marks[1:], strict=False) if b - a > 0.5]
+    if not gaps or label_step_px <= 0:
+        return 0.0, None
+    n0 = max(1, round(label_step_px / float(np.median(gaps))))
+    best, best_key, best_step = 0.0, None, label_step_px / n0
+    for n in sorted({max(1, n0 - 1), n0, n0 + 1}):
+        step = label_step_px / n
+        devs = [abs(g / step - round(g / step)) if round(g / step) >= 1 else 1.0 for g in gaps]
+        share = sum(1 for d in devs if d <= LATTICE_TOL) / len(gaps)
+        key = (share, -float(np.mean(devs)))  # ties: the closer lattice
+        if best_key is None or key > best_key:
+            best, best_key, best_step = share, key, step
+    idx = [0]  # indexed gap by gap, so a step a few percent off does not add up
+    for a, b in zip(marks, marks[1:], strict=False):
+        idx.append(idx[-1] + max(0, round((b - a) / best_step)))
+    dev = None
+    if len(set(idx)) >= 3:
+        fitted = float(np.polyfit(idx, marks, 1)[0])
+        if fitted > 0:
+            dev = abs(best_step - fitted) / fitted
+    return best, dev
+
+
+def _log_marks_on_grid(marks: Sequence[float], slope: float, intercept: float) -> float:
+    """Log axis: the share of marks on d x 10^k (d = 1..9), allowing the
+    labels' line to be off by up to LOG_SHIFT decades (label centres a pixel
+    or two off their ticks)."""
+    ts = [(m - intercept) / slope for m in marks]
+    logs = [math.log10(k) for k in range(1, 11)]
+    best = 0.0
+    for delta in np.linspace(-LOG_SHIFT, LOG_SHIFT, 13):
+        ok = 0
+        for t in ts:
+            f = (t + delta) - math.floor(t + delta)
+            ok += min(abs(f - lk) for lk in logs) <= LOG_TOL
+        best = max(best, ok / len(ts))
+    return best
+
+
 def _axis_signals(axis: dict, which: str, marks: Sequence[float] | None) -> dict:
     scale = axis["scale"]
     try:
@@ -479,8 +702,8 @@ def _axis_signals(axis: dict, which: str, marks: Sequence[float] | None) -> dict
     span = (max(pxs) - min(pxs)) if len(pxs) > 1 else 0.0
     res = max(abs(p - (slope * t + intercept)) for p, t in ticks) if ticks else 0.0
     residual = res / span if span > 0 else 1.0
-    # the label grid, in pixel order: equal value steps (or whole multiples);
-    # on a log axis, labels are d x 10^k (one significant digit)
+    # the label grid, in pixel order: whole multiples of the smallest value
+    # step (labels may be missing, v3); on a log axis, labels are d x 10^k
     order = [t for _, t in sorted(ticks)]
     steps = [b - a for a, b in zip(order, order[1:], strict=False)]
     grid_dev = 0.0
@@ -489,36 +712,33 @@ def _axis_signals(axis: dict, which: str, marks: Sequence[float] | None) -> dict
         base = float(np.median(steps))
         grid_dev = sum(1 for _, v in axis["ticks"] if not _one_digit(float(v))) / len(ticks)
     elif steps:
-        base = float(np.median(steps))
-        if base == 0:
+        nonzero = [s for s in steps if s != 0]
+        base = min(nonzero, key=abs) if nonzero else 0.0
+        if base == 0 or len(nonzero) < len(steps):
             grid_dev = 1.0
         else:
             for s in steps:
                 q = s / base
                 grid_dev = max(grid_dev, 1.0 if round(q) <= 0 else abs(q - round(q)))
     direction_ok = slope > 0 if which == "x" else slope < 0
-    marks = list(marks or [])
-    on_grid = None
-    if len(marks) >= 3 and base:
-        ok = 0
-        for m in marks:
-            t = (m - intercept) / slope
-            if scale == "log":
-                f = t - math.floor(t)
-                good = min(abs(f - math.log10(k)) for k in range(1, 11)) <= 0.02
-            else:
-                q = (t - order[0]) / abs(base)
-                good = min(abs(q * sub - round(q * sub)) / sub for sub in (1, 2, 5)) <= 0.03
-            ok += good
-        on_grid = ok / len(marks)
+    marks = sorted(float(m) for m in marks or [])
     on_marks = None
     if len(marks) >= 2 and ticks:
         tol = max(3.0, 0.01 * span)
         on_marks = sum(1 for p in pxs if min(abs(p - m) for m in marks) <= tol) / len(pxs)
+    on_grid = step_dev = None
+    # v3: the detected marks speak for the scale only when they are this
+    # axis's tick marks (the labels sit on them)
+    if len(marks) >= 3 and base and on_marks is not None and on_marks >= MARKS_AT_LABELS:
+        if scale == "log":
+            on_grid = _log_marks_on_grid(marks, slope, intercept)
+        else:
+            on_grid, step_dev = _lattice_share(marks, abs(slope * base))
     return {"ok": True, "scale": scale, "n_ticks": len(ticks), "residual": round(residual, 5),
             "grid_dev": round(grid_dev, 4), "direction_ok": direction_ok,
             "marks_on_grid": None if on_grid is None else round(on_grid, 4),
-            "labels_on_marks": None if on_marks is None else round(on_marks, 4)}
+            "labels_on_marks": None if on_marks is None else round(on_marks, 4),
+            "step_dev": None if step_dev is None else round(step_dev, 5)}
 
 
 def calibration_signals(cal: dict, tick_marks: dict | None) -> dict:
@@ -543,8 +763,9 @@ class Thresholds:
     min_score_image: float = 0.85  # score from the image signals alone (no detector cache)
     max_residual: float = 0.02  # calibration: of the labelled tick span
     max_grid_dev: float = 0.5
-    min_marks_on_grid: float = 0.5
+    min_marks_on_grid: float = 0.0  # v3: off (scripts/eval/orchestrator/v3_dev.py caltune)
     min_labels_on_marks: float = 0.0
+    max_step_dev: float = 0.02  # v3: label step against the minor marks' own spacing
     # hints
     min_contrast: float = 0.35  # per series, over its testifying points
     max_unexplained_share: float = 0.25  # missed blobs + look-alikes / (them + points)
@@ -603,6 +824,10 @@ def hints(signals: dict, th: Thresholds) -> list[str]:
     out = []
     if signals["n_points"] == 0:
         return ["no points"]
+    for ax, c in (signals.get("calibration") or {}).items():
+        if c.get("ok") and not c.get("direction_ok", True):
+            out.append(f"calibration {ax}: values run the reversed way -- check that the "
+                       "axis is printed reversed and no minus sign was lost")
     for s in signals["series"]:
         if s["n"] == 0:
             continue
@@ -639,8 +864,7 @@ def calibration_reasons(cal_signals: dict | None, th: Thresholds) -> list[str]:
         if not c.get("ok"):
             reasons.append(f"calibration {ax}: unusable")
             continue
-        if not c["direction_ok"]:
-            reasons.append(f"calibration {ax}: values run the wrong way")
+        # v3: a reversed axis is read on purpose now; the direction is a hint
         if c["residual"] > th.max_residual:
             reasons.append(f"calibration {ax}: tick labels off the fitted line "
                            f"(residual {c['residual']:.3f})")
@@ -652,6 +876,9 @@ def calibration_reasons(cal_signals: dict | None, th: Thresholds) -> list[str]:
         if c["labels_on_marks"] is not None and c["labels_on_marks"] < th.min_labels_on_marks:
             reasons.append(f"calibration {ax}: labels not at tick marks "
                            f"({c['labels_on_marks']:.2f})")
+        if c.get("step_dev") is not None and c["step_dev"] > th.max_step_dev:
+            reasons.append(f"calibration {ax}: the label spacing disagrees with the tick "
+                           f"marks by {c['step_dev']:.1%} -- a label at the wrong pixel?")
     return reasons
 
 

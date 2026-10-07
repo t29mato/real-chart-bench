@@ -257,3 +257,40 @@ def exponent_span(ink: np.ndarray) -> tuple[int, int, int, int] | None:
     x0, x1 = min(raised), max(raised) + 1
     r = np.flatnonzero(ink[:, x0:x1].any(axis=1))
     return (x0, int(r[0]), x1, int(r[-1]) + 1)
+
+
+def label_glyphs(ink: np.ndarray) -> dict:
+    """What a tick label's ink (a boolean crop of one label) shows that the
+    OCR may drop (方式D v3): a leading minus sign -- a short, thin, wide
+    piece at mid-height left of every digit -- and a decimal point -- a small
+    piece on the baseline between digits. ``dot_after`` counts the digits
+    left of the point (touching digits are counted by their width)."""
+    from scipy import ndimage
+
+    out: dict = {"minus": False, "dot_after": None}
+    lab, _ = ndimage.label(np.asarray(ink, bool), structure=np.ones((3, 3), bool))
+    boxes = [(sl[1].start, sl[0].start, sl[1].stop, sl[0].stop)
+             for sl in ndimage.find_objects(lab) if sl is not None]
+    if not boxes:
+        return out
+    hmax = max(b[3] - b[1] for b in boxes)
+    tall = [b for b in boxes if b[3] - b[1] >= 0.5 * hmax]
+    top, base = min(b[1] for b in tall), max(b[3] for b in tall)
+    height = base - top
+    first = min(b[0] for b in tall)
+    for b in boxes:
+        if b in tall:
+            continue
+        x0, y0, x1, y1 = b
+        w, h = x1 - x0, y1 - y0
+        cy = (y0 + y1) / 2
+        if (x1 <= first and first - x1 <= 0.8 * height and h <= 0.25 * height
+                and w >= 1.5 * h and w >= 0.25 * height
+                and abs(cy - (top + base) / 2) <= 0.2 * height):
+            out["minus"] = True
+        if (x0 > first and h <= 0.3 * height and w <= 0.35 * height and w <= 2 * h + 1
+                and base - y1 <= 0.2 * height):
+            cx = (x0 + x1) / 2
+            out["dot_after"] = sum(max(1, round((t[2] - t[0]) / (0.6 * height)))
+                                   for t in tall if (t[0] + t[2]) / 2 < cx)
+    return out

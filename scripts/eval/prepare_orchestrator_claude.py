@@ -31,6 +31,15 @@ orch2-claude-<condition>.
 
   .venv/bin/python scripts/eval/prepare_orchestrator_claude.py \\
       ~/.cache/real-chart-bench/orchestrator/claude-sealed-v2 claude-opus-5-5 noaxis parts2 --v2
+
+--v3 (v3: 検証の誤検知と道具の追加): as --v2 with another seed and names
+(key in data/llm_run_orch3/), verify v3 (line pieces, caps, split markers
+and minor-tick subdivisions no longer raise a redo), the blob_extract tool
+and the v3 tick reading. Archived with archive_orchestrator_claude.py <work>
+--v3 and scored as orch3-claude-<condition>.
+
+  .venv/bin/python scripts/eval/prepare_orchestrator_claude.py \\
+      ~/.cache/real-chart-bench/orchestrator/claude-sealed-v3 claude-opus-5-5 noaxis parts2 --v3
 """
 
 from __future__ import annotations
@@ -51,12 +60,15 @@ from real_chart_bench.usecase.real_image_gate import select_verified_pairings  #
 DETS = pathlib.Path.home() / ".cache/real-chart-bench/orchestrator/dets"
 PROMPT = REPO / "scripts/eval/orchestrator/claude_prompt.md"
 PROMPT_V2 = REPO / "scripts/eval/orchestrator/claude_prompt_v2.md"
+PROMPT_V3 = REPO / "scripts/eval/orchestrator/claude_prompt_v3.md"
 SOURCES = {
     "noaxis": (REPO / "data/llm_run_v3", "noaxis"),
     "pixcal": (REPO / "data/llm_run_pixcal", "pixcal"),
 }
 V2_SEED = 20261007
 V2_ARCHIVE = REPO / "data/llm_run_orch2"
+V3_SEED = 20261008
+V3_ARCHIVE = REPO / "data/llm_run_orch3"
 AS_PRINTED = (
     "Report numbers on the same scale as the printed tick labels. Do not apply "
     "a multiplier written in the axis title (e.g. '(10^4 S/m)' or 'x10^4'); if "
@@ -64,6 +76,7 @@ AS_PRINTED = (
 )
 MODULES = [
     "domain/verification.py",
+    "domain/marker_blobs.py",
     "domain/starry_extract.py",
     "domain/digitizer_tools.py",
     "domain/orchestration.py",
@@ -87,8 +100,9 @@ ANSWER_NOTE = {
 }
 
 
-def instructions(directory: pathlib.Path, n: int, condition: str, v2: bool = False) -> str:
-    text = (PROMPT_V2 if v2 else PROMPT).read_text()
+def instructions(directory: pathlib.Path, n: int, condition: str, v2: bool = False,
+                 v3: bool = False) -> str:
+    text = (PROMPT_V3 if v3 else PROMPT_V2 if v2 else PROMPT).read_text()
     body = text.split("\n---\n")[1].strip()
     block = text.split(f"## `{{CONDITION}}`, {condition}\n")[1].split("\n## ")[0].strip()
     return (body.replace("{CONDITION}", block).replace("{CALIBRATION_ROW}", CAL_ROW[condition])
@@ -120,7 +134,8 @@ def install_tools(d: pathlib.Path, condition: str, images: list[pathlib.Path]) -
     tool.chmod(0o755)
 
 
-def v2_tasks(condition: str) -> tuple[dict, list[dict]]:
+def v2_tasks(condition: str, seed: int = V2_SEED,
+             archive: pathlib.Path = V2_ARCHIVE) -> tuple[dict, list[dict]]:
     """The v2 run (検証とやり直し): a fresh seed and names, every scored
     figure, and the single "as printed" reporting rule (design 7.82) for
     condition 1 -- the v1 noaxis tasks still carried the old 10^tick / kelvin
@@ -133,7 +148,7 @@ def v2_tasks(condition: str) -> tuple[dict, list[dict]]:
     pairings = select_verified_pairings(load_registry(REPO / "data/verified_pairs/registry.json"))
     cal = {(c["paper_id"], c["figure_id"]): c for c in json.loads(
         (REPO / "data/verified_pairs/tick_calibration.json").read_text())["figures"]}
-    random.Random(V2_SEED).shuffle(pairings)
+    random.Random(seed).shuffle(pairings)
     key, noaxis, pixcal = {}, [], []
     for i, p in enumerate(pairings, 1):
         name = f"fig_{i:03d}.png"
@@ -146,8 +161,8 @@ def v2_tasks(condition: str) -> tuple[dict, list[dict]]:
                        "y_scale": c["y_scale"],
                        "x_ticks": [{"pixel_x": t["px"], "value": t["value"]} for t in c["x"]],
                        "y_ticks": [{"pixel_y": t["px"], "value": t["value"]} for t in c["y"]]})
-    files = {V2_ARCHIVE / "_key.json": key, V2_ARCHIVE / "noaxis/tasks.json": noaxis,
-             V2_ARCHIVE / "pixpts_px/tasks.json": pixcal}
+    files = {archive / "_key.json": key, archive / "noaxis/tasks.json": noaxis,
+             archive / "pixpts_px/tasks.json": pixcal}
     for path, obj in files.items():
         text = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
         if path.exists() and path.read_text() != text:
@@ -158,8 +173,9 @@ def v2_tasks(condition: str) -> tuple[dict, list[dict]]:
 
 
 def main() -> None:
-    args = [a for a in sys.argv[1:] if a != "--v2"]
-    v2 = "--v2" in sys.argv
+    args = [a for a in sys.argv[1:] if a not in ("--v2", "--v3")]
+    v3 = "--v3" in sys.argv
+    v2 = "--v2" in sys.argv or v3
     work, model, condition, spec = pathlib.Path(args[0]).resolve(), *args[1:4]
     if REPO in work.parents or work == REPO:
         raise SystemExit("work dir must be outside the repository")
@@ -167,7 +183,9 @@ def main() -> None:
         p.figure_id
         for p in select_verified_pairings(load_registry(REPO / "data/verified_pairs/registry.json"))
     }
-    if v2:
+    if v3:
+        key, tasks = v2_tasks(condition, V3_SEED, V3_ARCHIVE)
+    elif v2:
         key, tasks = v2_tasks(condition)
     else:
         run, name = SOURCES[condition]
@@ -186,7 +204,7 @@ def main() -> None:
         for t in batch:
             shutil.copy(REPO / key[t["id"]]["image_path"], d / "images" / t["id"])
         (d / "tasks.json").write_text(json.dumps(batch, indent=2) + "\n")
-        (d / "INSTRUCTIONS.md").write_text(instructions(d, len(batch), condition, v2) + "\n")
+        (d / "INSTRUCTIONS.md").write_text(instructions(d, len(batch), condition, v2, v3) + "\n")
         install_tools(d, condition, [d / "images" / t["id"] for t in batch])
         print(d, len(batch))
 

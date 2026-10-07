@@ -53,9 +53,18 @@ class TickReading:
     value: float
 
 
+_SCI = re.compile(r"^(-?\d+\.?\d*)\s*[x×X*]\s*10\^?(-?\d{1,2})$")
+_SCI_NO_TIMES = re.compile(r"^(-?\d\.\d)10(-?\d)$")
+
+
 def parse_tick_label(text: str) -> list[TickReading]:
-    """Every number an OCR'd tick label can mean; [] when it is not one."""
+    """Every number an OCR'd tick label can mean; [] when it is not one.
+    v3: a label printed as a x 10^n (OCR: "3.5x104", "3.5×10^4", "1.0×10⁴")
+    reads as its value."""
     s = text.strip().translate(_MINUS)
+    sci = _SCI.match(s.translate(_SUPERSCRIPT).replace(" ", ""))
+    if sci:
+        return [TickReading("plain", float(sci.group(1)) * 10.0 ** int(sci.group(2)))]
     if any(c in _SUPERSCRIPT_CHARS for c in s):
         s = s.translate(_SUPERSCRIPT)
         m = re.match(r"^10(-?\d{1,2})$", s)
@@ -69,6 +78,9 @@ def parse_tick_label(text: str) -> list[TickReading]:
     m = _POW10_OCR.match(s)
     if m:
         out.append(TickReading("pow10", 10.0 ** int(m.group(1))))
+    m = _SCI_NO_TIMES.match(s)
+    if m:  # "4.0104": "4.0x10^4" with the "x" lost (used by fit_axis(sci=True))
+        out.append(TickReading("sci", float(m.group(1)) * 10.0 ** int(m.group(2))))
     return out
 
 
@@ -97,7 +109,8 @@ class AxisFit:
         return 10**t if self.scale == "log" else t
 
 
-def _fit_family(points: list[tuple[float, float]], scale: str, direction: int):
+def _fit_family(points: list[tuple[float, float]], scale: str, direction: int,
+                plausible_log: bool = False):
     if scale == "log":
         points = [(px, v) for px, v in points if v > 0]
         tv = [math.log10(v) for _, v in points]
@@ -127,6 +140,8 @@ def _fit_family(points: list[tuple[float, float]], scale: str, direction: int):
         best = _on_label_grid(best, tv)
         if len(best) < MIN_TICKS:
             return None
+    elif plausible_log and not _plausible_log([points[k][1] for k in best]):
+        return None
     x = np.array([tv[k] for k in best])
     y = np.array([pxs[k] for k in best])
     a, b = np.polyfit(x, y, 1)
@@ -138,6 +153,52 @@ def _fit_family(points: list[tuple[float, float]], scale: str, direction: int):
 
 
 _GRID_TOL = 0.02
+
+
+def _one_significant_digit(v: float) -> bool:
+    if v <= 0:
+        return False
+    m = v / 10 ** math.floor(math.log10(v) + 1e-9)
+    return abs(m - round(m)) <= 1e-6 * max(1.0, m)
+
+
+def _plausible_log(values: Sequence[float]) -> bool:
+    """A log axis spans at least a decade, or prints d x 10^k labels (1, 2,
+    5, 10, 20 ...); labels such as 30, 25, 20, 14 over a third of a decade
+    are misreads of a linear axis (v3)."""
+    vals = [v for v in values if v > 0]
+    if not vals:
+        return False
+    span = math.log10(max(vals)) - math.log10(min(vals))
+    return span >= 0.99 or all(_one_significant_digit(v) for v in vals)
+
+
+def touches_border(box: Sequence[float], size: Sequence[int], margin: float = 1.0) -> bool:
+    """Whether a word box (x0, y0, x1, y1) touches the image border (w, h): a
+    tick label cut by the border reads as another number ("350" -> "50"), so
+    it is left out and the axis may become unreadable rather than guessed."""
+    x0, y0, x1, y1 = box
+    w, h = size
+    return x0 <= margin or y0 <= margin or x1 >= w - 1 - margin or y1 >= h - 1 - margin
+
+
+_NUMBER_TEXT = re.compile(r"^(-?)(\d+)(\.\d+)?$")
+
+
+def apply_glyphs(text: str, glyphs: dict) -> str:
+    """The OCR text with what the label's ink shows and the OCR dropped (from
+    axis_frame.label_glyphs): a leading minus sign, a decimal point after
+    `dot_after` digits. Other text is returned unchanged."""
+    m = _NUMBER_TEXT.match(text.strip().translate(_MINUS))
+    if not m:
+        return text
+    sign, digits, frac = m.group(1), m.group(2), m.group(3) or ""
+    if glyphs.get("minus") and not sign:
+        sign = "-"
+    k = glyphs.get("dot_after")
+    if not frac and k is not None and 0 < k < len(digits):
+        digits, frac = digits[:k], "." + digits[k:]
+    return f"{sign}{digits}{frac}"
 
 
 def _on_label_grid(idx: list[int], tv: list[float]) -> list[int]:
@@ -162,29 +223,41 @@ def _on_label_grid(idx: list[int], tv: list[float]) -> list[int]:
 
 
 def fit_axis(
-    readings: Sequence[tuple[float, Sequence[TickReading]]], *, direction: int
+    readings: Sequence[tuple[float, Sequence[TickReading]]], *, direction: int,
+    allow_reversed: bool = False, plausible_log: bool = False, sci: bool = False,
 ) -> AxisFit | None:
     """Best (px, value) line through OCR'd ticks. direction=+1 when pixels grow
     with value (x axis), -1 when they shrink (y axis, image y points down).
 
     Ranked by agreeing ticks; on a tie a powers-of-ten reading beats a plain
     one ("102 103 104" fits a linear axis perfectly, but nobody prints that)
-    and linear beats log."""
-    cands = []
-    for family in ("pow10", "plain"):
-        pts = [(float(px), r.value) for px, rs in readings for r in rs if r.kind == family]
-        for scale in ("linear", "log"):
-            if family == "pow10" and scale == "linear":
+    and linear beats log. v3 (sci): "a x 10^n" labels read with the "x" lost
+    ("4.0104") form their own family, with a "0" label, linear only; on a
+    tie it beats the plain reading (labels such as 4.0104 are not printed)."""
+    dirs = (direction, -direction) if allow_reversed else (direction,)
+    families = ("pow10", "sci", "plain") if sci else ("pow10", "plain")
+    for d in dirs:  # v3 (allow_reversed): a reversed axis when nothing else fits
+        cands = []
+        for family in families:
+            pts = [(float(px), r.value) for px, rs in readings for r in rs
+                   if r.kind == family or (family == "sci" and r.kind == "plain"
+                                           and r.value == 0)]
+            if family == "sci" and not any(r.kind == "sci" for _, rs in readings for r in rs):
                 continue
-            fit = _fit_family(pts, scale, direction)
-            if fit is not None:
-                fit = AxisFit(fit.scale, fit.slope, fit.intercept, fit.ticks,
-                              fit.residual_px, family)
-                rank = (len(fit.ticks), family == "pow10", scale == "linear", -fit.residual_px)
-                cands.append((rank, fit))
-    if not cands:
-        return None
-    return max(cands, key=lambda c: c[0])[1]
+            for scale in ("linear", "log"):
+                if family in ("pow10", "sci") and scale == ("linear" if family == "pow10"
+                                                             else "log"):
+                    continue
+                fit = _fit_family(pts, scale, d, plausible_log)
+                if fit is not None:
+                    fit = AxisFit(fit.scale, fit.slope, fit.intercept, fit.ticks,
+                                  fit.residual_px, family)
+                    rank = (len(fit.ticks), family != "plain", scale == "linear",
+                            -fit.residual_px)
+                    cands.append((rank, fit))
+        if cands:
+            return max(cands, key=lambda c: c[0])[1]
+    return None
 
 
 @dataclass(frozen=True)

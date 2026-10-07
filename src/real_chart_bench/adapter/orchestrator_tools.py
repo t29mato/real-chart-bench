@@ -19,6 +19,9 @@ one of these:
 | render_overlay   | a PNG of the figure with chosen results drawn over it         |
 | verify           | objective checks of chosen series on the image, with an      |
 |                  | accept / redo verdict (domain/verification.py)                |
+| blob_extract     | one point per marker of a colour, merging markers split by a  |
+|                  | white cross and splitting overlapping ones (v3,               |
+|                  | domain/marker_blobs.py)                                       |
 
 Results are JSON-able dicts. Parameters may refer to earlier results by an
 id (a string); ``resolve`` turns the id into the result -- the local loop
@@ -52,9 +55,10 @@ from real_chart_bench.domain.digitizer_tools import (
     to_hex,
     value_to_px,
 )
+from real_chart_bench.domain.marker_blobs import marker_centres
 from real_chart_bench.domain.marker_detection import Detection, PostConfig, postprocess
 from real_chart_bench.domain.orchestration import Action, assemble_final
-from real_chart_bench.domain.starry_extract import line_extract, symbol_extract
+from real_chart_bench.domain.starry_extract import line_extract, match_color_mask, symbol_extract
 from real_chart_bench.domain.verification import Thresholds, verdict, verify
 
 TOOLS = (
@@ -67,6 +71,7 @@ TOOLS = (
     "to_values",
     "render_overlay",
     "verify",
+    "blob_extract",
 )
 # words OCR'd anywhere in the figure count as text for verify when this sure
 TEXT_MIN_CONF = 60.0
@@ -204,6 +209,27 @@ class ToolBox:
                   "max_diameter_px": hi, "mask": spec}
         return points_result("symbol_extract", params, [_series(to_hex(target), pts)])
 
+    def _t_blob_extract(self, p, resolve):
+        _check_keys(p, {"color", "distance_pct", "min_diameter_px", "max_diameter_px",
+                        "marker_px", "merge", "split", "merge_gap_px", "mask"}, "blob_extract")
+        target, pct, m, spec = self._extract_common(p, resolve)
+        lo = _num(p, "min_diameter_px", 3, 0)
+        hi = _num(p, "max_diameter_px", 100, 0)
+        unit = _num(p, "marker_px", 0, 0) or None
+        gap = _num(p, "merge_gap_px", 0, 0) or None
+        merge, split = bool(p.get("merge", True)), bool(p.get("split", True))
+        ink = match_color_mask(self.rgb, target, pct)
+        if m is not None:
+            ink &= m
+        pts, info = marker_centres(ink, min_diameter=lo, max_diameter=hi, diameter=unit,
+                                   merge=merge, split=split, merge_gap=gap)
+        params = {"color": to_hex(target), "distance_pct": pct, "min_diameter_px": lo,
+                  "max_diameter_px": hi, "marker_px": unit, "merge": merge, "split": split,
+                  "merge_gap_px": gap, "mask": spec}
+        out = points_result("blob_extract", params, [_series(to_hex(target), pts)])
+        out["info"] = info
+        return out
+
     def _t_line_extract(self, p, resolve):
         _check_keys(p, {"color", "distance_pct", "dx_px", "dy_px", "mask"}, "line_extract")
         target, pct, m, spec = self._extract_common(p, resolve)
@@ -271,7 +297,7 @@ class ToolBox:
             raise ToolError("mode must be auto, given or manual")
         if not self.allow_auto_calibration:
             raise ToolError("automatic calibration is not used in this condition")
-        cal = calibrate_image(self.rgb)
+        cal = calibrate_image(self.rgb, v3=True)
         if cal is None:
             return {"kind": "calibration", "ok": False, "calibration": None, "frame": None,
                     "message": "no plot frame (axis lines) found"}

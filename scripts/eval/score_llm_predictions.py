@@ -657,6 +657,25 @@ for _c, _v2 in (("noaxis", "noaxis"), ("pixcal", "pixpts_px")):
         "目盛の自己整合)を足し、answer は verify が受理した系列か、やり直し2回の後の最良の"
         "試行だけを受け付ける。主条件1の報告ルールは印字どおりの1本(design 7.82)。",
     }
+# 方式D v3 (検証の誤検知と道具の追加): new seed and names (data/llm_run_orch3/),
+# verify v3, the blob_extract tool and the v3 tick reading. Answers in
+# data/llm_run_orchestrator_v3/<noaxis|pixpts_px>/<model>/<part>.predictions.json.
+ORCH3_ARCHIVE = REPO / "data/llm_run_orchestrator_v3"
+for _c, _v2 in (("noaxis", "noaxis"), ("pixcal", "pixpts_px")):
+    CONDITIONS[f"orch3-claude-{_c}"] = {
+        **CONDITIONS[f"orch2-claude-{_c}"],
+        "run_dir": REPO / "data/llm_run_orch3",
+        "pred_root": ORCH3_ARCHIVE,
+        "models": {m: label for m, label in MODELS_V2.items()
+                   if (ORCH3_ARCHIVE / _v2 / m).is_dir()},
+        "suffix": f"-orch3-{_c}",
+        "name_suffix": "（司令塔 + 道具 + 検証 v3、"
+        + ("軸レンジなし" if _c == "noaxis" else "目盛のピクセル位置あり") + "）",
+        "notes": CONDITIONS[f"orch2-claude-{_c}"]["notes"]
+        + "v3: verify の誤検知(線分・誤差棒の端・近似線・白い十字で割れたマーカー・副目盛の分割数)"
+        "を直し、道具 blob_extract(割れたマーカーの統合と重なったマーカーの分割)と目盛の読み取りの"
+        "改良(a×10^n、負号・小数点の復元、切れたラベルは読めないと返す、逆向きの軸)を足した。",
+    }
 # design 7.81: GPT through the Codex CLI (ChatGPT sign-in, no API key), the
 # same sealed-directory setup and v3 prompt as the Claude agents. A pilot on a
 # seeded subset of the v3 figures first (the subscription's usage is small);

@@ -44,7 +44,7 @@ def _store():
 def test_tools_listed():
     assert TOOLS == ("dominant_colors", "mask", "symbol_extract", "line_extract",
                      "marker_detector", "tick_calibration", "to_values", "render_overlay",
-                     "verify")
+                     "verify", "blob_extract")
 
 
 def test_colors_then_symbol_extract(chart):
@@ -186,4 +186,27 @@ def test_verify_checks_a_manual_calibration(chart):
     v = tb.run("verify", {"series": [{"from": "p", "index": -1}], "calibration": "c",
                           "ocr": False}, resolve)
     assert v["calibration"]["y"]["direction_ok"] is False
-    assert any("wrong way" in r for r in v["verdict"]["reasons"])
+    assert any("reversed way" in h for h in v["verdict"]["hints"])  # v3: a hint
+
+
+def test_blob_extract_merges_a_split_marker_and_splits_a_pair(tmp_path):
+    img = np.full((120, 200, 3), 255, np.uint8)
+    yy, xx = np.mgrid[:120, :200]
+    for cx, cy in ((30, 30), (70, 30), (110, 30), (150, 30)):
+        img[(xx - cx) ** 2 + (yy - cy) ** 2 <= 36] = (20, 20, 220)
+    for cx, cy in ((40, 80), (46, 80)):  # two overlapping
+        img[(xx - cx) ** 2 + (yy - cy) ** 2 <= 36] = (20, 20, 220)
+    img[(xx - 120) ** 2 + (yy - 80) ** 2 <= 36] = (20, 20, 220)
+    img[79:82, 113:128] = 255  # a white cross through the last one
+    img[73:88, 119:122] = 255
+    path = tmp_path / "b.png"
+    Image.fromarray(img).save(path)
+    _, resolve = _store()
+    r = ToolBox(path).run("blob_extract", {"color": "#1414dc", "distance_pct": 5}, resolve)
+    pts = sorted(zip(r["series"][0]["x"], r["series"][0]["y"], strict=True))
+    assert len(pts) == 7
+    assert r["info"]["n_split"] == 1 and r["info"]["n_merged"] == 1
+    assert min(abs(x - 120) + abs(y - 80) for x, y in pts) < 1.5
+    r = ToolBox(path).run("blob_extract", {"color": "#1414dc", "distance_pct": 5,
+                                           "merge": False, "split": False}, resolve)
+    assert r["n_points"] == 4 + 1 + 4
