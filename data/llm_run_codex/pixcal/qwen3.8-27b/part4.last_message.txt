@@ -1,0 +1,10 @@
+All checks pass. The work is complete and verified.
+
+**What I found and did**
+- The handoff's "critical open decision" was a misread: `tasks.json` actually has `fig_083` at `x_scale="linear"`, `y_scale="log"` (no figure has a log x-axis). So the existing linear x-values were already correct — no edits to `predictions.json` were needed.
+- Audited all 12 figures against `tasks.json`: every axis scale is linear except the y-axis of `fig_057` and `fig_083`, both handled with log10 interpolation and reported in tick-value space (actual σ / ρ, not log values).
+- Independently re-verified extraction against the images for 6 figures (`fig_083` 16/16/16/15, `fig_057` 5/5/11, `fig_091` 4×92, `fig_075` 5×8, `fig_035` 4×11, `fig_019` 5×7) — marker counts, positions, and value ranges all match. Insets/secondary panels (e.g. `fig_043` `D` panel, `fig_091` bottom panel) correctly excluded.
+- Final validation: file parses, 12 keys match `tasks.json`, all x/y arrays equal-length and non-empty, all values finite plain numbers.
+
+MODEL: Qwen3.8-27B
+12 figures, 44 series, 772 points (measured from `predictions.json` as written).
