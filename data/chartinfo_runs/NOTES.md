@@ -83,3 +83,10 @@ separately instead of being prompted away.
 - batch09-11 (Opus, Fable): interrupted by a Claude session limit on
   2026-10-08 03:11 and completed by second agents that kept the first runs'
   answers. batch11 / Opus: fig_30 some hidden markers placed by guess.
+- batch12-20 (Opus, Fable): run in per-model sealed roots (no sibling
+  directories). Exact-equal points with Opus stayed at 0.3-17% per batch and
+  concentrate on figures whose values sit on a regular grid; none of the Fable
+  transcripts names an Opus directory. batch19/20 Fable were restarted once
+  after an account switch (no answers had been written).
+- 2026-10-09: all 582 eligible figures done for the 4 models; totals in
+  SUMMARY.md (`scripts/eval/aggregate_chartinfo.py`).
