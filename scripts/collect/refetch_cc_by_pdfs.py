@@ -19,9 +19,16 @@ re-fetches exactly those papers:
 4. One log entry per paper (status, route, sha256 of PDF and every image,
    every attempt) in the committed data/manifest/v0/refetch_log.json.
 
-Politeness: single-threaded, >= --delay seconds (default 1.0) between ANY two
-HTTP requests (Unpaywall or PDF), descriptive User-Agent with the project's
-existing contact. A 403 is recorded, not worked around (§8.2: MDPI blocks scripts).
+Politeness (owner instruction 2026-10-09): single-threaded; >= --pdf-gap seconds
+(default 60, i.e. about one paper per minute) between ANY two publisher/PDF
+requests, globally across hosts; >= --delay seconds (default 1.0) between any two
+requests at all (this only matters for the Unpaywall metadata API); descriptive
+User-Agent with the project's existing contact. The first 403 or 429 from a host
+blocks that host for the rest of the run (and for every later resume: hosts that
+answered 403/429 in the log are pre-blocked);
+its remaining URLs are logged ``http_error`` with "host skipped: ..." in the detail.
+Never worked around (§8.2: MDPI blocks scripts; 2026-10-09: RSC rate-limited the
+owner's network after 31 back-to-back requests).
 
 Resumable: the log is rewritten atomically after every paper; papers already
 logged are skipped, except the transient statuses (lookup_failed,
@@ -53,6 +60,10 @@ sys.path.insert(0, str(ROOT / "src"))
 from real_chart_bench.adapter.figure_extraction import PyMuPdfFigureExtractor  # noqa: E402
 from real_chart_bench.adapter.pdf_fetch import HttpPdfFetchAdapter  # noqa: E402
 from real_chart_bench.adapter.unpaywall import UnpaywallOaLookupAdapter  # noqa: E402
+from real_chart_bench.usecase.host_politeness import (  # noqa: E402
+    BLOCKING_DETAILS,
+    HostPoliteFetcher,
+)
 from real_chart_bench.usecase.pdf_refetch import RefetchStatus, refetch_paper  # noqa: E402
 
 UNPAYWALL_EMAIL = "tomoya.matou@gmail.com"  # the contact every collection script already uses
@@ -120,6 +131,15 @@ def load_log() -> dict:
     }
 
 
+def blocked_hosts_from_log(run_log: dict) -> dict[str, str]:
+    blocked: dict[str, str] = {}
+    for entry in run_log["papers"].values():
+        for a in entry.get("attempts") or []:
+            if a["detail"] in BLOCKING_DETAILS:
+                blocked.setdefault(urllib.parse.urlparse(a["url"]).netloc.lower(), a["detail"])
+    return blocked
+
+
 def figure_counts() -> dict[str, collections.Counter]:
     counts: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for f in json.loads(FIGURES_PATH.read_text()):
@@ -145,7 +165,11 @@ def run(args) -> None:
     throttle = Throttle(args.delay)
     transport = make_transport(throttle, args.timeout)
     oa = UnpaywallOaLookupAdapter(email=UNPAYWALL_EMAIL, transport=transport)
-    fetcher = HttpPdfFetchAdapter(transport=transport)
+    blocked = blocked_hosts_from_log(run_log)
+    if blocked:
+        log(f"pre-blocked hosts (403/429 earlier): {sorted(blocked)}")
+    fetcher = HostPoliteFetcher(HttpPdfFetchAdapter(transport=transport),
+                                min_gap_s=args.pdf_gap, blocked_hosts=blocked)
     extractor = PyMuPdfFigureExtractor()  # v0 defaults: same images, same names
     figs = figure_counts()
 
@@ -241,6 +265,8 @@ def main() -> None:
     ap.add_argument("--raw-dir", type=pathlib.Path, default=ROOT / "data/raw",
                     help="gitignored raw area (pdf/ and images/<paper_id>/ go here)")
     ap.add_argument("--delay", type=float, default=1.0, help="min seconds between requests")
+    ap.add_argument("--pdf-gap", type=float, default=60.0,
+                    help="min seconds between any two publisher/PDF requests (all hosts)")
     ap.add_argument("--timeout", type=float, default=60.0)
     ap.add_argument("--limit", type=int, default=0, help="process at most N papers this run")
     ap.add_argument("--report", action="store_true", help="print counts from the log and exit")
