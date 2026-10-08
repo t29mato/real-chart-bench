@@ -217,9 +217,27 @@ PaperUnPlot の指摘は本研究の 3.5.2 と**同じ問題を、同じ方向�
 
 **しきい値を置くこと自体は、この分野で一枚岩ではない。** LineFormer(ICDAR 2023)は、点ごとの差を 2% でしきい値化する方式を検討した上で、「微小なずれを捉える精度が高い」として**連続値の積分に替えている**。本研究が点単位のしきい値を採るのは、材料科学の利用者に「何点が使えるか」を返す必要があるからである(3.2)。
 
-**Scatteract と FigureSeer の前後関係には、二次資料の食い違いがある。** LineFormer は「FigureSeer と線形計画の手法は点ごとの差を 2% のしきい値で二値化する」と書いているが、Scatteract 自身は「FigureSeer や従来の手法は**ピクセルからチャート座標への変換を含んでいない**」と述べており、チャート座標上での 2% 判定は Scatteract が最初だと読める。本研究は Scatteract の式(2)を一次資料で確認して引いており、FigureSeer の原論文は本文を取得できなかったため、この点は未決着として扱う。
+**2% というしきい値の起源は Scatteract ではなく FigureSeer だった**(2026-10-08、原論文で確認)。FigureSeer(Siegel et al., ECCV 2016)は曲線上の点の評価をこう定めている。
 
-**調査時点は 2026年10月7日。** 一次資料で本文を確認したのは Scatteract(ar5iv)、CHART-Infographics の指標定義(chartinfo.github.io の metric.pdf)、*From Pixels to Insights*、EpiCurveBench、ExChart-Bench、PlotPick である。PaperUnPlot、MetalThermoChartIE(RCLS)、Turan & Sparks (IMMI 2026) は PDF / OpenReview が取得できず、**要旨と検索結果の記述に基づく未検証の情報**として扱う。引用前に本文を確認する必要がある。
+> 予測した経路 `Ps = {(xᵢ, yᵢ)}` の点 `xᵢ` は、正解 `y'ᵢ` との**正規化した差**がしきい値を下回れば真陽性とする。`(yᵢ − y'ᵢ) < th`(実験では `th = 0.02`)。
+
+**ただし測っているものが違う。** FigureSeer は **y だけ**を、予測経路の x 位置で比べる — 線を対象とした経路の指標である。Scatteract(2017)は **x と y を別々に**、しかも**チャート座標の値**で比べる。Scatteract 自身が「FigureSeer や従来の手法はピクセルからチャート座標への変換を含んでいない」と書いているのは、この違いを指している。
+
+したがって系譜は次のようになる。**2% という水準は FigureSeer に始まり、散布図の点に対してチャート座標上で両軸を判定する形にしたのが Scatteract である。** 本研究が受け継いだのは後者の形であり(3.5.1)、しきい値の水準そのものは前者に遡る。LineFormer が「FigureSeer は点ごとの差を 2% で二値化する」と書いているのは正しい。
+
+**調査時点は 2026年10月7〜8日。** 一次資料で本文を確認したのは Scatteract(ar5iv)、CHART-Infographics の指標定義(metric.pdf)、CHART-Info 2024、*From Pixels to Insights*、EpiCurveBench、ExChart-Bench、PlotPick、**DePlot(RMS の原典)**、**PaperUnPlot**、**FigureSeer** である。
+
+**MetalThermoChartIE / PolyCompChartIE(RCLS)と Turan & Sparks (IMMI 2026) は、いまも本文を取得できていない**(OpenReview と chemRxiv が 403)。この2本は**要旨と検索結果に基づく未検証の情報**として扱う。前者は材料科学の図を対象としており本研究に最も近いので、引用する前に本文を確認する必要がある(`docs/experiments/TODO-literature.md`)。
+
+**PaperUnPlot の本文で確認できたこと**(2026-10-08):
+
+- 実図 **950対**、10種、**PubMed Central + arXiv**。対照用に合成図の対も付く
+- NMS は RMS の2つの限界を直す — 「**数値誤差を軸レンジではなく対象値の大きさで正規化し、対数軸を考慮しない**」
+- 評価したのは8モデル(GPT-4o、GPT-4o Mini、Gemini 2.5 Flash、Claude Sonnet 4.5、小型の重み公開モデル3種、DePlot)
+- **全モデルが合成図で実図より高い**。最良は Gemini 2.5 Flash、次が Claude Sonnet 4.5
+- 興味深い差: **Gemini は実図と合成図でほぼ同点**(+0.7pt / −0.1pt)だが、**Claude は合成図で大きく上がる**(+9.7pt / +14.7pt)。実図の見た目のばらつきに対する頑健さが違う、と論文は読んでいる
+
+**DePlot の本文で確認できたこと**(2026-10-08): RMS の割り当ては**見出しの距離だけ**で行う(`1 − NL_τ(pʳ‖pᶜ, tʳ‖tᶜ)` をコストとして先に行を対応づけ、そのうえで組になった項目の類似度を計算する)。本研究の実装(design §7.85)はこの通りであり、4.9 の順位の入れ替わりが**対応づけ由来**だという観察は、原典に忠実な実装の上で起きている。
 
 ## 3.6 参考指標 — 曲線距離(v0 の主指標)
 
