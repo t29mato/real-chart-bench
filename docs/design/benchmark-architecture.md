@@ -4892,3 +4892,46 @@ v2 にあった誤り:「°C は `*C`」(正解データは主に °)、%目盛�
 「テストデータに合わせたプロンプトエンジニアリング」と読まれ、研究としての主張を弱める。
 CHART-Infographics は prompt v2(データセット固有の調整なし)の 582図×4モデルを本番の数字とし、
 上表の書き方の食い違いは**失点の内訳の診断**としてだけ報告する。`prompt_v3.md` は不採用案として残す。
+
+### 7.87 第1段の取得: 画像なし CC BY 論文を全 OA 経路で再取得する(2026-10-09、オーナー判断・司令塔指示)
+
+**背景**: `figure-fetch-distribution.md` §7.2/§8.4。許諾済み 603論文のうち 424論文は、v0 収集が
+OpenAlex の `pdf_url` を1本しか解決しなかったため画像が無い。Unpaywall のメタデータ上は
+324論文(public 1,107図)が今日も CC BY で PDF URL を持つ。`scaling-verification.md` 第1段の前提。
+
+**実装**(取得のみ。ペアリング・registry は触らない):
+`usecase/oa_lookup.py`(全 OA 経路を持つ `OaRecord`)、`usecase/pdf_refetch.py`
+(`refetch_paper`: 今日のライセンスを `classify_license` で再判定 → 外れたら `licence_changed` で取得しない →
+`url_for_pdf` を Unpaywall の順に全部試す → v0 と同じ extractor・命名規約で抽出 → PDF/画像の sha256 と全試行を記録)、
+`usecase/host_politeness.py`(後述)、`adapter/unpaywall.py`(`starrydata_fetch.pdf_urls()` もこれを使うよう変更)、
+`scripts/collect/refetch_cc_by_pdfs.py`(再開可能、論文ごとに原子的に書く)。
+ログは `data/manifest/v0/refetch_log.json`(コミット)。PDF は `data/raw/pdf/`、画像は `data/raw/images/<paper_id>/`(gitignore)。
+`papers.json` の `n_extracted_images` / `pdf_status` は `--update-manifest` でログから反映する
+(`collect_v0_dataset.py` が書き `prepare_hf_dataset.py` が読む既存の慣習に合わせた)。
+
+**礼儀の事故と規則(2026-10-09)**: 最初の実行は「全リクエスト間 1秒」だけで、論文順に処理したため
+pubs.rsc.org に短時間で31回、403 を返し続ける MDPI にも毎回アクセスした。
+同一ネットワークのオーナーのブラウザが RSC から **HTTP 429** を受けた。司令塔指示で 354/424 論文の時点で停止。
+以後の規則(`HostPoliteFetcher`、テストで固定):
+1. **出版社/PDF へのリクエストは、ホストに関係なく全体で 60秒以上空ける**(オーナー指示。`--pdf-gap`、既定 60)。
+   Unpaywall API は従来どおり 1秒間隔。
+2. **あるホストが 403 か 429 を一度返したら、その実行中は二度とアクセスしない**。
+   残りの URL は `http_error`、detail に `host skipped: <host> returned HTTP 403 earlier` と記録する。
+   再開時はログ中で 403/429 を返したホストを最初から遮断する(今回の14ホスト。RSC・MDPI・Wiley・ACS・Elsevier・Hindawi 等)。
+3. 再開はしない(司令塔判断待ち)。残り 70論文は未取得。
+
+**結果(354/424 論文、停止時点)**:
+
+| status | 論文 |
+|---|---|
+| ok(全件で画像あり) | **46** |
+| http_error | 180(MDPI 88、RSC 22、Hindawi 19、Wiley 16、Elsevier 12、AIP 9、ACS 5 ほか) |
+| no_url | 79(10.1063 AIP 28、10.4028 Trans Tech 28、10.1021 ACS 8 ほか) |
+| not_pdf | 41(IOP 18、aip.scitation.org 16 ほか) |
+| licence_changed | 8(今日の Unpaywall にライセンス無し。Trans Tech 7、Springer 1) |
+
+取得経路: IOP 19、arXiv 10、OSTI 5、大学リポジトリ 10 ほか(repository 25 / publisher 21、
+best_oa_location で取れたのは 28、2本目以降で取れたのが 18)。抽出画像 721枚(1論文 5〜71、中央値 11)。
+**新たにペアリング候補になった論文 46、図 170(public 139)。** §8.4 の見積り 324論文は
+「URL がある」数であって、スクリプトから実際に取れる数ではなかった(出版社の bot 遮断が主因)。
+残りを増やす経路(Europe PMC / PMC の OA 版など)は既存コードに無く、新しい経路として司令塔の判断を要する。
