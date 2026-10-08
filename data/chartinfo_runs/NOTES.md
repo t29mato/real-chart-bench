@@ -80,3 +80,6 @@ separately instead of being prompted away.
   through the same ticks, so identical pixels give identical values; not
   treated as copying. Later batches' sealed directories should be separated
   per model.
+- batch09-11 (Opus, Fable): interrupted by a Claude session limit on
+  2026-10-08 03:11 and completed by second agents that kept the first runs'
+  answers. batch11 / Opus: fig_30 some hidden markers placed by guess.
