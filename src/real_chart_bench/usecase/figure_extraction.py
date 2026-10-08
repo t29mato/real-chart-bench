@@ -31,3 +31,13 @@ class ExtractedImage:
 
 class FigureExtractionPort(Protocol):
     def extract(self, pdf_bytes: bytes) -> list[ExtractedImage]: ...
+
+
+def canonical_image_name(index: int, image: ExtractedImage) -> str:
+    """The file name every collection script has used for an extracted image
+    (``collect_v0_dataset.py``, ``fetch_verified_images.py``): registry entries
+    address raw images by this name, so a re-extraction must reproduce it.
+    ``index`` is the image's position in the whole extractor output, not per page.
+    Embedded images keep the historical ``.jpg`` suffix whatever their codec."""
+    ext = "png" if image.source is ImageSource.PAGE_RENDER else "jpg"
+    return f"p{image.page_number:02d}_{image.source.value}_{index}.{ext}"

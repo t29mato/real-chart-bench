@@ -21,7 +21,6 @@ import json
 import pathlib
 import sys
 import time
-import urllib.parse
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -29,6 +28,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from real_chart_bench.adapter.figure_extraction import PyMuPdfFigureExtractor  # noqa: E402
 from real_chart_bench.adapter.pdf_fetch import HttpPdfFetchAdapter  # noqa: E402
+from real_chart_bench.adapter.unpaywall import UnpaywallOaLookupAdapter  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.usecase.pdf_fetch import PdfFetchStatus  # noqa: E402
 from real_chart_bench.usecase.real_image_gate import benchmark_paper_ids  # noqa: E402
@@ -56,23 +56,15 @@ def pdf_urls(dois: list[str], cache_path: pathlib.Path) -> dict:
     """DOI -> {license, pdf_urls} from Unpaywall (OpenAlex's daily quota was
     exhausted on 2026-10-06; Unpaywall carries the same OA locations)."""
     cache = json.loads(cache_path.read_text()) if cache_path.exists() else {}
+    # Same adapter as scripts/collect/refetch_cc_by_pdfs.py.
+    lookup = UnpaywallOaLookupAdapter(email="tomoya.matou@gmail.com")
     for n, doi in enumerate(d for d in dois if d not in cache):
-        url = f"https://api.unpaywall.org/v2/{urllib.parse.quote(doi)}?email=tomoya.matou@gmail.com"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
-                data = json.loads(resp.read())
-        except OSError as e:
-            log(f"unpaywall {doi}: {e}")
+        record = lookup.lookup(doi)
+        if record is None:
+            log(f"unpaywall {doi}: lookup failed")
             cache[doi] = {"license": None, "pdf_urls": []}
             continue
-        locs = [data.get("best_oa_location"), *(data.get("oa_locations") or [])]
-        urls = []
-        for loc in locs:
-            if loc and loc.get("url_for_pdf") and loc["url_for_pdf"] not in urls:
-                urls.append(loc["url_for_pdf"])
-        best = data.get("best_oa_location") or {}
-        cache[doi] = {"license": best.get("license"), "pdf_urls": urls}
+        cache[doi] = {"license": record.best_license, "pdf_urls": record.pdf_urls()}
         if n % 25 == 0:
             cache_path.write_text(json.dumps(cache))
         time.sleep(0.2)
