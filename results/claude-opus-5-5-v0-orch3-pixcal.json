@@ -3,11 +3,11 @@
   "model_name": "Claude Opus 5.5（司令塔 + 道具 + 検証 v3、目盛のピクセル位置あり）",
   "execution": "cloud",
   "dataset_version": "v0-eval-pilot-n91-pixcal",
-  "run_at": "2026-10-07T22:27:56.035800+00:00",
+  "run_at": "2026-10-08T10:11:00.718921+00:00",
   "n_figures": 91,
   "metric": "normalized-y-distance, span floor 5% of linear y axis (design 7.66)",
   "point_metric": "point-level recall/precision/F1 of marker positions, axis-range-normalized (log axes in log10), one-to-one Hungarian per series pair (count of pairs within tau maximized), series assigned by 1 - F1_tau; primary: macro point_f1 at tau 0.02 (design 7.67)",
-  "mean_summary_score": 0.9521167353191716,
+  "mean_summary_score": 0.952116735319172,
   "point_metrics": {
     "primary_tau": 0.02,
     "norm": "euclidean",
@@ -19,16 +19,16 @@
       "0.01": {
         "macro": {
           "point_recall": 0.8495913580919399,
-          "point_precision": 0.9166457772637375,
+          "point_precision": 0.9166457772637377,
           "point_f1": 0.8772763676727332,
-          "point_loc_error": 0.0034085809359452805,
+          "point_loc_error": 0.003408580935945281,
           "n_figures_with_matches": 77
         },
         "micro": {
           "point_recall": 0.7864109232769831,
           "point_precision": 0.8809176984705025,
           "point_f1": 0.8309859154929577,
-          "point_loc_error": 0.003481210984593835,
+          "point_loc_error": 0.0034812109845938355,
           "n_matched": 2419,
           "n_predicted": 2746,
           "n_ground_truth": 3076
@@ -36,17 +36,17 @@
       },
       "0.02": {
         "macro": {
-          "point_recall": 0.899911894499714,
+          "point_recall": 0.8999118944997138,
           "point_precision": 0.9758258067885162,
-          "point_f1": 0.9310889291852844,
-          "point_loc_error": 0.003965499639473872,
+          "point_f1": 0.9310889291852842,
+          "point_loc_error": 0.003965499639473874,
           "n_figures_with_matches": 77
         },
         "micro": {
           "point_recall": 0.8628088426527959,
           "point_precision": 0.9664967225054625,
           "point_f1": 0.9117141875644109,
-          "point_loc_error": 0.004366249766425115,
+          "point_loc_error": 0.004366249766425114,
           "n_matched": 2654,
           "n_predicted": 2746,
           "n_ground_truth": 3076
@@ -55,9 +55,9 @@
       "0.05": {
         "macro": {
           "point_recall": 0.9058893098397619,
-          "point_precision": 0.9831091346864257,
+          "point_precision": 0.9831091346864256,
           "point_f1": 0.9376442427025974,
-          "point_loc_error": 0.005524866344158308,
+          "point_loc_error": 0.0055248663441583076,
           "n_figures_with_matches": 77
         },
         "micro": {
@@ -76,9 +76,9 @@
     "criterion": "dense when the median, over the ground-truth points, of the distance to the nearest point of the same series in the axis-normalized space (log axes in log10) is below 2*tau, tau = the primary point tau (0.02 -> 0.04); dense figures leave point_metrics and are summarized on curve distance in dense_marker_metrics (design 7.72)",
     "n_figures": 14,
     "mean_summary_score": 0.8682317579494361,
-    "mean_match_rate": 0.7635854341736694,
+    "mean_match_rate": 0.7635854341736695,
     "mean_curve_distance": 0.042943169962811334,
-    "mean_coverage_ratio": 0.8840530096374498
+    "mean_coverage_ratio": 0.8840530096374497
   },
   "table_metrics": {
     "definition": "chart-as-table similarity over (x, series, value) triples, one-to-one assignment on the header distance; rms_f1 = faithful DePlot RMS (Liu et al. 2023, header ANLS x 1 - min(1, |g-p|/|g|), text theta 0.5, number theta 0.1); rms_f1_value_only = the same with the header term neutralized (series_label is the database's name, not necessarily the printed legend); nms_f1 = value_only with the error divided by the axis range instead of |g| (PaperUnPlot's NMS, log axes in log10). Secondary metrics: the primary metric stays macro point_f1 (design 7.67/7.85)",
@@ -91,22 +91,22 @@
       "rms_precision": 0.0,
       "rms_recall": 0.0,
       "rms_f1_value_only": 0.8955263828152435,
-      "rms_precision_value_only": 0.9313654023108078,
-      "rms_recall_value_only": 0.8854909644880519,
-      "nms_f1": 0.9218178146425527,
-      "nms_precision": 0.9600144562965833,
-      "nms_recall": 0.9109065693042047
+      "rms_precision_value_only": 0.9313654023108074,
+      "rms_recall_value_only": 0.8854909644880518,
+      "nms_f1": 0.9218178146425526,
+      "nms_precision": 0.9600144562965831,
+      "nms_recall": 0.9109065693042043
     },
     "micro": {
       "rms_f1": 0.0,
       "rms_precision": 0.0,
       "rms_recall": 0.0,
-      "rms_f1_value_only": 0.8098050546390355,
-      "rms_precision_value_only": 0.86037755446674,
-      "rms_recall_value_only": 0.7648477424426748,
-      "nms_f1": 0.8339867245671229,
-      "nms_precision": 0.8860693748826098,
-      "nms_recall": 0.7876869375638212
+      "rms_f1_value_only": 0.8098050546390353,
+      "rms_precision_value_only": 0.8603775544667398,
+      "rms_recall_value_only": 0.7648477424426747,
+      "nms_f1": 0.8339867245671226,
+      "nms_precision": 0.8860693748826096,
+      "nms_recall": 0.7876869375638211
     }
   },
   "per_figure": [
@@ -190,7 +190,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.003133180200658084,
+            "point_loc_error": 0.0031331802006580836,
             "n_matched": 26,
             "n_predicted": 26,
             "n_ground_truth": 26
@@ -199,7 +199,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.003133180200658084,
+            "point_loc_error": 0.0031331802006580836,
             "n_matched": 26,
             "n_predicted": 26,
             "n_ground_truth": 26
@@ -208,7 +208,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.003133180200658084,
+            "point_loc_error": 0.0031331802006580836,
             "n_matched": 26,
             "n_predicted": 26,
             "n_ground_truth": 26
@@ -388,7 +388,7 @@
             "point_recall": 0.7037037037037037,
             "point_precision": 0.8636363636363636,
             "point_f1": 0.7755102040816326,
-            "point_loc_error": 0.0025285442787577575,
+            "point_loc_error": 0.002528544278757758,
             "n_matched": 19,
             "n_predicted": 22,
             "n_ground_truth": 27
@@ -510,7 +510,7 @@
       "figure_id": "10939-1537",
       "summary_score": 0.9898338192843171,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.027947961873563403,
+      "mean_curve_distance": 0.027947961873563406,
       "mean_coverage_ratio": 0.9974494197265147,
       "error": null,
       "point": {
@@ -586,7 +586,7 @@
             "point_recall": 0.6818181818181818,
             "point_precision": 0.75,
             "point_f1": 0.7142857142857143,
-            "point_loc_error": 0.004810976623967897,
+            "point_loc_error": 0.004810976623967898,
             "n_matched": 30,
             "n_predicted": 40,
             "n_ground_truth": 44
@@ -670,7 +670,7 @@
             "point_recall": 0.8928571428571429,
             "point_precision": 1.0,
             "point_f1": 0.9433962264150945,
-            "point_loc_error": 0.012102630456242165,
+            "point_loc_error": 0.012102630456242167,
             "n_matched": 25,
             "n_predicted": 25,
             "n_ground_truth": 28
@@ -708,7 +708,7 @@
       "figure_id": "18668-12232",
       "summary_score": 0.9945313777432353,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.014784194818652197,
+      "mean_curve_distance": 0.014784194818652199,
       "mean_coverage_ratio": 0.9983783280483581,
       "error": null,
       "point": {
@@ -727,7 +727,7 @@
             "point_recall": 0.9545454545454546,
             "point_precision": 1.0,
             "point_f1": 0.9767441860465117,
-            "point_loc_error": 0.005204025723372193,
+            "point_loc_error": 0.005204025723372195,
             "n_matched": 42,
             "n_predicted": 42,
             "n_ground_truth": 44
@@ -736,7 +736,7 @@
             "point_recall": 0.9545454545454546,
             "point_precision": 1.0,
             "point_f1": 0.9767441860465117,
-            "point_loc_error": 0.005204025723372193,
+            "point_loc_error": 0.005204025723372195,
             "n_matched": 42,
             "n_predicted": 42,
             "n_ground_truth": 44
@@ -774,7 +774,7 @@
       "figure_id": "36305-45818",
       "summary_score": 0.8384678533634013,
       "match_rate": 0.8333333333333334,
-      "mean_curve_distance": 0.051662403808040866,
+      "mean_curve_distance": 0.05166240380804088,
       "mean_coverage_ratio": 0.7337326305649118,
       "error": null,
       "point": {
@@ -784,7 +784,7 @@
             "point_recall": 0.35714285714285715,
             "point_precision": 0.42857142857142855,
             "point_f1": 0.38961038961038963,
-            "point_loc_error": 0.0015467144571566286,
+            "point_loc_error": 0.0015467144571566288,
             "n_matched": 30,
             "n_predicted": 70,
             "n_ground_truth": 84
@@ -850,7 +850,7 @@
             "point_recall": 0.8352941176470589,
             "point_precision": 0.9861111111111112,
             "point_f1": 0.9044585987261147,
-            "point_loc_error": 0.0034483036519979255,
+            "point_loc_error": 0.003448303651997925,
             "n_matched": 71,
             "n_predicted": 72,
             "n_ground_truth": 85
@@ -859,7 +859,7 @@
             "point_recall": 0.8352941176470589,
             "point_precision": 0.9861111111111112,
             "point_f1": 0.9044585987261147,
-            "point_loc_error": 0.0034483036519979255,
+            "point_loc_error": 0.003448303651997925,
             "n_matched": 71,
             "n_predicted": 72,
             "n_ground_truth": 85
@@ -868,7 +868,7 @@
             "point_recall": 0.8352941176470589,
             "point_precision": 0.9861111111111112,
             "point_f1": 0.9044585987261147,
-            "point_loc_error": 0.012485443875240337,
+            "point_loc_error": 0.012485443875240334,
             "n_matched": 71,
             "n_predicted": 72,
             "n_ground_truth": 85
@@ -982,7 +982,7 @@
             "point_recall": 0.9523809523809523,
             "point_precision": 0.9523809523809523,
             "point_f1": 0.9523809523809523,
-            "point_loc_error": 0.0027379272111520275,
+            "point_loc_error": 0.002737927211152028,
             "n_matched": 20,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -1048,7 +1048,7 @@
             "point_recall": 0.8409090909090909,
             "point_precision": 0.8809523809523809,
             "point_f1": 0.8604651162790699,
-            "point_loc_error": 0.005616652710699404,
+            "point_loc_error": 0.005616652710699403,
             "n_matched": 37,
             "n_predicted": 42,
             "n_ground_truth": 44
@@ -1057,7 +1057,7 @@
             "point_recall": 0.9545454545454546,
             "point_precision": 1.0,
             "point_f1": 0.9767441860465117,
-            "point_loc_error": 0.006322653802744779,
+            "point_loc_error": 0.006322653802744778,
             "n_matched": 42,
             "n_predicted": 42,
             "n_ground_truth": 44
@@ -1114,7 +1114,7 @@
             "point_recall": 0.4673913043478261,
             "point_precision": 0.4725274725274725,
             "point_f1": 0.4699453551912569,
-            "point_loc_error": 0.006344886529240447,
+            "point_loc_error": 0.006344886529240445,
             "n_matched": 43,
             "n_predicted": 91,
             "n_ground_truth": 92
@@ -1123,7 +1123,7 @@
             "point_recall": 0.9021739130434783,
             "point_precision": 0.9120879120879121,
             "point_f1": 0.907103825136612,
-            "point_loc_error": 0.00992585844811247,
+            "point_loc_error": 0.009925858448112468,
             "n_matched": 83,
             "n_predicted": 91,
             "n_ground_truth": 92
@@ -1132,7 +1132,7 @@
             "point_recall": 0.9347826086956522,
             "point_precision": 0.945054945054945,
             "point_f1": 0.9398907103825138,
-            "point_loc_error": 0.010333202126123745,
+            "point_loc_error": 0.010333202126123743,
             "n_matched": 86,
             "n_predicted": 91,
             "n_ground_truth": 92
@@ -1180,7 +1180,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.001545371899835352,
+            "point_loc_error": 0.0015453718998353519,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -1189,7 +1189,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.001545371899835352,
+            "point_loc_error": 0.0015453718998353519,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -1198,7 +1198,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.001545371899835352,
+            "point_loc_error": 0.0015453718998353519,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -1303,7 +1303,7 @@
       "summary_score": 0.9965815936054446,
       "match_rate": 1.0,
       "mean_curve_distance": 0.007781358482168359,
-      "mean_coverage_ratio": 0.9975261392985023,
+      "mean_coverage_ratio": 0.9975261392985022,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -1378,7 +1378,7 @@
             "point_recall": 0.9666666666666667,
             "point_precision": 0.9666666666666667,
             "point_f1": 0.9666666666666667,
-            "point_loc_error": 0.003235619779086392,
+            "point_loc_error": 0.0032356197790863917,
             "n_matched": 29,
             "n_predicted": 30,
             "n_ground_truth": 30
@@ -1387,7 +1387,7 @@
             "point_recall": 0.9666666666666667,
             "point_precision": 0.9666666666666667,
             "point_f1": 0.9666666666666667,
-            "point_loc_error": 0.003235619779086392,
+            "point_loc_error": 0.0032356197790863917,
             "n_matched": 29,
             "n_predicted": 30,
             "n_ground_truth": 30
@@ -1396,7 +1396,7 @@
             "point_recall": 0.9666666666666667,
             "point_precision": 0.9666666666666667,
             "point_f1": 0.9666666666666667,
-            "point_loc_error": 0.003235619779086392,
+            "point_loc_error": 0.0032356197790863917,
             "n_matched": 29,
             "n_predicted": 30,
             "n_ground_truth": 30
@@ -1453,7 +1453,7 @@
             "point_recall": 0.9772727272727273,
             "point_precision": 1.0,
             "point_f1": 0.9885057471264368,
-            "point_loc_error": 0.00818700141516959,
+            "point_loc_error": 0.008187001415169592,
             "n_matched": 43,
             "n_predicted": 43,
             "n_ground_truth": 44
@@ -1462,7 +1462,7 @@
             "point_recall": 0.9772727272727273,
             "point_precision": 1.0,
             "point_f1": 0.9885057471264368,
-            "point_loc_error": 0.00818700141516959,
+            "point_loc_error": 0.008187001415169592,
             "n_matched": 43,
             "n_predicted": 43,
             "n_ground_truth": 44
@@ -1510,7 +1510,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0018583304848681693,
+            "point_loc_error": 0.0018583304848681695,
             "n_matched": 23,
             "n_predicted": 23,
             "n_ground_truth": 23
@@ -1519,7 +1519,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0018583304848681693,
+            "point_loc_error": 0.0018583304848681695,
             "n_matched": 23,
             "n_predicted": 23,
             "n_ground_truth": 23
@@ -1528,7 +1528,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0018583304848681693,
+            "point_loc_error": 0.0018583304848681695,
             "n_matched": 23,
             "n_predicted": 23,
             "n_ground_truth": 23
@@ -1576,7 +1576,7 @@
             "point_recall": 0.9166666666666666,
             "point_precision": 0.9705882352941176,
             "point_f1": 0.9428571428571428,
-            "point_loc_error": 0.0031464672860824256,
+            "point_loc_error": 0.0031464672860824264,
             "n_matched": 66,
             "n_predicted": 68,
             "n_ground_truth": 72
@@ -1585,7 +1585,7 @@
             "point_recall": 0.9166666666666666,
             "point_precision": 0.9705882352941176,
             "point_f1": 0.9428571428571428,
-            "point_loc_error": 0.0031464672860824256,
+            "point_loc_error": 0.0031464672860824264,
             "n_matched": 66,
             "n_predicted": 68,
             "n_ground_truth": 72
@@ -1594,7 +1594,7 @@
             "point_recall": 0.9166666666666666,
             "point_precision": 0.9705882352941176,
             "point_f1": 0.9428571428571428,
-            "point_loc_error": 0.0031464672860824256,
+            "point_loc_error": 0.0031464672860824264,
             "n_matched": 66,
             "n_predicted": 68,
             "n_ground_truth": 72
@@ -1632,7 +1632,7 @@
       "figure_id": "18668-12226",
       "summary_score": 0.9958032312249326,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.011074507957042347,
+      "mean_curve_distance": 0.011074507957042349,
       "mean_coverage_ratio": 0.9984842016318403,
       "error": null,
       "point": {
@@ -1651,7 +1651,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.006109483856014417,
+            "point_loc_error": 0.006109483856014419,
             "n_matched": 44,
             "n_predicted": 44,
             "n_ground_truth": 44
@@ -1660,7 +1660,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.006109483856014417,
+            "point_loc_error": 0.006109483856014419,
             "n_matched": 44,
             "n_predicted": 44,
             "n_ground_truth": 44
@@ -1708,7 +1708,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0033692794680746604,
+            "point_loc_error": 0.00336927946807466,
             "n_matched": 6,
             "n_predicted": 6,
             "n_ground_truth": 6
@@ -1717,7 +1717,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0033692794680746604,
+            "point_loc_error": 0.00336927946807466,
             "n_matched": 6,
             "n_predicted": 6,
             "n_ground_truth": 6
@@ -1726,7 +1726,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0033692794680746604,
+            "point_loc_error": 0.00336927946807466,
             "n_matched": 6,
             "n_predicted": 6,
             "n_ground_truth": 6
@@ -1906,7 +1906,7 @@
             "point_recall": 0.8518518518518519,
             "point_precision": 0.8214285714285714,
             "point_f1": 0.8363636363636364,
-            "point_loc_error": 0.003332915507544967,
+            "point_loc_error": 0.0033329155075449675,
             "n_matched": 23,
             "n_predicted": 28,
             "n_ground_truth": 27
@@ -1915,7 +1915,7 @@
             "point_recall": 0.9629629629629629,
             "point_precision": 0.9285714285714286,
             "point_f1": 0.9454545454545454,
-            "point_loc_error": 0.004424310612393934,
+            "point_loc_error": 0.004424310612393935,
             "n_matched": 26,
             "n_predicted": 28,
             "n_ground_truth": 27
@@ -1924,7 +1924,7 @@
             "point_recall": 0.9629629629629629,
             "point_precision": 0.9285714285714286,
             "point_f1": 0.9454545454545454,
-            "point_loc_error": 0.004424310612393934,
+            "point_loc_error": 0.004424310612393935,
             "n_matched": 26,
             "n_predicted": 28,
             "n_ground_truth": 27
@@ -1960,9 +1960,9 @@
     },
     {
       "figure_id": "18869-18876",
-      "summary_score": 0.9949919384717436,
+      "summary_score": 0.9949919384717435,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.012911676966249452,
+      "mean_curve_distance": 0.012911676966249456,
       "mean_coverage_ratio": 0.99788749238148,
       "error": null,
       "point": {
@@ -2038,7 +2038,7 @@
             "point_recall": 0.8571428571428571,
             "point_precision": 0.9130434782608695,
             "point_f1": 0.8842105263157894,
-            "point_loc_error": 0.003832286801674863,
+            "point_loc_error": 0.0038322868016748618,
             "n_matched": 42,
             "n_predicted": 46,
             "n_ground_truth": 49
@@ -2047,7 +2047,7 @@
             "point_recall": 0.8775510204081632,
             "point_precision": 0.9347826086956522,
             "point_f1": 0.9052631578947369,
-            "point_loc_error": 0.004062408330205861,
+            "point_loc_error": 0.004062408330205859,
             "n_matched": 43,
             "n_predicted": 46,
             "n_ground_truth": 49
@@ -2056,7 +2056,7 @@
             "point_recall": 0.9183673469387755,
             "point_precision": 0.9782608695652174,
             "point_f1": 0.9473684210526316,
-            "point_loc_error": 0.004955547293839021,
+            "point_loc_error": 0.004955547293839019,
             "n_matched": 45,
             "n_predicted": 46,
             "n_ground_truth": 49
@@ -2104,7 +2104,7 @@
             "point_recall": 0.79296875,
             "point_precision": 0.8982300884955752,
             "point_f1": 0.8423236514522822,
-            "point_loc_error": 0.002869724009834576,
+            "point_loc_error": 0.0028697240098345764,
             "n_matched": 203,
             "n_predicted": 226,
             "n_ground_truth": 256
@@ -2122,7 +2122,7 @@
             "point_recall": 0.84765625,
             "point_precision": 0.9601769911504425,
             "point_f1": 0.9004149377593362,
-            "point_loc_error": 0.005717822723690854,
+            "point_loc_error": 0.005717822723690851,
             "n_matched": 217,
             "n_predicted": 226,
             "n_ground_truth": 256
@@ -2160,7 +2160,7 @@
       "figure_id": "28020-40067",
       "summary_score": 0.9983044619723378,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.0037874635382518693,
+      "mean_curve_distance": 0.0037874635382518698,
       "mean_coverage_ratio": 0.998700849455265,
       "error": null,
       "point": {
@@ -2170,7 +2170,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002709178345056538,
+            "point_loc_error": 0.0027091783450565376,
             "n_matched": 63,
             "n_predicted": 63,
             "n_ground_truth": 63
@@ -2179,7 +2179,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002709178345056538,
+            "point_loc_error": 0.0027091783450565376,
             "n_matched": 63,
             "n_predicted": 63,
             "n_ground_truth": 63
@@ -2188,7 +2188,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002709178345056538,
+            "point_loc_error": 0.0027091783450565376,
             "n_matched": 63,
             "n_predicted": 63,
             "n_ground_truth": 63
@@ -2236,7 +2236,7 @@
             "point_recall": 0.7954545454545454,
             "point_precision": 0.8536585365853658,
             "point_f1": 0.8235294117647058,
-            "point_loc_error": 0.005083406861998844,
+            "point_loc_error": 0.005083406861998845,
             "n_matched": 35,
             "n_predicted": 41,
             "n_ground_truth": 44
@@ -2245,7 +2245,7 @@
             "point_recall": 0.9318181818181818,
             "point_precision": 1.0,
             "point_f1": 0.9647058823529412,
-            "point_loc_error": 0.006267710664265052,
+            "point_loc_error": 0.006267710664265053,
             "n_matched": 41,
             "n_predicted": 41,
             "n_ground_truth": 44
@@ -2254,7 +2254,7 @@
             "point_recall": 0.9318181818181818,
             "point_precision": 1.0,
             "point_f1": 0.9647058823529412,
-            "point_loc_error": 0.006267710664265052,
+            "point_loc_error": 0.006267710664265053,
             "n_matched": 41,
             "n_predicted": 41,
             "n_ground_truth": 44
@@ -2377,7 +2377,7 @@
             "point_recall": 0.7591623036649214,
             "point_precision": 0.5991735537190083,
             "point_f1": 0.6697459584295612,
-            "point_loc_error": 0.006584955634159221,
+            "point_loc_error": 0.006584955634159222,
             "n_matched": 145,
             "n_predicted": 242,
             "n_ground_truth": 191
@@ -2386,7 +2386,7 @@
             "point_recall": 0.8638743455497382,
             "point_precision": 0.6818181818181818,
             "point_f1": 0.7621247113163973,
-            "point_loc_error": 0.013890646783613552,
+            "point_loc_error": 0.013890646783613559,
             "n_matched": 165,
             "n_predicted": 242,
             "n_ground_truth": 191
@@ -2443,7 +2443,7 @@
             "point_recall": 0.9423076923076923,
             "point_precision": 1.0,
             "point_f1": 0.9702970297029703,
-            "point_loc_error": 0.005583961807979028,
+            "point_loc_error": 0.005583961807979029,
             "n_matched": 49,
             "n_predicted": 49,
             "n_ground_truth": 52
@@ -2452,7 +2452,7 @@
             "point_recall": 0.9423076923076923,
             "point_precision": 1.0,
             "point_f1": 0.9702970297029703,
-            "point_loc_error": 0.005583961807979028,
+            "point_loc_error": 0.005583961807979029,
             "n_matched": 49,
             "n_predicted": 49,
             "n_ground_truth": 52
@@ -2490,8 +2490,8 @@
       "figure_id": "4173-20120",
       "summary_score": 0.9921485480561798,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.02247798232488833,
-      "mean_coverage_ratio": 0.9989236264934278,
+      "mean_curve_distance": 0.022477982324888332,
+      "mean_coverage_ratio": 0.9989236264934277,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -2622,8 +2622,8 @@
       "figure_id": "46278-51440",
       "summary_score": 0.996223818225327,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.00964110570126187,
-      "mean_coverage_ratio": 0.9983125603772428,
+      "mean_curve_distance": 0.009641105701261872,
+      "mean_coverage_ratio": 0.9983125603772427,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -2632,7 +2632,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.003503765427497494,
+            "point_loc_error": 0.0035037654274974934,
             "n_matched": 27,
             "n_predicted": 27,
             "n_ground_truth": 27
@@ -2641,7 +2641,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.003503765427497494,
+            "point_loc_error": 0.0035037654274974934,
             "n_matched": 27,
             "n_predicted": 27,
             "n_ground_truth": 27
@@ -2650,7 +2650,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.003503765427497494,
+            "point_loc_error": 0.0035037654274974934,
             "n_matched": 27,
             "n_predicted": 27,
             "n_ground_truth": 27
@@ -2686,10 +2686,10 @@
     },
     {
       "figure_id": "34286-33297",
-      "summary_score": 0.949049233570752,
+      "summary_score": 0.9490492335707521,
       "match_rate": 1.0,
       "mean_curve_distance": 0.025413103734917415,
-      "mean_coverage_ratio": 0.8725608044471734,
+      "mean_coverage_ratio": 0.8725608044471737,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -2698,7 +2698,7 @@
             "point_recall": 0.40625,
             "point_precision": 0.48148148148148145,
             "point_f1": 0.4406779661016949,
-            "point_loc_error": 0.005697250516428588,
+            "point_loc_error": 0.0056972505164285875,
             "n_matched": 39,
             "n_predicted": 81,
             "n_ground_truth": 96
@@ -2707,7 +2707,7 @@
             "point_recall": 0.8020833333333334,
             "point_precision": 0.9506172839506173,
             "point_f1": 0.8700564971751413,
-            "point_loc_error": 0.009611400444664698,
+            "point_loc_error": 0.0096114004446647,
             "n_matched": 77,
             "n_predicted": 81,
             "n_ground_truth": 96
@@ -2716,7 +2716,7 @@
             "point_recall": 0.84375,
             "point_precision": 1.0,
             "point_f1": 0.9152542372881356,
-            "point_loc_error": 0.010179315552797193,
+            "point_loc_error": 0.010179315552797195,
             "n_matched": 81,
             "n_predicted": 81,
             "n_ground_truth": 96
@@ -2764,7 +2764,7 @@
             "point_recall": 0.3230769230769231,
             "point_precision": 0.8076923076923077,
             "point_f1": 0.4615384615384616,
-            "point_loc_error": 0.005236141758125723,
+            "point_loc_error": 0.005236141758125724,
             "n_matched": 42,
             "n_predicted": 52,
             "n_ground_truth": 130
@@ -2773,7 +2773,7 @@
             "point_recall": 0.4,
             "point_precision": 1.0,
             "point_f1": 0.5714285714285715,
-            "point_loc_error": 0.006512660578377339,
+            "point_loc_error": 0.00651266057837734,
             "n_matched": 52,
             "n_predicted": 52,
             "n_ground_truth": 130
@@ -2782,7 +2782,7 @@
             "point_recall": 0.4,
             "point_precision": 1.0,
             "point_f1": 0.5714285714285715,
-            "point_loc_error": 0.006512660578377339,
+            "point_loc_error": 0.00651266057837734,
             "n_matched": 52,
             "n_predicted": 52,
             "n_ground_truth": 130
@@ -2821,7 +2821,7 @@
       "summary_score": 0.853511420075555,
       "match_rate": 0.8235294117647058,
       "mean_curve_distance": 0.09649022742725387,
-      "mean_coverage_ratio": 0.8334950758892131,
+      "mean_coverage_ratio": 0.8334950758892132,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -2839,7 +2839,7 @@
             "point_recall": 0.24384432088959493,
             "point_precision": 0.7912371134020618,
             "point_f1": 0.3727990285367334,
-            "point_loc_error": 0.005717358739685202,
+            "point_loc_error": 0.0057173587396852,
             "n_matched": 307,
             "n_predicted": 388,
             "n_ground_truth": 1259
@@ -2848,7 +2848,7 @@
             "point_recall": 0.2541699761715647,
             "point_precision": 0.8247422680412371,
             "point_f1": 0.3885853066180935,
-            "point_loc_error": 0.009832553869271017,
+            "point_loc_error": 0.009832553869271022,
             "n_matched": 320,
             "n_predicted": 388,
             "n_ground_truth": 1259
@@ -2896,7 +2896,7 @@
             "point_recall": 0.9714285714285714,
             "point_precision": 1.0,
             "point_f1": 0.9855072463768115,
-            "point_loc_error": 0.003944589156504901,
+            "point_loc_error": 0.003944589156504902,
             "n_matched": 34,
             "n_predicted": 34,
             "n_ground_truth": 35
@@ -2905,7 +2905,7 @@
             "point_recall": 0.9714285714285714,
             "point_precision": 1.0,
             "point_f1": 0.9855072463768115,
-            "point_loc_error": 0.003944589156504901,
+            "point_loc_error": 0.003944589156504902,
             "n_matched": 34,
             "n_predicted": 34,
             "n_ground_truth": 35
@@ -2914,7 +2914,7 @@
             "point_recall": 0.9714285714285714,
             "point_precision": 1.0,
             "point_f1": 0.9855072463768115,
-            "point_loc_error": 0.003944589156504901,
+            "point_loc_error": 0.003944589156504902,
             "n_matched": 34,
             "n_predicted": 34,
             "n_ground_truth": 35
@@ -2962,7 +2962,7 @@
             "point_recall": 0.9285714285714286,
             "point_precision": 0.9629629629629629,
             "point_f1": 0.9454545454545454,
-            "point_loc_error": 0.0039003044507821788,
+            "point_loc_error": 0.0039003044507821783,
             "n_matched": 26,
             "n_predicted": 27,
             "n_ground_truth": 28
@@ -3160,7 +3160,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002599219053221769,
+            "point_loc_error": 0.0025992190532217684,
             "n_matched": 24,
             "n_predicted": 24,
             "n_ground_truth": 24
@@ -3169,7 +3169,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002599219053221769,
+            "point_loc_error": 0.0025992190532217684,
             "n_matched": 24,
             "n_predicted": 24,
             "n_ground_truth": 24
@@ -3178,7 +3178,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002599219053221769,
+            "point_loc_error": 0.0025992190532217684,
             "n_matched": 24,
             "n_predicted": 24,
             "n_ground_truth": 24
@@ -3301,7 +3301,7 @@
             "point_recall": 0.625,
             "point_precision": 0.2840909090909091,
             "point_f1": 0.390625,
-            "point_loc_error": 0.006640628631058381,
+            "point_loc_error": 0.006640628631058378,
             "n_matched": 25,
             "n_predicted": 88,
             "n_ground_truth": 40
@@ -3310,7 +3310,7 @@
             "point_recall": 0.45,
             "point_precision": 0.20454545454545456,
             "point_f1": 0.28125000000000006,
-            "point_loc_error": 0.007645388742487903,
+            "point_loc_error": 0.007645388742487904,
             "n_matched": 18,
             "n_predicted": 88,
             "n_ground_truth": 40
@@ -3358,7 +3358,7 @@
             "point_recall": 0.8953488372093024,
             "point_precision": 0.4782608695652174,
             "point_f1": 0.6234817813765181,
-            "point_loc_error": 0.004266653952049956,
+            "point_loc_error": 0.004266653952049957,
             "n_matched": 77,
             "n_predicted": 161,
             "n_ground_truth": 86
@@ -3367,7 +3367,7 @@
             "point_recall": 0.9302325581395349,
             "point_precision": 0.4968944099378882,
             "point_f1": 0.6477732793522267,
-            "point_loc_error": 0.004594296298713792,
+            "point_loc_error": 0.004594296298713791,
             "n_matched": 80,
             "n_predicted": 161,
             "n_ground_truth": 86
@@ -3424,7 +3424,7 @@
             "point_recall": 0.5555555555555556,
             "point_precision": 0.9375,
             "point_f1": 0.6976744186046512,
-            "point_loc_error": 0.0029462542948154318,
+            "point_loc_error": 0.002946254294815432,
             "n_matched": 15,
             "n_predicted": 16,
             "n_ground_truth": 27
@@ -3433,7 +3433,7 @@
             "point_recall": 0.5555555555555556,
             "point_precision": 0.9375,
             "point_f1": 0.6976744186046512,
-            "point_loc_error": 0.0029462542948154318,
+            "point_loc_error": 0.002946254294815432,
             "n_matched": 15,
             "n_predicted": 16,
             "n_ground_truth": 27
@@ -3499,7 +3499,7 @@
             "point_recall": 0.8541666666666666,
             "point_precision": 0.9318181818181818,
             "point_f1": 0.8913043478260869,
-            "point_loc_error": 0.0049482398574520175,
+            "point_loc_error": 0.004948239857452016,
             "n_matched": 41,
             "n_predicted": 44,
             "n_ground_truth": 48
@@ -3508,7 +3508,7 @@
             "point_recall": 0.8541666666666666,
             "point_precision": 0.9318181818181818,
             "point_f1": 0.8913043478260869,
-            "point_loc_error": 0.0049482398574520175,
+            "point_loc_error": 0.004948239857452016,
             "n_matched": 41,
             "n_predicted": 44,
             "n_ground_truth": 48
@@ -3565,7 +3565,7 @@
             "point_recall": 0.810077519379845,
             "point_precision": 0.4883177570093458,
             "point_f1": 0.6093294460641399,
-            "point_loc_error": 0.003475774741573196,
+            "point_loc_error": 0.0034757747415731966,
             "n_matched": 209,
             "n_predicted": 428,
             "n_ground_truth": 258
@@ -3574,7 +3574,7 @@
             "point_recall": 0.8604651162790697,
             "point_precision": 0.5186915887850467,
             "point_f1": 0.6472303206997084,
-            "point_loc_error": 0.0085353178897973,
+            "point_loc_error": 0.008535317889797304,
             "n_matched": 222,
             "n_predicted": 428,
             "n_ground_truth": 258
@@ -3612,7 +3612,7 @@
       "figure_id": "28331-28501",
       "summary_score": 0.9631268386560382,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.027625985622471313,
+      "mean_curve_distance": 0.027625985622471316,
       "mean_coverage_ratio": 0.9170065015905857,
       "error": null,
       "point": {
@@ -3622,7 +3622,7 @@
             "point_recall": 0.7777777777777778,
             "point_precision": 1.0,
             "point_f1": 0.8750000000000001,
-            "point_loc_error": 0.0021695246623141856,
+            "point_loc_error": 0.002169524662314185,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 27
@@ -3631,7 +3631,7 @@
             "point_recall": 0.7777777777777778,
             "point_precision": 1.0,
             "point_f1": 0.8750000000000001,
-            "point_loc_error": 0.0021695246623141856,
+            "point_loc_error": 0.002169524662314185,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 27
@@ -3754,7 +3754,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0017162040910507375,
+            "point_loc_error": 0.0017162040910507377,
             "n_matched": 39,
             "n_predicted": 39,
             "n_ground_truth": 39
@@ -3763,7 +3763,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0017162040910507375,
+            "point_loc_error": 0.0017162040910507377,
             "n_matched": 39,
             "n_predicted": 39,
             "n_ground_truth": 39
@@ -3772,7 +3772,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0017162040910507375,
+            "point_loc_error": 0.0017162040910507377,
             "n_matched": 39,
             "n_predicted": 39,
             "n_ground_truth": 39
@@ -3820,7 +3820,7 @@
             "point_recall": 0.7916666666666666,
             "point_precision": 0.890625,
             "point_f1": 0.8382352941176471,
-            "point_loc_error": 0.002782145580550553,
+            "point_loc_error": 0.0027821455805505544,
             "n_matched": 57,
             "n_predicted": 64,
             "n_ground_truth": 72
@@ -3829,7 +3829,7 @@
             "point_recall": 0.8194444444444444,
             "point_precision": 0.921875,
             "point_f1": 0.8676470588235294,
-            "point_loc_error": 0.0030966949499492856,
+            "point_loc_error": 0.003096694949949286,
             "n_matched": 59,
             "n_predicted": 64,
             "n_ground_truth": 72
@@ -3838,7 +3838,7 @@
             "point_recall": 0.8333333333333334,
             "point_precision": 0.9375,
             "point_f1": 0.8823529411764706,
-            "point_loc_error": 0.00566933853001751,
+            "point_loc_error": 0.005669338530017509,
             "n_matched": 60,
             "n_predicted": 64,
             "n_ground_truth": 72
@@ -3952,7 +3952,7 @@
             "point_recall": 0.8837209302325582,
             "point_precision": 0.9047619047619048,
             "point_f1": 0.8941176470588236,
-            "point_loc_error": 0.003936730887563511,
+            "point_loc_error": 0.0039367308875635125,
             "n_matched": 38,
             "n_predicted": 42,
             "n_ground_truth": 43
@@ -3961,7 +3961,7 @@
             "point_recall": 0.9534883720930233,
             "point_precision": 0.9761904761904762,
             "point_f1": 0.9647058823529412,
-            "point_loc_error": 0.004454322637738519,
+            "point_loc_error": 0.004454322637738521,
             "n_matched": 41,
             "n_predicted": 42,
             "n_ground_truth": 43
@@ -3970,7 +3970,7 @@
             "point_recall": 0.9534883720930233,
             "point_precision": 0.9761904761904762,
             "point_f1": 0.9647058823529412,
-            "point_loc_error": 0.004454322637738519,
+            "point_loc_error": 0.004454322637738521,
             "n_matched": 41,
             "n_predicted": 42,
             "n_ground_truth": 43
@@ -4093,7 +4093,7 @@
             "point_recall": 0.7407407407407407,
             "point_precision": 1.0,
             "point_f1": 0.851063829787234,
-            "point_loc_error": 0.0033377376634633896,
+            "point_loc_error": 0.00333773766346339,
             "n_matched": 20,
             "n_predicted": 20,
             "n_ground_truth": 27
@@ -4102,7 +4102,7 @@
             "point_recall": 0.7407407407407407,
             "point_precision": 1.0,
             "point_f1": 0.851063829787234,
-            "point_loc_error": 0.010246406220268758,
+            "point_loc_error": 0.010246406220268761,
             "n_matched": 20,
             "n_predicted": 20,
             "n_ground_truth": 27
@@ -4150,7 +4150,7 @@
             "point_recall": 0.5,
             "point_precision": 0.8888888888888888,
             "point_f1": 0.64,
-            "point_loc_error": 0.005506388267802917,
+            "point_loc_error": 0.005506388267802918,
             "n_matched": 8,
             "n_predicted": 9,
             "n_ground_truth": 16
@@ -4204,10 +4204,10 @@
     },
     {
       "figure_id": "45914-45360",
-      "summary_score": 0.9574410576902888,
+      "summary_score": 0.9574410576902886,
       "match_rate": 1.0,
       "mean_curve_distance": 0.02587307033485903,
-      "mean_coverage_ratio": 0.8981962434057252,
+      "mean_coverage_ratio": 0.8981962434057251,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -4225,7 +4225,7 @@
             "point_recall": 0.8472222222222222,
             "point_precision": 1.0,
             "point_f1": 0.9172932330827067,
-            "point_loc_error": 0.0027823181896319514,
+            "point_loc_error": 0.002782318189631951,
             "n_matched": 61,
             "n_predicted": 61,
             "n_ground_truth": 72
@@ -4234,7 +4234,7 @@
             "point_recall": 0.8472222222222222,
             "point_precision": 1.0,
             "point_f1": 0.9172932330827067,
-            "point_loc_error": 0.010759117459098008,
+            "point_loc_error": 0.010759117459098006,
             "n_matched": 61,
             "n_predicted": 61,
             "n_ground_truth": 72
@@ -4282,7 +4282,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002087621802989583,
+            "point_loc_error": 0.002087621802989582,
             "n_matched": 36,
             "n_predicted": 36,
             "n_ground_truth": 36
@@ -4291,7 +4291,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002087621802989583,
+            "point_loc_error": 0.002087621802989582,
             "n_matched": 36,
             "n_predicted": 36,
             "n_ground_truth": 36
@@ -4300,7 +4300,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.002087621802989583,
+            "point_loc_error": 0.002087621802989582,
             "n_matched": 36,
             "n_predicted": 36,
             "n_ground_truth": 36
@@ -4414,7 +4414,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0025031045176742983,
+            "point_loc_error": 0.002503104517674299,
             "n_matched": 36,
             "n_predicted": 36,
             "n_ground_truth": 36
@@ -4423,7 +4423,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0025031045176742983,
+            "point_loc_error": 0.002503104517674299,
             "n_matched": 36,
             "n_predicted": 36,
             "n_ground_truth": 36
@@ -4432,7 +4432,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0025031045176742983,
+            "point_loc_error": 0.002503104517674299,
             "n_matched": 36,
             "n_predicted": 36,
             "n_ground_truth": 36
@@ -4546,7 +4546,7 @@
             "point_recall": 0.5595238095238095,
             "point_precision": 0.6911764705882353,
             "point_f1": 0.618421052631579,
-            "point_loc_error": 0.003748514513725992,
+            "point_loc_error": 0.0037485145137259915,
             "n_matched": 94,
             "n_predicted": 136,
             "n_ground_truth": 168
@@ -4564,7 +4564,7 @@
             "point_recall": 0.6071428571428571,
             "point_precision": 0.75,
             "point_f1": 0.6710526315789472,
-            "point_loc_error": 0.01115836541771661,
+            "point_loc_error": 0.011158365417716611,
             "n_matched": 102,
             "n_predicted": 136,
             "n_ground_truth": 168
@@ -4612,7 +4612,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0021551595138176757,
+            "point_loc_error": 0.0021551595138176753,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -4621,7 +4621,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0021551595138176757,
+            "point_loc_error": 0.0021551595138176753,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -4630,7 +4630,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0021551595138176757,
+            "point_loc_error": 0.0021551595138176753,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -4678,7 +4678,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0020410494359097246,
+            "point_loc_error": 0.002041049435909724,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -4687,7 +4687,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0020410494359097246,
+            "point_loc_error": 0.002041049435909724,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -4696,7 +4696,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.0020410494359097246,
+            "point_loc_error": 0.002041049435909724,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -4753,7 +4753,7 @@
             "point_recall": 1.0,
             "point_precision": 0.31724137931034485,
             "point_f1": 0.48167539267015713,
-            "point_loc_error": 0.004728574432808188,
+            "point_loc_error": 0.004728574432808186,
             "n_matched": 46,
             "n_predicted": 145,
             "n_ground_truth": 46
@@ -4762,7 +4762,7 @@
             "point_recall": 1.0,
             "point_precision": 0.31724137931034485,
             "point_f1": 0.48167539267015713,
-            "point_loc_error": 0.004728574432808188,
+            "point_loc_error": 0.004728574432808186,
             "n_matched": 46,
             "n_predicted": 145,
             "n_ground_truth": 46
@@ -4810,7 +4810,7 @@
             "point_recall": 0.4090909090909091,
             "point_precision": 0.5294117647058824,
             "point_f1": 0.46153846153846156,
-            "point_loc_error": 0.005698603695033649,
+            "point_loc_error": 0.005698603695033648,
             "n_matched": 18,
             "n_predicted": 34,
             "n_ground_truth": 44
@@ -4828,7 +4828,7 @@
             "point_recall": 0.6136363636363636,
             "point_precision": 0.7941176470588235,
             "point_f1": 0.6923076923076923,
-            "point_loc_error": 0.014085543302265212,
+            "point_loc_error": 0.014085543302265214,
             "n_matched": 27,
             "n_predicted": 34,
             "n_ground_truth": 44
@@ -4876,7 +4876,7 @@
             "point_recall": 0.7379679144385026,
             "point_precision": 0.9583333333333334,
             "point_f1": 0.8338368580060422,
-            "point_loc_error": 0.003283485948273719,
+            "point_loc_error": 0.0032834859482737174,
             "n_matched": 276,
             "n_predicted": 288,
             "n_ground_truth": 374
@@ -4885,7 +4885,7 @@
             "point_recall": 0.7433155080213903,
             "point_precision": 0.9652777777777778,
             "point_f1": 0.8398791540785498,
-            "point_loc_error": 0.0033441149430322985,
+            "point_loc_error": 0.0033441149430322972,
             "n_matched": 278,
             "n_predicted": 288,
             "n_ground_truth": 374
@@ -4894,7 +4894,7 @@
             "point_recall": 0.7433155080213903,
             "point_precision": 0.9652777777777778,
             "point_f1": 0.8398791540785498,
-            "point_loc_error": 0.0033441149430322985,
+            "point_loc_error": 0.0033441149430322972,
             "n_matched": 278,
             "n_predicted": 288,
             "n_ground_truth": 374
@@ -5074,7 +5074,7 @@
             "point_recall": 0.7941176470588235,
             "point_precision": 0.84375,
             "point_f1": 0.8181818181818182,
-            "point_loc_error": 0.004505236502553547,
+            "point_loc_error": 0.0045052365025535475,
             "n_matched": 27,
             "n_predicted": 32,
             "n_ground_truth": 34
@@ -5083,7 +5083,7 @@
             "point_recall": 0.8823529411764706,
             "point_precision": 0.9375,
             "point_f1": 0.9090909090909091,
-            "point_loc_error": 0.005180745893208876,
+            "point_loc_error": 0.0051807458932088745,
             "n_matched": 30,
             "n_predicted": 32,
             "n_ground_truth": 34
@@ -5131,7 +5131,7 @@
       "summary_score": 0.8045797096097654,
       "match_rate": 1.0,
       "mean_curve_distance": 0.13417126876225946,
-      "mean_coverage_ratio": 0.5479103975915554,
+      "mean_coverage_ratio": 0.5479103975915555,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -5149,7 +5149,7 @@
             "point_recall": 0.5909090909090909,
             "point_precision": 1.0,
             "point_f1": 0.7428571428571429,
-            "point_loc_error": 0.007161092339339639,
+            "point_loc_error": 0.0071610923393396414,
             "n_matched": 26,
             "n_predicted": 26,
             "n_ground_truth": 44
@@ -5206,7 +5206,7 @@
             "point_recall": 0.8472222222222222,
             "point_precision": 0.9104477611940298,
             "point_f1": 0.8776978417266188,
-            "point_loc_error": 0.003421070072553466,
+            "point_loc_error": 0.0034210700725534667,
             "n_matched": 61,
             "n_predicted": 67,
             "n_ground_truth": 72
@@ -5272,7 +5272,7 @@
             "point_recall": 0.5925925925925926,
             "point_precision": 0.7619047619047619,
             "point_f1": 0.6666666666666666,
-            "point_loc_error": 0.0035634541529491193,
+            "point_loc_error": 0.00356345415294912,
             "n_matched": 16,
             "n_predicted": 21,
             "n_ground_truth": 27
@@ -5290,7 +5290,7 @@
             "point_recall": 0.6296296296296297,
             "point_precision": 0.8095238095238095,
             "point_f1": 0.7083333333333334,
-            "point_loc_error": 0.018856096065902776,
+            "point_loc_error": 0.018856096065902772,
             "n_matched": 17,
             "n_predicted": 21,
             "n_ground_truth": 27
@@ -5338,7 +5338,7 @@
             "point_recall": 0.6161971830985915,
             "point_precision": 0.5555555555555556,
             "point_f1": 0.5843071786310517,
-            "point_loc_error": 0.005729057354363789,
+            "point_loc_error": 0.0057290573543637875,
             "n_matched": 175,
             "n_predicted": 315,
             "n_ground_truth": 284
@@ -5356,7 +5356,7 @@
             "point_recall": 0.9154929577464789,
             "point_precision": 0.8253968253968254,
             "point_f1": 0.8681135225375627,
-            "point_loc_error": 0.012647254178326342,
+            "point_loc_error": 0.012647254178326347,
             "n_matched": 260,
             "n_predicted": 315,
             "n_ground_truth": 284
@@ -5404,7 +5404,7 @@
             "point_recall": 0.4318181818181818,
             "point_precision": 0.7916666666666666,
             "point_f1": 0.5588235294117647,
-            "point_loc_error": 0.005249566440952615,
+            "point_loc_error": 0.0052495664409526145,
             "n_matched": 19,
             "n_predicted": 24,
             "n_ground_truth": 44
@@ -5460,7 +5460,7 @@
       "figure_id": "45906-45323",
       "summary_score": 0.7596081656549799,
       "match_rate": 0.5,
-      "mean_curve_distance": 0.04571854203013493,
+      "mean_curve_distance": 0.04571854203013492,
       "mean_coverage_ratio": 0.8245430389950744,
       "error": null,
       "point": {
@@ -5470,7 +5470,7 @@
             "point_recall": 0.5890909090909091,
             "point_precision": 0.5491525423728814,
             "point_f1": 0.5684210526315789,
-            "point_loc_error": 0.0033520347958668263,
+            "point_loc_error": 0.0033520347958668254,
             "n_matched": 162,
             "n_predicted": 295,
             "n_ground_truth": 275
@@ -5488,7 +5488,7 @@
             "point_recall": 0.6909090909090909,
             "point_precision": 0.6440677966101694,
             "point_f1": 0.6666666666666665,
-            "point_loc_error": 0.007866082646474615,
+            "point_loc_error": 0.007866082646474619,
             "n_matched": 190,
             "n_predicted": 295,
             "n_ground_truth": 275
@@ -5536,7 +5536,7 @@
             "point_recall": 0.8974358974358975,
             "point_precision": 1.0,
             "point_f1": 0.945945945945946,
-            "point_loc_error": 0.004252619256151285,
+            "point_loc_error": 0.004252619256151284,
             "n_matched": 35,
             "n_predicted": 35,
             "n_ground_truth": 39
@@ -5545,7 +5545,7 @@
             "point_recall": 0.8974358974358975,
             "point_precision": 1.0,
             "point_f1": 0.945945945945946,
-            "point_loc_error": 0.004252619256151285,
+            "point_loc_error": 0.004252619256151284,
             "n_matched": 35,
             "n_predicted": 35,
             "n_ground_truth": 39
@@ -5554,7 +5554,7 @@
             "point_recall": 0.8974358974358975,
             "point_precision": 1.0,
             "point_f1": 0.945945945945946,
-            "point_loc_error": 0.004252619256151285,
+            "point_loc_error": 0.004252619256151284,
             "n_matched": 35,
             "n_predicted": 35,
             "n_ground_truth": 39
@@ -5602,7 +5602,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.001645985917805473,
+            "point_loc_error": 0.0016459859178054735,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -5611,7 +5611,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.001645985917805473,
+            "point_loc_error": 0.0016459859178054735,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -5620,7 +5620,7 @@
             "point_recall": 1.0,
             "point_precision": 1.0,
             "point_f1": 1.0,
-            "point_loc_error": 0.001645985917805473,
+            "point_loc_error": 0.0016459859178054735,
             "n_matched": 21,
             "n_predicted": 21,
             "n_ground_truth": 21
@@ -5658,7 +5658,7 @@
       "figure_id": "21682-21283",
       "summary_score": 0.9068232505386028,
       "match_rate": 1.0,
-      "mean_curve_distance": 0.1310179793707607,
+      "mean_curve_distance": 0.13101797937076068,
       "mean_coverage_ratio": 0.8514877309865689,
       "error": null,
       "point": {
@@ -5668,7 +5668,7 @@
             "point_recall": 0.3917525773195876,
             "point_precision": 0.5352112676056338,
             "point_f1": 0.4523809523809524,
-            "point_loc_error": 0.006227446949493024,
+            "point_loc_error": 0.0062274469494930235,
             "n_matched": 38,
             "n_predicted": 71,
             "n_ground_truth": 97
@@ -5686,7 +5686,7 @@
             "point_recall": 0.7319587628865979,
             "point_precision": 1.0,
             "point_f1": 0.8452380952380951,
-            "point_loc_error": 0.010531086229637426,
+            "point_loc_error": 0.010531086229637427,
             "n_matched": 71,
             "n_predicted": 71,
             "n_ground_truth": 97
@@ -5734,7 +5734,7 @@
             "point_recall": 0.09767441860465116,
             "point_precision": 0.12844036697247707,
             "point_f1": 0.11096433289299869,
-            "point_loc_error": 0.006100119759621832,
+            "point_loc_error": 0.006100119759621833,
             "n_matched": 42,
             "n_predicted": 327,
             "n_ground_truth": 430
@@ -5743,7 +5743,7 @@
             "point_recall": 0.16279069767441862,
             "point_precision": 0.21406727828746178,
             "point_f1": 0.18494055482166444,
-            "point_loc_error": 0.011691381388262112,
+            "point_loc_error": 0.011691381388262114,
             "n_matched": 70,
             "n_predicted": 327,
             "n_ground_truth": 430
@@ -5752,7 +5752,7 @@
             "point_recall": 0.5232558139534884,
             "point_precision": 0.6880733944954128,
             "point_f1": 0.59445178335535,
-            "point_loc_error": 0.029648080243431803,
+            "point_loc_error": 0.029648080243431785,
             "n_matched": 225,
             "n_predicted": 327,
             "n_ground_truth": 430
@@ -5790,7 +5790,7 @@
       "figure_id": "17040-21020",
       "summary_score": 0.8622915855756069,
       "match_rate": 0.6666666666666666,
-      "mean_curve_distance": 0.02260757697876421,
+      "mean_curve_distance": 0.022607576978764206,
       "mean_coverage_ratio": 0.9428156670389185,
       "error": null,
       "point": {
@@ -5800,7 +5800,7 @@
             "point_recall": 0.7272727272727273,
             "point_precision": 0.4383561643835616,
             "point_f1": 0.547008547008547,
-            "point_loc_error": 0.004562842260736981,
+            "point_loc_error": 0.0045628422607369825,
             "n_matched": 160,
             "n_predicted": 365,
             "n_ground_truth": 220
@@ -5809,7 +5809,7 @@
             "point_recall": 0.8318181818181818,
             "point_precision": 0.5013698630136987,
             "point_f1": 0.6256410256410256,
-            "point_loc_error": 0.005430958708810137,
+            "point_loc_error": 0.005430958708810138,
             "n_matched": 183,
             "n_predicted": 365,
             "n_ground_truth": 220
@@ -5818,7 +5818,7 @@
             "point_recall": 0.8454545454545455,
             "point_precision": 0.5095890410958904,
             "point_f1": 0.6358974358974359,
-            "point_loc_error": 0.011545954443386656,
+            "point_loc_error": 0.011545954443386654,
             "n_matched": 186,
             "n_predicted": 365,
             "n_ground_truth": 220
@@ -5932,7 +5932,7 @@
             "point_recall": 0.9545454545454546,
             "point_precision": 1.0,
             "point_f1": 0.9767441860465117,
-            "point_loc_error": 0.004263292803765172,
+            "point_loc_error": 0.00426329280376517,
             "n_matched": 42,
             "n_predicted": 42,
             "n_ground_truth": 44
@@ -5941,7 +5941,7 @@
             "point_recall": 0.9545454545454546,
             "point_precision": 1.0,
             "point_f1": 0.9767441860465117,
-            "point_loc_error": 0.004263292803765172,
+            "point_loc_error": 0.00426329280376517,
             "n_matched": 42,
             "n_predicted": 42,
             "n_ground_truth": 44
@@ -5950,7 +5950,7 @@
             "point_recall": 0.9545454545454546,
             "point_precision": 1.0,
             "point_f1": 0.9767441860465117,
-            "point_loc_error": 0.004263292803765172,
+            "point_loc_error": 0.00426329280376517,
             "n_matched": 42,
             "n_predicted": 42,
             "n_ground_truth": 44
@@ -6007,7 +6007,7 @@
             "point_recall": 0.6836734693877551,
             "point_precision": 0.5275590551181102,
             "point_f1": 0.5955555555555555,
-            "point_loc_error": 0.006638133503171595,
+            "point_loc_error": 0.006638133503171596,
             "n_matched": 67,
             "n_predicted": 127,
             "n_ground_truth": 98
@@ -6016,7 +6016,7 @@
             "point_recall": 0.8163265306122449,
             "point_precision": 0.6299212598425197,
             "point_f1": 0.7111111111111111,
-            "point_loc_error": 0.014686782402806714,
+            "point_loc_error": 0.01468678240280671,
             "n_matched": 80,
             "n_predicted": 127,
             "n_ground_truth": 98
@@ -6055,7 +6055,7 @@
       "summary_score": 0.9924807624138575,
       "match_rate": 1.0,
       "mean_curve_distance": 0.02063638769534898,
-      "mean_coverage_ratio": 0.9980786749369219,
+      "mean_coverage_ratio": 0.9980786749369218,
       "error": null,
       "point": {
         "norm": "euclidean",
@@ -6064,7 +6064,7 @@
             "point_recall": 0.7692307692307693,
             "point_precision": 0.7692307692307693,
             "point_f1": 0.7692307692307693,
-            "point_loc_error": 0.005407594724669673,
+            "point_loc_error": 0.005407594724669674,
             "n_matched": 40,
             "n_predicted": 52,
             "n_ground_truth": 52
