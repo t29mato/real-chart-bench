@@ -43,10 +43,13 @@ from real_chart_bench.domain.axis_frame import (
 from real_chart_bench.domain.tick_calibration import (
     AxisFit,
     apply_glyphs,
+    dark_background,
     decade_readings,
     fit_axis,
     labels_for_axis,
     readings_for_axis,
+    scaled_fit,
+    scaled_frame,
     split_merged_labels,
     touches_border,
 )
@@ -248,14 +251,16 @@ def calibrate_frame(
                 if superscripts:
                     raw = _exponent_rescue(strip, raw)
                 ws = [(t, a + ox, b + oy, c + ox, d + oy, conf) for t, a, b, c, d, conf in raw]
-                if v3:
-                    if not keep_border:
-                        ws = [wd for wd in ws if not touches_border(wd[1:5], (w, h))]
-                    ws = _fix_glyphs(gray, ws, ox, ox + strip.shape[1])
+                if v3 and not keep_border:
+                    ws = [wd for wd in ws if not touches_border(wd[1:5], (w, h))]
                 if split_merged:
                     if axis == "x":
                         ws = _split_line(gray, ws)
                     ws = _split_merged(gray, ws)
+                if v3:  # after splitting: a point restored inside "300320340"
+                    # would make the merged labels unsplittable (28331, design
+                    # local-model.md「自動校正の改善」)
+                    ws = _fix_glyphs(gray, ws, ox, ox + strip.shape[1])
                 mw = _mirror_words(ws, w) if mirror else ws
                 rd = readings_for_axis(mw, fr, axis, ticks=ticks)
                 if superscripts:
@@ -360,6 +365,40 @@ def calibrate_frames(
 
 
 def calibrate_image(
+    rgb: np.ndarray,
+    *,
+    normalize: bool = False,
+    max_side: int | None = None,
+    min_side: int | None = None,
+    **kw,
+) -> ImageCalibration | None:
+    """_calibrate_unnormalized, after normalising the image when asked
+    (design local-model.md「自動校正の改善」): a dark page is inverted (the
+    rules expect black axes on white), and a figure whose long side exceeds
+    max_side is read shrunk (one smaller than min_side enlarged), its frame
+    and fits mapped back to the original pixels."""
+    if not normalize:
+        return _calibrate_unnormalized(rgb, **kw)
+    if dark_background(to_gray(rgb)):
+        rgb = 255 - rgb
+    h, w = rgb.shape[:2]
+    if max_side is not None and max(h, w) > max_side:
+        s = max_side / max(h, w)
+    elif min_side is not None and max(h, w) < min_side:
+        s = min_side / max(h, w)
+    else:
+        return _calibrate_unnormalized(rgb, **kw)
+    small = np.asarray(Image.fromarray(rgb).resize(
+        (max(1, round(w * s)), max(1, round(h * s))), Image.Resampling.LANCZOS))
+    c = _calibrate_unnormalized(small, **kw)
+    if c is None:
+        return None
+    k = 1 / s
+    return ImageCalibration(scaled_frame(c.frame, k), scaled_fit(c.x_fit, k),
+                            scaled_fit(c.y_fit, k), c.n_frames, c.y_side)
+
+
+def _calibrate_unnormalized(
     rgb: np.ndarray,
     *,
     superscripts: bool = True,

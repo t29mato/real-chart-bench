@@ -54,6 +54,13 @@ def to_values(answer: list[dict], cal) -> list[dict]:
     return out
 
 
+CALIB = {"v2": {}, "v3-norm": {"v3": True, "normalize": True, "max_side": 900,
+                                "min_side": 800},
+         # resizing dropped: its dev evidence came from artificially resized
+         # synthetic figures only (design 自動校正の改善)
+         "v3-inv": {"v3": True, "normalize": True}}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", required=True)
@@ -61,6 +68,9 @@ def main():
     ap.add_argument("--run", required=True)
     ap.add_argument("--name", required=True)
     ap.add_argument("--data-note", default="")
+    ap.add_argument("--calib", choices=["v2", "v3-norm", "v3-inv"], default="v2",
+                    help="v3-inv: tick reading v3 + dark pages inverted; v3-norm also "
+                    "resizes to a long side of 900 / 800 (design 自動校正の改善)")
     ap.add_argument("--method-a", action="store_true",
                     help="method A's post-processing (the before row), no frame restriction")
     args = ap.parse_args()
@@ -82,7 +92,7 @@ def main():
         fig = lab["fig"]
         assert pix_key[fig]["figure_id"] == lab["figure_id"]
         t0 = time.time()
-        cal = calibrate_image(load_rgb(REPO / lab["image_path"]))
+        cal = calibrate_image(load_rgb(REPO / lab["image_path"]), **CALIB[args.calib])
         cal_s = time.time() - t0
         dets = [Detection(d[0], d[1], d[2], d[3], tuple(d[4]), *d[5:]) for d in row["dets"][ls]]
         t1 = time.time()
@@ -131,7 +141,8 @@ def main():
         "long_side": ls,
         "validation_best": chosen.get("objective"),
         "calibration":
-        "automatic: frame rules + Tesseract tick OCR (adapter/auto_axis_calibration.py)",
+        "automatic: frame rules + Tesseract tick OCR (adapter/auto_axis_calibration.py), "
+        f"options {args.calib}: {CALIB[args.calib]}",
         "torch": "see cache_dets.py run",
         "gpu": "Apple M3 Max" if device == "mps" else None,
         "device": device,

@@ -109,6 +109,26 @@ class AxisFit:
         return 10**t if self.scale == "log" else t
 
 
+def scaled_fit(fit: AxisFit | None, factor: float) -> AxisFit | None:
+    """A fit found on an image shrunk by `factor`, in the original pixels."""
+    if fit is None:
+        return None
+    return AxisFit(
+        fit.scale, fit.slope * factor, fit.intercept * factor,
+        tuple((px * factor, v) for px, v in fit.ticks), fit.residual_px * factor, fit.family,
+    )
+
+
+def scaled_frame(frame: tuple[float, ...], factor: float) -> tuple[float, ...]:
+    return tuple(float(v * factor) for v in frame)
+
+
+def dark_background(gray: np.ndarray) -> bool:
+    """The page is dark (a white-on-black figure): its median grey is below
+    the middle. Thick black ink on a white page leaves the median white."""
+    return float(np.median(gray)) < 128
+
+
 def _fit_family(points: list[tuple[float, float]], scale: str, direction: int,
                 plausible_log: bool = False):
     if scale == "log":
