@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pairing review</title><style>
+body{font:14px sans-serif;margin:12px;background:#111;color:#ddd}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
+.tile{background:#1c1c1c;padding:6px;border:3px solid #333}.tile img{width:100%}
+.tile.yes{border-color:#2a2}.tile.no{border-color:#c33}.tile.unsure{border-color:#cb2}
+.meta{font-size:12px;color:#aaa;margin:4px 0}button{margin-right:4px;padding:6px 10px}
+h2{margin:18px 0 6px}</style>
+<h1>Pairing candidates (__N__ public figures)</h1>
+<p>Question: <b>do the coloured circles sit on the curves drawn in the figure?</b> Nothing here is adopted until you answer.
+Candidates are machine proposals (Tesseract calibration + Starrydata points); thresholds are provisional.
+<button id="allyes">mark all undecided in view: yes</button> <button id="export">export verdicts (JSON)</button> <span id="count"></span></p>
+__BODY__
+<script>
+const KEY='pairing_review_v1';let V=JSON.parse(localStorage.getItem(KEY)||'{}');
+function paint(t){const v=V[t.dataset.id];t.classList.remove('yes','no','unsure');if(v)t.classList.add(v.verdict);}
+function count(){document.getElementById('count').textContent=Object.keys(V).length+' / '+document.querySelectorAll('.tile').length+' decided';}
+document.querySelectorAll('.tile').forEach(t=>{const im0=t.querySelector('img');im0.dataset.over=im0.src;paint(t);t.dataset.t0=Date.now();
+ t.querySelectorAll('button[data-v]').forEach(b=>b.onclick=()=>{V[t.dataset.id]={candidate_id:t.dataset.id,shown_sha256:t.dataset.sha,verdict:b.dataset.v,reviewed_at:new Date().toISOString()};localStorage.setItem(KEY,JSON.stringify(V));paint(t);count();});
+ t.querySelector('.tog').onclick=()=>{const i=t.querySelector('img');i.src=i.src===i.dataset.over?i.dataset.plain:i.dataset.over;};});
+document.getElementById('allyes').onclick=()=>{document.querySelectorAll('.tile').forEach(t=>{const r=t.getBoundingClientRect();if(!V[t.dataset.id]&&r.bottom>0&&r.top<innerHeight)t.querySelector('button[data-v=yes]').click();});};
+document.getElementById('export').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(Object.values(V),null,1)],{type:'application/json'}));a.download='pairing_verdicts.json';a.click();};
+count();</script>

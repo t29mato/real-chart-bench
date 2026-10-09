@@ -288,6 +288,61 @@ class ImageCalibration:
         return self.x_fit is not None and self.y_fit is not None
 
 
+def _frame_area(f: Frame) -> float:
+    return (f[2] - f[0]) * (f[3] - f[1])
+
+
+def _same_plot_box(f: Frame, g: Frame) -> bool:
+    ix = min(f[2], g[2]) - max(f[0], g[0])
+    iy = min(f[3], g[3]) - max(f[1], g[1])
+    return ix > 0 and iy > 0 and ix * iy > 0.8 * min(_frame_area(f), _frame_area(g))
+
+
+def _candidate_frames(dark: np.ndarray, right_axes: bool) -> list[tuple[Frame, str]]:
+    """Bottom-left frames first (largest first); a bottom-right L only when
+    it is not the same plot box seen from its other corner."""
+    uniq: list[tuple[Frame, str]] = [
+        (f, "left") for f in sorted(detect_axis_frames(dark), key=lambda f: -_frame_area(f))
+    ]
+    if right_axes:
+        for f in sorted(detect_right_axis_frames(dark), key=lambda f: -_frame_area(f)):
+            if not any(_same_plot_box(f, g) for g, _ in uniq):
+                uniq.append((f, "right"))
+    return uniq
+
+
+def calibrate_frames(
+    rgb: np.ndarray,
+    *,
+    superscripts: bool = True,
+    right_axes: bool = True,
+    split_merged: bool = True,
+    max_frames: int = 6,
+    v3: bool = True,
+) -> list[ImageCalibration]:
+    """Every plot frame of the image whose two axes calibrate (a pairing
+    candidate pool, design pairing-automation.md §12): unlike
+    `calibrate_image`, which stops at the first panel, all of them are kept,
+    largest first. Frames that do not calibrate are not returned -- they
+    cannot project ground truth."""
+    gray = to_gray(rgb)
+    dark = gray < DARK
+    uniq = _candidate_frames(dark, right_axes)
+    out: list[ImageCalibration] = []
+    for f, side in uniq[:max_frames]:
+        sides = [side] + (["right" if side == "left" else "left"] if right_axes else [])
+        for s in sides:
+            cal = calibrate_frame(
+                gray, dark, f, superscripts=superscripts, y_side=s, split_merged=split_merged,
+                v3=v3,
+            )
+            c = ImageCalibration(f, cal["x_fit"], cal["y_fit"], len(uniq), s)
+            if c.ok:
+                out.append(c)
+                break
+    return out
+
+
 def calibrate_image(
     rgb: np.ndarray,
     *,
@@ -306,23 +361,7 @@ def calibrate_image(
     found (no drawn axis lines)."""
     gray = to_gray(rgb)
     dark = gray < DARK
-    def area(f):
-        return (f[2] - f[0]) * (f[3] - f[1])
-
-    def overlaps(f, g):
-        ix = min(f[2], g[2]) - max(f[0], g[0])
-        iy = min(f[3], g[3]) - max(f[1], g[1])
-        return ix > 0 and iy > 0 and ix * iy > 0.8 * min(area(f), area(g))
-
-    # bottom-left frames first (largest first); a bottom-right L only when it
-    # is not the same plot box seen from its other corner
-    uniq: list[tuple[Frame, str]] = [
-        (f, "left") for f in sorted(detect_axis_frames(dark), key=lambda f: -area(f))
-    ]
-    if right_axes:
-        for f in sorted(detect_right_axis_frames(dark), key=lambda f: -area(f)):
-            if not any(overlaps(f, g) for g, _ in uniq):
-                uniq.append((f, "right"))
+    uniq = _candidate_frames(dark, right_axes)
     if not uniq:
         return None
     best = None
