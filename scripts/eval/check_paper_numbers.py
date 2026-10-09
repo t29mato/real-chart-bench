@@ -32,6 +32,7 @@ MODELS: dict[str, tuple[str, str]] = {
     "Claude Sonnet 5.5": ("claude-sonnet-5-5-v0-r3-noaxis", "claude-sonnet-5-5-v0-pixcal"),
     "Gemma 4 31B(8bit)": ("gemma-4-31b-8bit-v0-local-v3-noaxis", ""),
     "Qwen3.8-27B(8bit)": ("qwen3.8-27b-8bit-v0-local-v3-noaxis", ""),
+    "Qwen3.8-27B Q4(Codex CLI + Ollama)": ("", "qwen3.8-27b-v0-codex-local-pixcal"),
     "Qwen3.5-9B(bf16)": ("qwen3.5-9b-bf16-v0-local-cuda-v3-noaxis", ""),
     "Qwen3.5-9B(8bit)": ("qwen3.5-9b-8bit-v0-local-v3-noaxis", ""),
     "GPT-5.5": ("gpt-5.5-v0-codex-noaxis", "gpt-5.5-v0-codex-pixcal"),
