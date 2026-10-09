@@ -274,6 +274,8 @@ flowchart LR
 - **C2(参照文字列)・C5(系列数)は未使用**(C5 は LLM の系列数読みが要る)。C3/C4/C6 は `best_projection` の
   枠内率・被覆の判定で代替。
 - **C7 = hit(S)**。§5 の「決着させる実験」は未実施。よって閾値は暫定(`pairing_assignment.py` の定数)。
+  → 2026-10-10 に検証済みペア136図で実施: [docs/experiments/2026-10-10-pairing-threshold-validation.md](../experiments/2026-10-10-pairing-threshold-validation.md)。
+  結論: S は S=1.0 で飽和して誤りを分けず、M だけが判別軸。精度≥99%の採用レーンはこのデータでは根拠づけられない(閾値は未変更)。
 - 採用レーンは作らない。**全候補を人が見る**(§7 バーンイン)。レーン `high`(S≥0.80, M≥0.30, contrast≥0.35)は
   レビュー順を決めるだけ。`MIN_HIT=0.5`, `MIN_CONTRAST=0.2` 未満は `unassigned` として記録のみ(レビューに出さない)。
 

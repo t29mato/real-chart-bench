@@ -36,7 +36,6 @@ from real_chart_bench.usecase.pairing_threshold_validation import (  # noqa: E40
     UNLABELLED,
     WRONG,
     LabelledAssignment,
-    adopt_stats,
     clopper_pearson_upper,
     label_assignment,
     normalise_reference,
@@ -218,7 +217,6 @@ def analyse(args) -> None:
     items = [(key, r, o) for key, r, o in rows if o is not None]
     labelled = [LabelledAssignment(o, r["S"], r["M"], r["contrast"]) for _, r, o in items]
     n_ev = len(evaluable)
-    n_sc = len(evaluable & scored_keys)
     print(f"\nproposals: {len(items)} (correct {sum(o == CORRECT for *_, o in items)}, "
           f"wrong {sum(o == WRONG for *_, o in items)}, "
           f"ambiguous {sum(o == AMBIGUOUS for *_, o in items)}, "
@@ -268,40 +266,49 @@ def analyse(args) -> None:
         ok.sort(key=lambda r: (-r.stats.correct, r.s_min + r.m_min + r.c_min))
         table(f"best grid rules with pessimistic precision >= {target:.0%} "
               f"(top 8 by correct coverage)", ok[:8])
+    ok = [r for r in full if r.stats.precision is not None
+          and r.stats.precision >= 0.99 - 1e-9 and r.stats.correct > 0]
+    ok.sort(key=lambda r: (-r.stats.correct, r.s_min + r.m_min + r.c_min))
+    table("best grid rules with precision >= 99% when sibling digitizations are tolerated "
+          "(top 8 by correct coverage)", ok[:8])
     print("\nexact 95% upper bounds on the error rate of a lane with 0 errors: "
-          + ", ".join(f"n={n}: {_pct(clopper_pearson_upper(0, n))}" for n in (20, 50, 91, 136, 300)))
+          + ", ".join(f"n={n}: {_pct(clopper_pearson_upper(0, n))}"
+                      for n in (20, 50, 91, 136, 300)))
 
-    # §5-style pair-level distributions
-    print("\n## Pair level (design §5): S of true vs wrong (frame, figure) pairs\n")
-    pos, neg = [], []
+    # §5-style pair level: every scored (frame, figure) pair, eligible or not
+    print("\n## Pair level (design §5): best true pair per figure vs every wrong pair\n")
     ref_of = {(pid, r["figure_id"]): r["figure_reference"]
               for pid, p in raw.items() for r in p["records"]}
+    best_true, neg, sib = {}, [], []
     for pid, p in raw.items():
         for q in p["pairs"]:
-            if not q["eligible"]:
-                continue
-            o = label_assignment((pid, q["figure"]), q["image"], verified=verified,
-                                 rejected=rejected, owners=owners,
-                                 reference=ref_of.get((pid, q["figure"]), ""),
+            key = (pid, q["figure"])
+            o = label_assignment(key, q["image"], verified=verified, rejected=rejected,
+                                 owners=owners, reference=ref_of.get(key, ""),
                                  owner_references=owner_refs)
-            (pos if o == CORRECT else neg if o == WRONG else []).append(q)
-    for name, ps in (("true pairs", pos), ("wrong pairs", neg)):
-        ss = sorted(q["S"] for q in ps)
-        if ss:
-            qs = [ss[min(len(ss) - 1, int(f * len(ss)))] for f in (0.05, 0.25, 0.5, 0.75, 0.95)]
-            print(f"- {name}: n={len(ss)}, S quantiles 5/25/50/75/95% = "
-                  + ", ".join(f"{v:.2f}" for v in qs))
-    for t in (0.5, 0.6, 0.7, 0.8, 0.9):
-        fn = sum(q["S"] >= t for q in neg)
-        fp = sum(q["S"] < t for q in pos)
-        print(f"- S>={t:.1f}: wrong pairs passing {fn}/{len(neg)} ({_pct(fn / len(neg) if neg else None)}); "
-              f"true pairs failing {fp}/{len(pos)} ({_pct(fp / len(pos) if pos else None)})")
-    if neg:
-        top = sorted(neg, key=lambda q: -q["S"])[:5]
-        print("- highest-S wrong pairs: " + "; ".join(
-            f"{q['figure']}@{q['image'].rsplit('/', 1)[-1]} S={q['S']:.2f}" for q in top))
+            if o == CORRECT:
+                if key not in best_true or q["S"] > best_true[key]["S"]:
+                    best_true[key] = q
+            elif o == WRONG:
+                neg.append(q)
+            elif o == SIBLING:
+                sib.append(q)
+    pos = list(best_true.values())
+    print(f"- verified figures with any scored pair on their own image: {len(pos)}/{n_ev}; "
+          f"wrong pairs (all, incl. ineligible): {len(neg)}; sibling pairs: {len(sib)}")
+    print("\n| S>= | true pairs kept | wrong pairs passing | sibling pairs passing | "
+          "pair precision (true/(true+wrong)) |")
+    print("|---|---|---|---|---|")
+    for t in (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 1.0):
+        tp = sum(q["S"] >= t - 1e-9 for q in pos)
+        fp = sum(q["S"] >= t - 1e-9 for q in neg)
+        sb = sum(q["S"] >= t - 1e-9 for q in sib)
+        print(f"| {t:.2f} | {tp}/{len(pos)} | {fp}/{len(neg)} | {sb}/{len(sib)} | "
+              f"{_pct(tp / (tp + fp) if tp + fp else None)} |")
+    low = sorted(q["S"] for q in pos if not q["eligible"])
+    print(f"\n- true pairs below the eligibility floor (hit<0.5 or contrast<0.2): {len(low)}, "
+          f"their S: {[round(v, 2) for v in low]}")
 
-    # unassigned causes for verified figures
     print("\n## Why verified figures were not correctly proposed\n")
     why = Counter()
     for key, r, o in rows:

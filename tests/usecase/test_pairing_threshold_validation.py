@@ -1,11 +1,11 @@
 import pytest
 
 from real_chart_bench.usecase.pairing_threshold_validation import (
+    AMBIGUOUS,
     CORRECT,
     SIBLING,
     UNLABELLED,
     WRONG,
-    AMBIGUOUS,
     LabelledAssignment,
     adopt_stats,
     clopper_pearson_upper,
