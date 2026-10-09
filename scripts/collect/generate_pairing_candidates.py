@@ -100,9 +100,20 @@ def main() -> None:
                     default=ROOT / "data/manifest/v0/pairing_candidates.json")
     ap.add_argument("--overlays", type=pathlib.Path, default=ROOT / "build/pairing_overlays.json")
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--redecide", action="store_true",
+                    help="re-decide every paper with the current rule and replace the file "
+                         "(default: incremental, existing papers are never re-decided). Only "
+                         "while no human verdict refers to the records.")
     args = ap.parse_args()
 
     prev = json.loads(args.out.read_text()) if args.out.exists() else {"candidates": []}
+    old_papers = {r["paper_id"] for r in prev["candidates"]}
+    if args.redecide:
+        # Explicit re-decision of EVERY paper with the current rule (design
+        # pairing-automation.md 12.7). Only safe while no human verdict refers
+        # to these records; the old file is replaced, not merged.
+        prev = {k: v for k, v in prev.items()
+                if k in ("generated", "work_pdf_sha256")} | {"candidates": []}
     existing = prev["candidates"]
     done = {r["paper_id"] for r in existing}
     refetch = json.loads((ROOT / "data/manifest/v0/refetch_log.json").read_text())["papers"]
@@ -118,7 +129,8 @@ def main() -> None:
     work_new = [p for p in work_dirs
                 if p in cc_by and p not in benchmark and p not in raw_papers and p not in done]
     raw_new = sorted((set(raw_papers) - benchmark) - done, key=int)
-    overlays = json.loads(args.overlays.read_text()) if args.overlays.exists() else {}
+    overlays = ({} if args.redecide or not args.overlays.exists()
+                else json.loads(args.overlays.read_text()))
     # Overlays live in an ignored file; rebuild missing ones for papers already decided
     # (records are not touched; a changed decision is reported).
     redo_ids = sorted({r["paper_id"] for r in existing if r["decision"].startswith("proposed")
@@ -176,6 +188,9 @@ def main() -> None:
                                      else _sha(args.work_root / "images" / p / n))
     merged = merge_candidate_records(existing, new_records[SRC_RAW], SRC_RAW, old_source=SRC_RAW)
     merged = merge_candidate_records(merged, new_records[SRC_WORK], SRC_WORK, old_source=SRC_RAW)
+    lost = old_papers - {r["paper_id"] for r in merged}
+    if args.redecide and lost:
+        sys.exit(f"--redecide would drop papers {sorted(lost, key=int)}; nothing written")
     dec: dict = {}
     by_src: dict = {}
     for r in merged:
