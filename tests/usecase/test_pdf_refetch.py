@@ -4,6 +4,7 @@ every Unpaywall oa_location instead of the single pdf_url the v0 collection used
 
 import hashlib
 
+from real_chart_bench.domain.dataset_subset import DatasetSubset
 from real_chart_bench.usecase.figure_extraction import (
     ExtractedImage,
     ImageSource,
@@ -254,3 +255,52 @@ def test_log_entry_of_failure_has_null_route_and_hashes():
     assert entry["route"] is None
     assert entry["pdf_sha256"] is None
     assert entry["n_images"] == 0
+
+
+# --- design §7.88.1: the nc subset flows through; a subset move is only reported
+
+
+def test_nc_paper_is_fetched_and_tagged_nc():
+    fetcher = _ScriptedFetcher({"https://a/x.pdf": _ok()})
+    outcome = refetch_paper(
+        _record(_loc("https://a/x.pdf"), license_id="cc-by-nc-sa"),
+        fetcher,
+        _FixedExtractor([_img(1)]),
+        expected_subset=DatasetSubset.NC,
+    )
+    assert outcome.status is RefetchStatus.OK
+    assert outcome.subset is DatasetSubset.NC
+    assert outcome.to_log_entry()["subset"] == "nc"
+
+
+def test_core_outcome_log_entry_has_no_subset_key():
+    outcome = refetch_paper(
+        _record(_loc("https://a/x.pdf")),
+        _ScriptedFetcher({"https://a/x.pdf": _ok()}),
+        _FixedExtractor([_img(1)]),
+    )
+    assert outcome.subset is DatasetSubset.CORE
+    assert "subset" not in outcome.to_log_entry()
+
+
+def test_core_paper_whose_licence_moved_to_nc_is_reported_not_fetched():
+    # CC BY -> NC is a subset move: a person decides, the fetch does not
+    fetcher = _ScriptedFetcher({})
+    outcome = refetch_paper(
+        _record(_loc("https://a/x.pdf"), license_id="cc-by-nc"), fetcher, _FixedExtractor([])
+    )
+    assert outcome.status is RefetchStatus.LICENCE_CHANGED
+    assert outcome.licence_today == "cc-by-nc"
+    assert fetcher.calls == []
+
+
+def test_nc_paper_whose_licence_moved_to_nc_nd_is_not_fetched():
+    fetcher = _ScriptedFetcher({})
+    outcome = refetch_paper(
+        _record(_loc("https://a/x.pdf"), license_id="cc-by-nc-nd"),
+        fetcher,
+        _FixedExtractor([]),
+        expected_subset=DatasetSubset.NC,
+    )
+    assert outcome.status is RefetchStatus.LICENCE_CHANGED
+    assert fetcher.calls == []

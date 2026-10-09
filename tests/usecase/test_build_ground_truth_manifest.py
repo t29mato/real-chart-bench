@@ -1,5 +1,6 @@
 from real_chart_bench.domain.collection_records import PaperRecord
 from real_chart_bench.domain.dataset_split import DatasetSplit
+from real_chart_bench.domain.dataset_subset import DatasetSubset
 from real_chart_bench.domain.licensing import LicenseStatus
 from real_chart_bench.usecase.build_ground_truth_manifest import build_ground_truth_for_paper
 from real_chart_bench.usecase.starrydata_ingestion import ParsedCurveRow
@@ -74,3 +75,21 @@ def test_empty_curve_rows_yields_no_figures_or_curves():
     figures, curves = build_ground_truth_for_paper(_paper(), [], held_out_ratio=0.0)
     assert figures == ()
     assert curves == ()
+
+
+# --- design §7.88.1: the paper's subset is carried onto every figure
+
+
+def test_core_paper_figures_are_core():
+    figures, _ = build_ground_truth_for_paper(_paper(), [_row()], held_out_ratio=0.0)
+    assert figures[0].subset is DatasetSubset.CORE
+
+
+def test_nc_paper_figures_are_nc():
+    paper = PaperRecord(
+        paper_id="6061", doi="10.1000/example", title="Example",
+        license_status=LicenseStatus.REDISTRIBUTABLE, license_id="cc-by-nc-sa",
+        subset=DatasetSubset.NC,
+    )
+    figures, _ = build_ground_truth_for_paper(paper, [_row()], held_out_ratio=0.0)
+    assert {f.subset for f in figures} == {DatasetSubset.NC}

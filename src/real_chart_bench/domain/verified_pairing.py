@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from real_chart_bench.domain.curve import ScaleType
+from real_chart_bench.domain.dataset_subset import DatasetSubset, distribution_dir_name
+from real_chart_bench.domain.licensing import LicenseStatus, license_subset
 
 
 class VerificationStatus(Enum):
@@ -341,8 +343,35 @@ class VerifiedPairing:
     # the repository, so the box could not be recovered and verified.
     crop: CropRecipe | None = None
     final_sha256: str | None = None
+    # design §7.88.1: which distribution this figure belongs to. Follows the
+    # licence (never set by hand): enforced in __post_init__ whenever
+    # license_id names a redistributable licence. core for every entry
+    # written before the nc subset existed.
+    subset: DatasetSubset = DatasetSubset.CORE
 
     def __post_init__(self) -> None:
+        self._check_subset()
+        self._check_invariants()
+
+    def _check_subset(self) -> None:
+        decided = license_subset(self.license_id)
+        if decided.status is LicenseStatus.REDISTRIBUTABLE and decided.subset is not self.subset:
+            raise ValueError(
+                f"subset {self.subset.value!r} contradicts license_id {self.license_id!r} "
+                f"(which puts the figure in {decided.subset.value!r}); the subset follows "
+                "the licence and is never set by hand (design §7.88)"
+            )
+        # a committed figure (a path with a directory) must sit in its own
+        # subset's distribution directory -- the nc figures ship separately
+        if self.image_path and "/" in self.image_path:
+            own = f"data/{distribution_dir_name(self.subset)}/"
+            if not self.image_path.startswith(own):
+                raise ValueError(
+                    f"{self.subset.value} figure {self.image_path!r} must be committed "
+                    f"under {own}"
+                )
+
+    def _check_invariants(self) -> None:
         if (
             self.status is VerificationStatus.VERIFIED
             and self.rejection_category is not None

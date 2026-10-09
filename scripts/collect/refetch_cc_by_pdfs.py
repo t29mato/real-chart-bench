@@ -9,7 +9,9 @@ re-fetches exactly those papers:
 
 1. Unpaywall lookup today (same query/contact as starrydata_fetch.py's
    pdf_urls(), now UnpaywallOaLookupAdapter); the licence must still classify
-   REDISTRIBUTABLE, else the paper is skipped and logged ``licence_changed``.
+   REDISTRIBUTABLE *in the paper's own subset* (core or nc, design §7.88.1),
+   else the paper is skipped and logged ``licence_changed`` (a core <-> nc move
+   is reported this way too; a person moves the paper, the script does not).
 2. Every best_oa_location + oa_locations url_for_pdf, in order, through
    HttpPdfFetchAdapter (``is_pdf_content`` rejects HTML interstitials).
 3. Images extracted with PyMuPdfFigureExtractor (v0 defaults) and the v0
@@ -60,6 +62,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from real_chart_bench.adapter.figure_extraction import PyMuPdfFigureExtractor  # noqa: E402
 from real_chart_bench.adapter.pdf_fetch import HttpPdfFetchAdapter  # noqa: E402
 from real_chart_bench.adapter.unpaywall import UnpaywallOaLookupAdapter  # noqa: E402
+from real_chart_bench.usecase.dataset_subsets import manifest_entry_subset  # noqa: E402
 from real_chart_bench.usecase.host_politeness import (  # noqa: E402
     BLOCKING_DETAILS,
     HostPoliteFetcher,
@@ -107,8 +110,13 @@ def make_transport(throttle: Throttle, timeout_s: float):
 
 
 def candidates(papers: list[dict]) -> list[dict]:
-    """§7.2: licence-cleared papers with no images from the v0 collection."""
-    return [p for p in papers if p["license_id"] == "cc-by" and not p.get("n_extracted_images")]
+    """§7.2: licence-cleared papers with no images from the v0 collection --
+    core and, since design §7.88.1, nc (ND / unknown never get here)."""
+    return [
+        p
+        for p in papers
+        if manifest_entry_subset(p) is not None and not p.get("n_extracted_images")
+    ]
 
 
 def write_json_atomic(path: pathlib.Path, data) -> None:
@@ -175,7 +183,9 @@ def run(args) -> None:
 
     for n, paper in enumerate(todo, 1):
         sid, doi = paper["paper_id"], paper["doi"]
-        outcome = refetch_paper(oa.lookup(doi), fetcher, extractor)
+        outcome = refetch_paper(
+            oa.lookup(doi), fetcher, extractor, expected_subset=manifest_entry_subset(paper)
+        )
         if outcome.pdf_bytes:
             (raw / "pdf" / f"{sid}.pdf").write_bytes(outcome.pdf_bytes)
         if outcome.images:

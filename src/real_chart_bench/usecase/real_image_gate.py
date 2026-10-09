@@ -11,18 +11,28 @@ A VERIFIED pairing with excluded_reason set (design §7.22, HQ decision
 correct — the current harness cannot score it yet (e.g. log-y axis charts).
 This is a separate concept from REJECTED: the pairing is trustworthy, it's
 just not includable in scoring until the relevant harness gap closes.
+
+Selection is per dataset subset (design §7.88.1): ``core`` by default, so
+every existing caller keeps scoring exactly the figures it always did; the
+``nc`` figures are selected separately and scored on their own
+dataset_version, never pooled with ``core``.
 """
 
 from __future__ import annotations
 
+from real_chart_bench.domain.dataset_subset import DatasetSubset
 from real_chart_bench.domain.verified_pairing import VerificationStatus, VerifiedPairing
 
 
-def select_verified_pairings(registry: list[VerifiedPairing]) -> list[VerifiedPairing]:
+def select_verified_pairings(
+    registry: list[VerifiedPairing], *, subset: DatasetSubset = DatasetSubset.CORE
+) -> list[VerifiedPairing]:
     return [
         p
         for p in registry
-        if p.status is VerificationStatus.VERIFIED and p.excluded_reason is None
+        if p.status is VerificationStatus.VERIFIED
+        and p.excluded_reason is None
+        and p.subset is subset
     ]
 
 

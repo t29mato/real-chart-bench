@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 
 from real_chart_bench.domain.curve import ScaleType
 from real_chart_bench.domain.dataset_split import DatasetSplit
-from real_chart_bench.domain.licensing import LicenseStatus
+from real_chart_bench.domain.dataset_subset import DatasetSubset
+from real_chart_bench.domain.licensing import LicenseStatus, license_subset
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,18 @@ class PaperRecord:
     license_status: LicenseStatus
     license_id: str | None
     starrydata_paper_id: str | None = None
+    # design §7.88.1: core / nc, decided from license_id (never by hand)
+    subset: DatasetSubset = DatasetSubset.CORE
+
+    def __post_init__(self) -> None:
+        if self.license_status is not LicenseStatus.REDISTRIBUTABLE:
+            return
+        decided = license_subset(self.license_id)
+        if decided.status is LicenseStatus.REDISTRIBUTABLE and decided.subset is not self.subset:
+            raise ValueError(
+                f"paper {self.paper_id}: subset {self.subset.value!r} contradicts "
+                f"license_id {self.license_id!r} ({decided.subset.value!r}, design §7.88)"
+            )
 
 
 @dataclass(frozen=True)
@@ -30,6 +43,7 @@ class FigureRecord:
     figure_reference: str  # raw Starrydata figure_name, e.g. "2(a)"
     image_uri: str | None = None
     split: DatasetSplit = DatasetSplit.PUBLIC
+    subset: DatasetSubset = DatasetSubset.CORE  # the paper's (design §7.88.1)
 
 
 @dataclass(frozen=True)

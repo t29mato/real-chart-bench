@@ -19,8 +19,21 @@ can be tailed. Two-tier output (design §7.11):
   - data/raw/images/<SID>/ — extracted candidate images, gitignored,
     only for papers where PDF fetch succeeded
 
+Licence subsets (design §7.88 / §7.88.1): CC BY / BY-SA / CC0 papers are
+``core``, CC BY-NC / BY-NC-SA papers are ``nc`` (admitted since 2026-10-09,
+distributed and scored separately), ND is still dropped. Every new
+papers.json / figures.json entry records its ``subset``; entries written before
+that have no key and are all ``core``.
+
+PDF requests are spaced PDF_FETCH_DELAY_S = 60 s apart (design §7.87: the lab
+IP is shared with the owner's browser; RSC answered 429 at 1 s spacing).
+Prefer ``--skip-images`` and scripts/collect/refetch_cc_by_pdfs.py, which also
+blocks hosts that returned 403/429.
+
 Usage:
     python scripts/collect/collect_v0_dataset.py --held-out-ratio 0.2
+    # licence screen only -- writes the per-paper subset list, no manifest, no PDFs
+    python scripts/collect/collect_v0_dataset.py --candidates-only data/cache/candidates.json
 """
 
 from __future__ import annotations
@@ -42,7 +55,11 @@ from real_chart_bench.adapter.figure_extraction import PyMuPdfFigureExtractor  #
 from real_chart_bench.adapter.pdf_fetch import HttpPdfFetchAdapter  # noqa: E402
 from real_chart_bench.adapter.starrydata_csv import parse_curve_row  # noqa: E402
 from real_chart_bench.domain.collection_records import PaperRecord  # noqa: E402
-from real_chart_bench.domain.licensing import LicenseStatus, classify_license  # noqa: E402
+from real_chart_bench.domain.dataset_subset import DatasetSubset  # noqa: E402
+from real_chart_bench.domain.licensing import (  # noqa: E402
+    LicenseStatus,
+    classify_figure_license,
+)
 from real_chart_bench.usecase.build_ground_truth_manifest import (  # noqa: E402
     build_ground_truth_for_paper,
 )
@@ -52,7 +69,7 @@ RELEASE_BASE = "https://github.com/starrydata/starrydata_datasets/releases/downl
 USER_AGENT = "real-chart-bench-collector/0.1 (mailto:tomoya.matou@gmail.com)"
 OPENALEX_BATCH_SIZE = 40
 OPENALEX_DELAY_S = 0.3
-PDF_FETCH_DELAY_S = 0.5  # matches deep-digitizer pilot's politeness interval
+PDF_FETCH_DELAY_S = 60.0  # design §7.87: >= 60 s between PDF/publisher requests
 PDF_FETCH_TIMEOUT_S = 20
 
 
@@ -134,6 +151,13 @@ def main() -> None:
     parser.add_argument("--held-out-ratio", type=float, default=0.2)
     parser.add_argument("--log-every", type=int, default=20)
     parser.add_argument("--skip-images", action="store_true", help="ground truth manifest only")
+    parser.add_argument(
+        "--candidates-only",
+        type=pathlib.Path,
+        metavar="OUT_JSON",
+        help="classify licences (OpenAlex, cached), write the redistributable papers with "
+        "their subset (core / nc) to OUT_JSON and stop -- no manifest, no PDF requests",
+    )
     args = parser.parse_args()
 
     raw_dir = args.out_dir / "raw"
@@ -153,13 +177,37 @@ def main() -> None:
 
     license_cache = classify_all_papers(list(papers_by_doi), cache_dir / "openalex_license.json")
 
+    # design §7.88.1: nc is tagged, not dropped; ND / closed / unknown stay out
+    decisions = {
+        doi: classify_figure_license(info.get("license"), is_oa=info.get("is_oa"))
+        for doi, info in license_cache.items()
+    }
     redistributable = [
         (doi, info)
         for doi, info in license_cache.items()
-        if classify_license(info.get("license"), is_oa=info.get("is_oa"))
-        is LicenseStatus.REDISTRIBUTABLE
+        if decisions[doi].status is LicenseStatus.REDISTRIBUTABLE
     ]
-    log(f"REDISTRIBUTABLE papers: {len(redistributable)} / {len(license_cache)}")
+    by_subset = {
+        s.value: sum(1 for doi, _ in redistributable if decisions[doi].subset is s)
+        for s in DatasetSubset
+    }
+    log(f"REDISTRIBUTABLE papers: {len(redistributable)} / {len(license_cache)} {by_subset}")
+
+    if args.candidates_only:
+        candidates = [
+            {
+                "doi": doi,
+                "paper_id": papers_by_doi.get(doi, {}).get("SID"),
+                "license": info.get("license"),
+                "license_normalized": decisions[doi].normalized,
+                "subset": decisions[doi].subset.value,
+                "pdf_url": info.get("pdf_url"),
+            }
+            for doi, info in sorted(redistributable)
+        ]
+        args.candidates_only.write_text(json.dumps(candidates, indent=2) + "\n")
+        log(f"wrote {len(candidates)} candidates to {args.candidates_only} {by_subset}")
+        return
 
     log("loading curves.csv (grouping by SID)...")
     curves_by_sid: dict[str, list] = {}
@@ -206,6 +254,7 @@ def main() -> None:
         paper = PaperRecord(
             paper_id=sid, doi=doi, title=paper_row.get("title", ""),
             license_status=LicenseStatus.REDISTRIBUTABLE, license_id=info.get("license") or "cc-by",
+            subset=decisions[doi].subset,
         )
 
         raw_rows = curves_by_sid.get(sid, [])
@@ -243,12 +292,13 @@ def main() -> None:
             {
                 "paper_id": sid, "doi": doi, "license_id": paper.license_id,
                 "n_figures": len(figures), "n_curves": len(curves), "n_extracted_images": n_images,
-                "pdf_status": pdf_status,
+                "pdf_status": pdf_status, "subset": paper.subset.value,
             }
         )
         all_figures.extend(
             {"figure_id": f.figure_id, "paper_id": f.paper_id,
-             "figure_reference": f.figure_reference, "split": f.split.value}
+             "figure_reference": f.figure_reference, "split": f.split.value,
+             "subset": f.subset.value}
             for f in figures
         )
         all_curves.extend(
@@ -269,6 +319,7 @@ def main() -> None:
 
     summary = {
         "redistributable_papers": len(redistributable),
+        "redistributable_papers_by_subset": by_subset,
         "papers_with_ground_truth": len({f["paper_id"] for f in all_figures}),
         "n_figure_records": len(all_figures),
         "n_ground_truth_curves": len(all_curves),

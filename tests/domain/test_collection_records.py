@@ -48,3 +48,39 @@ def test_records_are_immutable():
     )
     with pytest.raises(AttributeError):
         paper.title = "mutated"  # type: ignore[misc]
+
+
+# --- design §7.88.1: subset on paper and figure records ----------------------------
+
+
+def test_records_default_to_core_subset():
+    from real_chart_bench.domain.dataset_subset import DatasetSubset
+
+    paper = PaperRecord(
+        paper_id="1", doi="10.1/x", title="t",
+        license_status=LicenseStatus.REDISTRIBUTABLE, license_id="cc-by",
+    )
+    figure = FigureRecord(figure_id="5190", paper_id="1", figure_reference="2(a)")
+    assert paper.subset is DatasetSubset.CORE
+    assert figure.subset is DatasetSubset.CORE
+
+
+def test_nc_paper_record():
+    from real_chart_bench.domain.dataset_subset import DatasetSubset
+
+    paper = PaperRecord(
+        paper_id="1", doi="10.1/x", title="t",
+        license_status=LicenseStatus.REDISTRIBUTABLE, license_id="CC BY-NC 4.0",
+        subset=DatasetSubset.NC,
+    )
+    assert paper.subset is DatasetSubset.NC
+
+
+def test_paper_subset_must_follow_its_licence():
+    import pytest
+
+    with pytest.raises(ValueError, match="subset"):
+        PaperRecord(
+            paper_id="1", doi="10.1/x", title="t",
+            license_status=LicenseStatus.REDISTRIBUTABLE, license_id="cc-by-nc",
+        )

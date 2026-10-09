@@ -16,6 +16,11 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
+from real_chart_bench.domain.dataset_subset import (  # noqa: E402
+    DatasetSubset,
+    strip_subset_prefix,
+    subset_of_dataset_version,
+)
 from real_chart_bench.usecase.build_leaderboard import (  # noqa: E402
     build_dense_marker_rows,
     build_leaderboard_rows,
@@ -400,6 +405,13 @@ def _cost_cells(result: dict) -> str:
     return sec_cell + tok_cell
 
 
+# design 7.88.1: the nc (CC BY-NC / BY-NC-SA) figures are a separate set, scored
+# and ranked on their own; their numbers are never pooled with the core set's
+_NC_SECTION_LABEL = (
+    "<strong>NC subset</strong> &mdash; CC BY-NC / BY-NC-SA figures, non-commercial use "
+    "only; a separate figure set, not comparable to the core sections above"
+)
+
 _CONDITION_LABELS = {
     "-noaxis": "Main condition 1 &mdash; fully automatic (no axis information)",
     "-pixcal": "Main condition 2 &mdash; a person calibrates the axes (two ticks per axis)",
@@ -423,16 +435,21 @@ def _section_heading(dataset_version: str | None, group_rows: list) -> str:
     else:
         figures_text = "unknown figure count"
     condition = ""
+    # design 7.88.1: an nc section is labelled as such; its condition is read
+    # off the version without the nc- prefix
+    base_version = strip_subset_prefix(dataset_version)
     if (
-        dataset_version
-        and dataset_version.startswith("v0-eval-pilot-")
-        and ("-llm-subset-" not in dataset_version)
+        base_version
+        and base_version.startswith("v0-eval-pilot-")
+        and ("-llm-subset-" not in base_version)
     ):
         for suffix, text in _CONDITION_LABELS.items():
-            if dataset_version.endswith(suffix):
+            if base_version.endswith(suffix):
                 condition = f"{text}<br>"
-        if not condition and dataset_version.rsplit("-", 1)[-1].startswith("n"):
+        if not condition and base_version.rsplit("-", 1)[-1].startswith("n"):
             condition = "Appendix &mdash; axis value ranges given<br>"
+    if subset_of_dataset_version(dataset_version) is DatasetSubset.NC:
+        condition = f"{_NC_SECTION_LABEL}<br>{condition}"
     return f'{condition}{label} <span class="figure-count">&mdash; {figures_text}</span>'
 
 
