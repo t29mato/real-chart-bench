@@ -22,10 +22,10 @@
   - 量子化: Qwen3.5-9B の bf16 / FP8 / 8bit / 4bit(RTX 4090、v3)
   - 合成図で学習したチャート専用モデル: DePlot / TinyChart / UniChart / Granite Vision / ChartGemma(主条件1)。TinyChart と DePlot は論文の値を再現
   - 合成図(PlotQA dot_line 100図): チャート専用モデル5種、Qwen3.5-9B、Claude 4モデル
-  - LineFormer: ローカル RTX 4090、人の目盛校正で値に直して点 F1 0.033(再現率 0.863)
+  - LineFormer: ローカル RTX 4090、人の目盛校正で値に直して点 F1 0.033(再現率 0.858)
   - 実行時間とトークン量: 各結果ファイルの `run_cost`(Claude の主条件1と LineFormer は記録なし)
   - 学習を使わない CV は測定対象から外した(design §7.82 追記)
-  - 主条件2(人が軸を校正)の2段階版(Qwen3.5-9B、design §7.79): 画素座標 0.017、0〜1000 座標 0.031
+  - 主条件2(人が軸を校正)の2段階版(Qwen3.5-9B、design §7.79): 画素座標 0.016、0〜1000 座標 0.032
   - ローカルのエージェント(Codex CLI + Qwen3.8-27B Q4、RTX 4090、主条件2のみ): 点 F1 0.913、91図中86図に回答、1図あたり約17分(6.3)
 - CHART-Infographics 2024 の scatter 582図(4.8): Claude Opus 5.5 / Fable 5.1 / Sonnet 5.5、GPT-6.1-Sol を完全自動・prompt v2 で。
   公式の総合スコア 0.729〜0.757、点 F1 0.845〜0.887。失点の内訳を自動分析し、正解データの書き方に合わせた prompt v3 は採らなかった(4.8.3、7.5)
@@ -125,7 +125,7 @@ CHART-Infographics を運営しているのは **University at Buffalo(CSE)の S
 実際の差分は、分野ではなく次の3点にある。
 
 1. **正解データの出所.** CHART-Infographics はベンチマークのために注釈者を雇って作る。本研究は Starrydata という独立した専門家のデジタイズ DB との照合で得る(2.2)
-2. **系列の網羅.** 本研究は採点対象の全94図で全系列の点が揃っている。CHART-Infographics はデータ注釈まで到達した図が一部で、scatter-line は0図(上記)
+2. **系列の網羅.** 本研究は採点対象の全91図で全系列の点が揃っている。CHART-Infographics はデータ注釈まで到達した図が一部で、scatter-line は0図(上記)
 3. **評価の粒度.** 本研究は点単位の F1(3.2)、CHART-Infographics はしきい値なしの割り当てコスト(3.5)
 
 同じ土俵で competitor になるより、互いの欠けを補う関係として扱うほうが正確である。

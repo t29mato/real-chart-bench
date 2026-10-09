@@ -33,7 +33,10 @@ MODELS: dict[str, tuple[str, str]] = {
     "Gemma 4 31B(8bit)": ("gemma-4-31b-8bit-v0-local-v3-noaxis", ""),
     "Qwen3.8-27B(8bit)": ("qwen3.8-27b-8bit-v0-local-v3-noaxis", ""),
     "Qwen3.8-27B Q4(Codex CLI + Ollama)": ("", "qwen3.8-27b-v0-codex-local-pixcal"),
-    "Qwen3.5-9B(bf16)": ("qwen3.5-9b-bf16-v0-local-cuda-v3-noaxis", ""),
+    "Qwen3.5-9B(bf16)": (
+        "qwen3.5-9b-bf16-v0-local-cuda-v3-noaxis",
+        "qwen3.5-9b-bf16-v0-local-cuda-pixcal",
+    ),
     "Qwen3.5-9B(8bit)": ("qwen3.5-9b-8bit-v0-local-v3-noaxis", ""),
     "GPT-5.5": ("gpt-5.5-v0-codex-noaxis", "gpt-5.5-v0-codex-pixcal"),
     "Granite Vision 4.1": ("granite-vision-noaxis", ""),
@@ -42,11 +45,53 @@ MODELS: dict[str, tuple[str, str]] = {
     "TinyChart-3B-768": ("tinychart-noaxis", ""),
     "ChartGemma": ("chartgemma-noaxis", ""),
     "Claude Haiku 4.5": ("claude-haiku-4-5-v0-r3-noaxis", "claude-haiku-4-5-v0-pixcal"),
+    "LineFormer(事前学習)+ 目盛校正": ("", "lineformer-pretrained-tickcal"),
+    "Qwen3.5-9B(bf16)、2段階・0〜1000 座標": ("", "qwen3.5-9b-bf16-v0-local-cuda-pixpts-norm"),
+    "Qwen3.5-9B(bf16)、2段階・画素座標": ("", "qwen3.5-9b-bf16-v0-local-cuda-pixpts-px"),
 }
 
-# 列の位置 -> 指標。表は 手法 | 実行 | 点F1 | 再現率 | 適合率 | 位置誤差 | ...
-COLUMNS = {2: "point_f1", 3: "point_recall", 4: "point_precision", 5: "point_loc_error"}
+# 列の位置 -> 指標。表は 手法 | 実行 | 点F1 | 再現率 | 適合率 | 位置誤差 | 秒/図 | トークン/図
+COLUMNS = {
+    2: "point_f1",
+    3: "point_recall",
+    4: "point_precision",
+    5: "point_loc_error",
+    6: "seconds_per_figure",
+    7: "tokens_per_figure",
+}
 ROW = re.compile(r"^\| ([^|]+?) \| ([^|]+?) \|(.+)$")
+
+
+def per_figure_cost(data: dict) -> dict:
+    """秒/図とトークン/図。
+
+    どちらも `run_cost` の合計を**採点した図数**で割る(2026-10-09 から全行で同じ規則)。
+    図数は結果ファイルの `n_figures`(なければ `per_figure` の長さ)。
+    トークンは提供元ごとの数え方のまま: Codex は `tokens.total_tokens`、
+    Claude Code は `subagent_tokens`、ローカルは `prompt_tokens + generation_tokens`。
+    記録がない量は返さない(表の「記録なし」を推測で埋めない)。
+    """
+    rc = data.get("run_cost") or {}
+    if not rc.get("recorded"):
+        return {}
+    n = data.get("n_figures") or len(data.get("per_figure") or [])
+    if not n:
+        return {}
+    out = {}
+    if rc.get("seconds_total") is not None:
+        out["seconds_per_figure"] = rc["seconds_total"] / n
+    tokens = rc.get("tokens")
+    if isinstance(tokens, dict) and tokens.get("total_tokens") is not None:
+        total = tokens["total_tokens"]
+    elif rc.get("subagent_tokens") is not None:
+        total = rc["subagent_tokens"]
+    elif rc.get("prompt_tokens") is not None and rc.get("generation_tokens") is not None:
+        total = rc["prompt_tokens"] + rc["generation_tokens"]
+    else:
+        total = None
+    if total is not None:
+        out["tokens_per_figure"] = total / n
+    return out
 
 
 def current(stem: str) -> dict | None:
@@ -59,6 +104,7 @@ def current(stem: str) -> dict | None:
         return None
     return {
         **macro,
+        **per_figure_cost(data),
         "dataset_version": data.get("dataset_version", ""),
         "n_point_figures": (data.get("point_metrics") or {}).get("n_figures"),
     }
@@ -110,15 +156,23 @@ def main() -> None:
             cell = cells[cell_index]
             printed = cell.replace("**", "").strip()
             try:
-                written = float(printed)
+                written = float(printed.replace(",", ""))
             except ValueError:
+                continue
+            if metric not in values:
+                drift.append(f"  {name}({where}) {metric}: 論文 {printed} → 結果ファイルに記録なし")
                 continue
             digits = len(printed.split(".")[1]) if "." in printed else 0
             now = round(values[metric], digits)
             if abs(written - now) < 10**-digits / 2:
                 continue
-            drift.append(f"  {name}({where}) {metric}: 論文 {printed} → いま {now:.{digits}f}")
-            cells[cell_index] = cell.replace(printed, f"{now:.{digits}f}")
+            shown = (
+                f"{now:,.{digits}f}"
+                if "," in printed or metric == "tokens_per_figure"
+                else f"{now:.{digits}f}"
+            )
+            drift.append(f"  {name}({where}) {metric}: 論文 {printed} → いま {shown}")
+            cells[cell_index] = cell.replace(printed, shown)
             changed = True
         if changed and args.apply:
             lines[row_index] = "|".join(cells) + "\n"
