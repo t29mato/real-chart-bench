@@ -32,6 +32,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from real_chart_bench.usecase.pairing_threshold_validation import (  # noqa: E402
     AMBIGUOUS,
     CORRECT,
+    COVERED,
+    GROUP_CORRECT,
     SIBLING,
     UNLABELLED,
     WRONG,
@@ -50,6 +52,7 @@ CURVES_CSV = (
 RAW = ROOT / "build/pairing_validation_raw.json"
 REGISTRY = ROOT / "data/verified_pairs/registry.json"
 BOTH_Y = False  # set by --both-y-sides (design 12.8)
+SIBLINGS = False  # set by --sibling-groups (design 12.9)
 MIN_IMAGE_PX = 200  # same filters as scripts/collect/generate_pairing_candidates.py
 MAX_DARK_SHARE = 0.4
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".img", ".gif", ".bmp", ".webp", ".tif", ".tiff"}
@@ -58,6 +61,7 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".img", ".gif", ".bmp", ".webp", ".ti
 def _work(job):
     from real_chart_bench.adapter.auto_axis_calibration import calibrate_frames, load_rgb
     from real_chart_bench.adapter.pairing_scorer import ink_mask, score_figure_on_frame
+    from real_chart_bench.adapter.starrydata_figure_gt import sibling_groups_of
     from real_chart_bench.usecase.pairing_candidates import FigureInfo, FrameInfo, decide_paper
 
     paper_id, images, figures = job  # images: [(key, abs path)]
@@ -89,7 +93,9 @@ def _work(job):
             skipped.append([key, "no_frame"])
     infos = [FigureInfo(g, fig.figure_name, "n/a", tuple(c.curve_id for c in fig.curves))
              for g, fig in figures.items()]
-    records = decide_paper(paper_id, frames, infos, scored, rule="validation")
+    groups = sibling_groups_of(figures) if SIBLINGS else []
+    records = decide_paper(paper_id, frames, infos, scored, rule="validation",
+                           sibling_groups=groups)
     return paper_id, {
         "records": records,
         "pairs": pairs,
@@ -117,8 +123,9 @@ def _local_images(paper: str, roots: dict[str, pathlib.Path]) -> list[tuple[str,
 
 
 def collect(args) -> None:
-    global BOTH_Y
+    global BOTH_Y, SIBLINGS
     BOTH_Y = args.both_y_sides
+    SIBLINGS = args.sibling_groups
     from real_chart_bench.adapter.starrydata_figure_gt import load_figure_gt
 
     registry = json.loads(REGISTRY.read_text())
@@ -198,6 +205,14 @@ def analyse(args) -> None:
                     key, r["image"], verified=verified, rejected=rejected, owners=owners,
                     reference=r["figure_reference"], owner_references=owner_refs,
                 )
+                # the proposal stands for its sibling group: a verified member
+                # owning this image makes it right (not a separate sibling)
+                if outcome == SIBLING and r.get("siblings"):
+                    members = {c.split("-", 1)[1] for c in r["siblings"]}
+                    if owners.get(r["image"], frozenset()) & members:
+                        outcome = GROUP_CORRECT
+            elif r["decision"] == "sibling_of" and key in verified:
+                outcome = COVERED if verified[key] == r["image"] else WRONG
             rows.append((key, r, outcome))
 
     held = heldout_papers({k[0] for k in verified})
@@ -209,20 +224,25 @@ def analyse(args) -> None:
         for key, r, outcome in rows:
             if key in keys:
                 lane = r["decision"].removeprefix("proposed_")
+                if lane == "sibling_of":
+                    lane = "sibling_of"
                 by[lane][outcome or r.get("reason")] += 1
-        print("| decision | n | correct | wrong | ambiguous | sibling | other |")
-        print("|---|---|---|---|---|---|---|")
-        for lane in ("high", "review", "unassigned"):
+        print("| decision | n | correct | wrong | ambiguous | sibling | group_correct | covered "
+              "| other |")
+        print("|---|---|---|---|---|---|---|---|---|")
+        for lane in ("high", "review", "sibling_of", "unassigned"):
             c = by[lane]
             n = sum(c.values())
             other = {k: v for k, v in c.items()
-                     if k not in (CORRECT, WRONG, AMBIGUOUS, SIBLING)}
+                     if k not in (CORRECT, WRONG, AMBIGUOUS, SIBLING, GROUP_CORRECT, COVERED)}
             print(f"| {lane} | {n} | {c[CORRECT]} | {c[WRONG]} | {c[AMBIGUOUS]} | "
-                  f"{c[SIBLING]} | {other or ''} |")
+                  f"{c[SIBLING]} | {c[GROUP_CORRECT]} | {c[COVERED]} | {other or ''} |")
 
     # every proposal about a labelled situation (verified, rejected or stealing an owned image)
     items = [(key, r, o) for key, r, o in rows if o is not None]
-    labelled = [LabelledAssignment(o, r["S"], r["M"], r["contrast"]) for _, r, o in items]
+    labelled = [LabelledAssignment(CORRECT if o == GROUP_CORRECT else o, r["S"], r["M"],
+                                   r["contrast"])
+                for _, r, o in items if o != COVERED]
     n_ev = len(evaluable)
     print(f"\nproposals: {len(items)} (correct {sum(o == CORRECT for *_, o in items)}, "
           f"wrong {sum(o == WRONG for *_, o in items)}, "
@@ -319,7 +339,7 @@ def analyse(args) -> None:
     print("\n## Why verified figures were not correctly proposed\n")
     why = Counter()
     for key, r, o in rows:
-        if key in evaluable and o != CORRECT:
+        if key in evaluable and o not in (CORRECT, GROUP_CORRECT, COVERED):
             why[o or r.get("reason")] += 1
     print(dict(why))
 
@@ -331,6 +351,8 @@ def main() -> None:
     c.add_argument("--extra-root", action="append", default=[],
                    help="LABEL=DIR holding <paper_id>/<images>; repeatable")
     c.add_argument("--workers", type=int, default=8)
+    c.add_argument("--sibling-groups", action="store_true",
+                   help="propose a sibling digitization group once (design 12.9)")
     c.add_argument("--both-y-sides", action="store_true",
                    help="keep left and right y calibrations as separate frames (design 12.8)")
     c.add_argument("--raw", type=pathlib.Path, default=RAW)

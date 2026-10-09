@@ -3,7 +3,7 @@ from __future__ import annotations
 import gzip
 import json
 
-from real_chart_bench.adapter.starrydata_figure_gt import load_figure_gt
+from real_chart_bench.adapter.starrydata_figure_gt import load_figure_gt, sibling_groups_of
 
 HEADER = "SID,DOI,composition,sample_id,figure_id,figure_name,prop_x,prop_y,unit_x,unit_y,x,y\n"
 
@@ -62,3 +62,20 @@ def test_malformed_or_empty_rows_are_skipped(tmp_path):
     ])
     fig = load_figure_gt(path, {"1"})["1"]["10"]
     assert len(fig.curves) == 1
+
+
+def test_sibling_groups_of_finds_sigma_and_log_sigma_records(tmp_path):
+    xs = [0.0009, 0.001, 0.0011]
+    sigma = [100.0, 50.0, 10.0]
+    log = [100 * __import__("math").log10(v) - 200 for v in sigma]
+    path = _write(tmp_path, [
+        _row("1", "10", "8a sigma", "Inverse temperature", "Electrical conductivity",
+             "K^(-1)", "S*m^(-1)", xs, sigma),
+        _row("1", "11", "8a", "Inverse temperature", "log(Electrical conductivity)",
+             "K^(-1)", "S*m^(-1)", xs, log),
+        _row("1", "12", "9", "Inverse temperature", "Seebeck coefficient", "K^(-1)", "V*K^(-1)",
+             xs, [1e-6, 2e-6, 3e-6]),
+    ])
+    figures = load_figure_gt(path, ["1"])["1"]
+    assert sibling_groups_of(figures) == [("10", "11")]
+    assert sibling_groups_of({}) == []

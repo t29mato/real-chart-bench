@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from real_chart_bench.adapter.starrydata_csv import iter_curve_rows
+from real_chart_bench.domain.pairing_siblings import SiblingFigure, sibling_groups
 
 
 @dataclass(frozen=True)
@@ -90,3 +91,18 @@ def load_figure_gt(
             n_other_axis_curves=len(rows) - len(kept),
         )
     return dict(out)
+
+
+def sibling_groups_of(
+    figures: dict[str, FigureGt], references: dict[str, str] | None = None
+) -> list[tuple[str, ...]]:
+    """Groups of one paper's figures that are the same plot digitized twice
+    (domain/pairing_siblings, design pairing-automation.md 12.9). `references`
+    overrides each figure's printed reference (default: Starrydata's figure_name)."""
+    return sibling_groups([
+        SiblingFigure(
+            f.paper_id, fid, (references or {}).get(fid, f.figure_name), f.prop_x, f.unit_x,
+            f.prop_y, f.unit_y, tuple((c.xs, c.ys) for c in f.curves),
+        )
+        for fid, f in figures.items()
+    ])

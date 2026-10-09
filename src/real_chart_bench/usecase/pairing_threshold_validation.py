@@ -25,6 +25,10 @@ AMBIGUOUS = "ambiguous"  # a crop versus its (possible) source image: cannot be 
 SIBLING = "sibling"  # an unverified Starrydata figure of the same reference as the image's owner
 # (the same plot digitized a second time, e.g. log10(sigma) and sigma): the image does show it,
 # but adopting it would duplicate the verified figure
+# a proposal for a sibling group whose verified member owns the image
+GROUP_CORRECT = "group_correct"
+# a verified figure recorded as `sibling_of` the proposal for its image
+COVERED = "covered"
 UNLABELLED = "unlabelled"  # nothing in the registry decides it
 
 _EPS = 1e-9

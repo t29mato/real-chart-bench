@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from real_chart_bench.adapter.auto_axis_calibration import ImageCalibration
@@ -56,6 +58,25 @@ def test_values_far_outside_the_frame_in_every_known_form_give_none():
         "f", _figure([1e9, 2e9], [1e9, 2e9]), _cal(), ink_mask(_image_with_markers(DRAWN))
     )
     assert scored is None
+
+
+def test_a_plain_figure_on_a_linear_axis_matches_the_printed_axis_scale():
+    ink = ink_mask(_image_with_markers(DRAWN))
+    scored = score_figure_on_frame("f", _figure(XS, YS), _cal(), ink)
+    assert scored.matches_axis_scale is True
+
+
+def test_a_log_quantity_on_a_log_axis_does_not_match_the_printed_axis_scale():
+    # y printed on a decade axis: 1..1000 over px 250..50; stored log(Y) = 10..900
+    ys = [10, 100, 300, 600, 900]
+    y_fit = AxisFit("log", -200.0 / 3, 250.0, (), 0.0)
+    cal = ImageCalibration(FRAME, AxisFit("linear", 2.0, 50.0, (), 0.0), y_fit, 1)
+    px = [(50 + 2 * x, 250 - 200.0 / 3 * math.log10(y)) for x, y in zip(XS, ys, strict=True)]
+    figure = FigureGt("1", "1", "1", "X", "1", "log(Y)", "1",
+                      (CurveGt("1-1-0", "A", tuple(XS), tuple(ys)),), 0)
+    scored = score_figure_on_frame("f", figure, cal, ink_mask(_image_with_markers(px)))
+    assert scored is not None
+    assert scored.matches_axis_scale is False
 
 
 def test_ink_mask_ignores_white_and_keeps_dark_and_coloured_pixels():

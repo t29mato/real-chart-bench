@@ -30,6 +30,10 @@ class ScoredProjection:
     x_transform: str
     y_transform: str
     points_px: list  # per curve: [(x, y), ...] in image pixels
+    # whether the figure's quantity is drawn as stored (design pairing-automation.md 12.9):
+    # no log10 conversion, and a log(...) quantity only on a linear axis. Breaks the tie
+    # between sibling digitizations (sigma / log sigma) of the same plot.
+    matches_axis_scale: bool = False
 
 
 def ink_mask(rgb: np.ndarray) -> np.ndarray:
@@ -64,6 +68,11 @@ def score_figure_on_frame(
         null=projection.null,
         inside=projection.inside,
     )
+    log_quantity = figure.prop_y.strip().lower().startswith("log")
+    matches = projection.y_transform.kind != "log10" and not (
+        log_quantity and cal.y_fit.scale == "log"
+    )
     return ScoredProjection(
-        pair, projection.x_transform.name, projection.y_transform.name, projection.points_px
+        pair, projection.x_transform.name, projection.y_transform.name, projection.points_px,
+        matches,
     )

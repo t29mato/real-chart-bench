@@ -36,7 +36,10 @@ from real_chart_bench.adapter.auto_axis_calibration import (  # noqa: E402
     load_rgb,
 )
 from real_chart_bench.adapter.pairing_scorer import ink_mask, score_figure_on_frame  # noqa: E402
-from real_chart_bench.adapter.starrydata_figure_gt import load_figure_gt  # noqa: E402
+from real_chart_bench.adapter.starrydata_figure_gt import (  # noqa: E402
+    load_figure_gt,
+    sibling_groups_of,
+)
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.usecase.pairing_candidates import (  # noqa: E402
     FigureInfo,
@@ -50,6 +53,7 @@ WORK = pathlib.Path.home() / ".cache/real-chart-bench/starrydata-work"
 CURVES_CSV = WORK / "ThermoelectricMaterials_curves.csv.gz"
 SRC_RAW = "data_raw_refetch"
 SRC_WORK = "starrydata_work"
+SIBLINGS = False  # --sibling-groups: propose a sibling digitization group once (design 12.9)
 BOTH_Y = False  # --both-y-sides: keep left and right y calibrations (design 12.8)
 MIN_IMAGE_PX = 200
 MAX_DARK_SHARE = 0.4  # a photograph or micrograph
@@ -78,7 +82,9 @@ def _work(job):
                     overlays_src[(fid, g)] = s.points_px
     infos = [FigureInfo(g, figure_meta[g]["figure_reference"], figure_meta[g]["split"],
                         tuple(c.curve_id for c in fig.curves)) for g, fig in figures.items()]
-    records = decide_paper(paper_id, frames, infos, scored, rule=rule)
+    groups = (sibling_groups_of(figures, {g: figure_meta[g]["figure_reference"] for g in figures})
+              if SIBLINGS else [])
+    records = decide_paper(paper_id, frames, infos, scored, rule=rule, sibling_groups=groups)
     overlays = {}
     for r in records:
         if r["decision"].startswith("proposed"):
@@ -105,11 +111,15 @@ def main() -> None:
                     help="re-decide every paper with the current rule and replace the file "
                          "(default: incremental, existing papers are never re-decided). Only "
                          "while no human verdict refers to the records.")
+    ap.add_argument("--sibling-groups", action="store_true",
+                    help="a plot digitized twice (sigma / log sigma) is proposed once; the other "
+                         "record becomes `sibling_of` (design 12.9)")
     ap.add_argument("--both-y-sides", action="store_true",
                     help="keep left and right y calibrations as separate frames (design 12.8)")
     args = ap.parse_args()
-    global BOTH_Y
+    global BOTH_Y, SIBLINGS
     BOTH_Y = args.both_y_sides
+    SIBLINGS = args.sibling_groups
 
     prev = json.loads(args.out.read_text()) if args.out.exists() else {"candidates": []}
     old_papers = {r["paper_id"] for r in prev["candidates"]}

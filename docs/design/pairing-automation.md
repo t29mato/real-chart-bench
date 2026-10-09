@@ -386,3 +386,33 @@ high 97→101, review 50→54, unassigned 193→185(no_eligible 133→124, no_ca
 二重 y は 新規提案 +12、high→review 3(競合枠が増えて M が下がる)、提案画像の変更0、提案の消失0。
 追加の12件は人手未確認(検証集合で精度を裏付けられない)。レビュー画面は全件を人が見る前提なので採用したが、
 精度の根拠は無い点を明記する。
+
+### 12.9 兄弟(同一プロットの二重デジタイズ)をグループで扱う(2026-10-10)
+
+問題: Starrydata は同じ印刷プロットを σ と log(σ)(保存値は 100·log10σ−200 という単位変換の産物)、あるいは同一曲線を
+2つの図レコードとして持つことがある。log 版は射影できず(shift ±6 に収まらない)、σ 版だけが画像に割り当たる。
+検証実験では「正解画像に別図番号が付く sibling 6件」と、人手検証済み log 版 6図の未割当(no_eligible_frame)として現れた。
+
+```mermaid
+flowchart LR
+  G[Starrydata 図] --> D[domain/pairing_siblings.sibling_groups]
+  D -->|グループ| C[decide_paper: グループを1つの図として Hungarian]
+  C --> P[primary: proposed_*, siblings=[…]]
+  C --> S[他のメンバー: decision=sibling_of, sibling_of=primary]
+  P --> R[レビュー画面: 1タイル]
+```
+
+**検出(`domain/pairing_siblings.are_siblings`、保守的)**: 同一論文・同一正規化図番号("8a sigma"≈"8a")・同一 x 量/単位・同一 y 量
+(`log(…)` 接頭辞は無視。同じく温度で単調増加する σ と κ は別量なので兄弟にしない)、かつ小さい側の曲線の50%以上に、
+x 値が一致する相手曲線があり、y が(a)一致するか(b)片方だけが log 量のとき3点以上で厳密単調関係にある。グループは推移閉包。
+実データ走査(本番候補89論文+検証済み論文): 12グループ=既知の6組+46278 の log/σ 6組。誤検出なし。
+
+**割当(`decide_paper(sibling_groups=…)`)**: グループは1つの図として扱う(同じ枠を二重に取り合わず、互いが競合として M を潰さない)。
+枠ごとに最も良く射影するメンバー(S 最大、同点なら印刷軸の尺度に合う方 = `ScoredProjection.matches_axis_scale`
+〔log10 変換を要さず、log 量は線形軸のとき〕、次に小さい id)を primary とし、primary は通常の `proposed_*` 記録
+(+`siblings: [candidate_id…]`)。他メンバーは `decision: "sibling_of"`, `sibling_of: <primary の candidate_id>`, `image`, `frame_id` のみ
+(独立したペアリングではなく、レビュー画面にも出ない)。グループのどのメンバーも適格な枠が無いときは各自の `unassigned` 理由のまま。
+グループ指定が無い場合の挙動はバイト単位で従来と同じ。
+
+**評価の数え方**: primary の提案が、検証済みメンバーの所有画像を指すとき `group_correct`、その検証済みメンバーの記録は
+`covered`(sibling_of で画像が一致)。再現率 = (correct + covered) / 検証済み図数。
