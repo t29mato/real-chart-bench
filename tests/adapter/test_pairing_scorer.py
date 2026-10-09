@@ -35,7 +35,8 @@ DRAWN = [(50 + 2 * x, 250 - 2 * y) for x, y in zip(XS, YS, strict=True)]
 
 
 def test_ground_truth_drawn_in_the_frame_scores_high_with_low_null():
-    scored = score_figure_on_frame("f", _figure(XS, YS), _cal(), ink_mask(_image_with_markers(DRAWN)))
+    ink = ink_mask(_image_with_markers(DRAWN))
+    scored = score_figure_on_frame("f", _figure(XS, YS), _cal(), ink)
     assert scored is not None
     assert scored.pair.hit >= 0.99
     assert scored.pair.null < 0.3
