@@ -53,5 +53,5 @@ def iter_curve_rows(csv_gz_path: pathlib.Path) -> Iterator[dict[str, str]]:
     """Reads a Starrydata ``*_curves.csv.gz`` file, yielding raw row dicts
     (before parse_curve_row translates them). Kept separate from parsing so
     tests can exercise parse_curve_row without touching the filesystem."""
-    with gzip.open(csv_gz_path, mode="rt", newline="", encoding="utf-8") as f:
+    with gzip.open(csv_gz_path, mode="rt", newline="", encoding="utf-8-sig") as f:
         yield from csv.DictReader(f)

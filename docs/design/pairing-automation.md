@@ -245,3 +245,50 @@ C7 は、**同一物理量・同一軸レンジの2パネル**(例: 10939 の Fi
   ヒューリスティクスは過去に例外なくバグを生んでいる。
 - **系列ラベルと曲線の対応付け**: ペアリングには不要。
 - **Starrydata側の単位タグの修正**: C1で検出して報告するに留め、上流データを書き換えない。
+
+---
+
+## 12. 段階1(候補生成と一括レビュー画面)の実装メモ(2026-10-09、レビュー待ち)
+
+対象: §7.87 で再取得した CC BY 46論文 / 721画像 / 図170(public 139)。**候補とレビュー画面を作るだけ**で、
+`registry.json`・`ground_truth.json`・`verified_pairs/` は触らない。ネットワークアクセスなし
+(Starrydata 曲線は `~/.cache/real-chart-bench/starrydata-work/` のローカルCSV)。
+
+### 12.1 パイプライン
+
+```mermaid
+flowchart LR
+  I[data/raw/images/&lt;paper&gt;/*] --> F[枠検出 + 自動軸校正<br/>auto_axis_calibration.calibrate_frames<br/>Tesseract, LLM不使用]
+  G[Starrydata curves CSV<br/>starrydata_figure_gt] --> S
+  F --> S[pairing_scorer: best_projection<br/>S=hit, null, contrast]
+  S --> H[domain/pairing_assignment<br/>Hungarian + ダミー列]
+  H --> C[data/manifest/v0/pairing_candidates.json]
+  C --> R[scripts/eval/generate_pairing_review.py<br/>build/pairing_review.html]
+```
+
+### 12.2 §5/§6 からの逸脱(明示)
+
+- **C1(次元ゲート)は数値形のみ**: 印刷軸の単位文字列は LLM 読みが無いと得られないため、
+  `candidate_transforms`(スケール・K→℃・1000/T・log10)のうち、点が枠内に収まる形が無ければ
+  「別の量」として候補から落とす。`unit_conversion` による次元ゲートは未使用。
+- **C2(参照文字列)・C5(系列数)は未使用**(C5 は LLM の系列数読みが要る)。C3/C4/C6 は `best_projection` の
+  枠内率・被覆の判定で代替。
+- **C7 = hit(S)**。§5 の「決着させる実験」は未実施。よって閾値は暫定(`pairing_assignment.py` の定数)。
+- 採用レーンは作らない。**全候補を人が見る**(§7 バーンイン)。レーン `high`(S≥0.80, M≥0.30, contrast≥0.35)は
+  レビュー順を決めるだけ。`MIN_HIT=0.5`, `MIN_CONTRAST=0.2` 未満は `unassigned` として記録のみ(レビューに出さない)。
+
+### 12.3 割当と判定
+
+論文ごとに 枠×図 の Hungarian(未割当ダミー列付き)。1図=1枠、1枠=1図。図は Starrydata の
+最頻 (prop_x, unit_x, prop_y, unit_y) の曲線だけを投影し、他は件数だけ記録。判定値:
+`proposed_high` / `proposed_review` / `unassigned`(理由: `no_calibrated_frame` / `no_eligible_frame` / `lost_assignment`)。
+同一図が埋込画像とページ描画に二重に写る場合、互いが競合になり M が小さくなる(レビュー側に回るだけで害はない)。
+1論文3図の上限(scaling §1.1)は強制せず `paper_rank` を記録する。
+
+### 12.4 レビュー画面
+
+1枚のHTML(画像は data: URI JPEG)、グリッド、問いは1つ「点は曲線の上に乗っているか」(はい/いいえ/判断不能)。
+判定は JSON で書き出し、`shown_sha256`(見せた絵のハッシュ)に紐付ける(scaling §4.4)。Artifact db 連携は未実装。
+**画像は public 分割の図のみ埋め込む**(held_out は候補レコードのみ、画像なし)。HTML は `build/`(gitignore)。
+ライセンスは論文単位の CC BY(OpenAlex + 今日の Unpaywall)であり、図単位の目視確認(§11)は未了 —
+レコードに `licence_figure_verified: false` を置く。
