@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 from torch.utils.data import Dataset
 
 REPO = Path(__file__).resolve().parents[3]
@@ -136,11 +136,13 @@ def legend_boxes(lab: dict) -> list | None:
     return None
 
 
-def _augment(im: Image.Image, rng: random.Random) -> Image.Image:
+def _augment(im: Image.Image, rng: random.Random, invert_p: float = 0.0) -> Image.Image:
     if rng.random() < 0.5:  # global hue rotation keeps series colours distinct
         hsv = np.array(im.convert("HSV"))
         hsv[..., 0] = (hsv[..., 0].astype(int) + rng.randint(0, 255)) % 256
         im = Image.fromarray(hsv, "HSV").convert("RGB")
+    if invert_p and rng.random() < invert_p:  # white-on-black figures (design 方式A v2, 47534)
+        im = ImageOps.invert(im)
     if rng.random() < 0.3:
         im = im.filter(ImageFilter.GaussianBlur(rng.uniform(0.3, 1.0)))
     if rng.random() < 0.5:
@@ -169,12 +171,14 @@ class CropDataset(Dataset):
         seed: int = 0,
         max_points: int = 1024,
         partial_neg_weight: float = 1.0,
+        invert_p: float = 0.0,
     ):
         self.labels = labels
         self.crop, self.long_side, self.scale_jitter = crop, long_side, scale_jitter
         self.sigma, self.require_marker = sigma, require_marker
         self.seed, self.max_points = seed, max_points
         self.partial_neg_weight = partial_neg_weight
+        self.invert_p = invert_p
         self.epoch = 0
 
     def __len__(self):
@@ -189,7 +193,7 @@ class CropDataset(Dataset):
         lb = Letterbox.fit(w, h, long_side=ls, stride=STRIDE)
         nw, nh = max(1, round(w * lb.scale)), max(1, round(h * lb.scale))
         im = im.resize((nw, nh), Image.BILINEAR)
-        im = _augment(im, rng)
+        im = _augment(im, rng, self.invert_p)
         c = self.crop
         ox = rng.randint(0, max(0, nw - c))
         oy = rng.randint(0, max(0, nh - c))

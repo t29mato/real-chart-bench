@@ -928,12 +928,15 @@ def _local_run_block(
             "peak_threshold": env.get("peak_threshold"),
             "group_threshold": env.get("group_threshold"),
             "long_side": env.get("long_side"),
-            "hardware": f"{env['gpu']} (24GB), Linux"
-            if env.get("gpu")
+            "hardware": LOCAL_HARDWARE + ", macOS (MPS)" if env.get("device") == "mps"
+            else f"{env['gpu']} (24GB), Linux" if env.get("gpu")
             else f"CPU ({env.get('cpu_threads')} threads), Linux",
             "engine": f"torch {env['torch']}",
-            "concurrent_with_other_models": not sequential,
-            **({"seconds_per_figure": _seconds_stats(run, key, scoreable)} if sequential else {}),
+            # MPS runs shared the GPU with a training job (env concurrent_with_training)
+            "concurrent_with_other_models": not sequential
+            or bool(env.get("concurrent_with_training")),
+            **({"seconds_per_figure": _seconds_stats(run, key, scoreable)}
+               if sequential and not env.get("concurrent_with_training") else {}),
             "n_scored_figures_without_answer": len(figs(run.parse_failures))
             + len(figs(run.errors)),
             "runtime_errors": figs(run.errors),

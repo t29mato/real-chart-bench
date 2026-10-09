@@ -63,6 +63,8 @@ def main():
         {"_path": str(REPO / k["image_path"]), "fig": f, "paper_id": k["paper_id"],
          "figure_id": k["figure_id"], "image_path": k["image_path"]}
         for f, k in sorted(key.items())
+        # paper 446's crops were deleted (no longer redistributable, n94 -> n91)
+        if (REPO / k["image_path"]).exists()
     ]
     ck = torch.load(args.ckpt, map_location=DEVICE, weights_only=False)
     model = MarkerNet(aux=bool((ck.get("args") or {}).get("aux"))).to(DEVICE).eval()  # v2: aux
@@ -71,8 +73,9 @@ def main():
 
     detect(model, Image.new("RGB", (800, 600), "white"))
     cache: dict = {"ckpt": args.ckpt, "threshold": args.threshold, "sets": {}, "device": DEVICE}
-    if args.only and Path(args.out).exists():
-        cache = pickle.loads(Path(args.out).read_bytes())
+    if args.only:
+        if Path(args.out).exists():
+            cache = pickle.loads(Path(args.out).read_bytes())
         sets = {k: v for k, v in sets.items() if k in args.only}
     for name, labs in sets.items():
         t0 = time.time()

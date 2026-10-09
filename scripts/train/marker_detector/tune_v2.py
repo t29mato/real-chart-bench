@@ -1,7 +1,7 @@
 """Choose the post-processing of a MarkerNet v2 checkpoint (方式A v2,
 docs/design/local-model.md) on validation data only: the training labels'
 deterministic validation split exactly as train.py makes it (plotqa,
-synth-materials, synth-stress, chartinfo; synthetic images 5%, real figures
+synth-materials, synth-stress, chartinfo, chartinfo-line-markers; synthetic images 5%, real figures
 by paper 20%) and the stress validation set (gen_stress_val.py, generated
 here when missing). The benchmark is never read.
 
@@ -38,7 +38,7 @@ from real_chart_bench.domain.marker_detection import (  # noqa: E402
     postprocess,
 )
 
-DATA = ("plotqa", "synth-materials", "synth-stress", "chartinfo")
+DATA = ("plotqa", "synth-materials", "synth-stress", "chartinfo", "chartinfo-line-markers")
 SETS = ("val_synth", "val_real", "stress")
 LONG_SIDES = (768, 1024, 1280)
 CACHE: dict = {}

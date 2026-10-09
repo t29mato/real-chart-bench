@@ -107,6 +107,8 @@ def main():
     ap.add_argument("--aux", action="store_true", help="v2: size and region heads")
     ap.add_argument("--size-weight", type=float, default=0.5)
     ap.add_argument("--region-weight", type=float, default=0.5)
+    ap.add_argument("--invert-p", type=float, default=0.0,
+                    help="probability of inverting an image's colours (white-on-black figures)")
     ap.add_argument("--amp", choices=["bf16", "fp16", "off"], default="bf16")
     args = ap.parse_args()
     dev = pick_device()
@@ -169,6 +171,7 @@ def main():
         crop=args.crop,
         require_marker=args.require_marker,
         partial_neg_weight=args.partial_neg_weight,
+        invert_p=args.invert_p,
     )
 
     def save(path):
