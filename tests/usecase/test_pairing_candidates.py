@@ -2,13 +2,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from real_chart_bench.domain.pairing_assignment import PairScore
 from real_chart_bench.usecase.pairing_candidates import (
     FigureInfo,
     FrameInfo,
     decide_paper,
+    merge_candidate_records,
     prefer_embedded_frames,
 )
+
+
+def rec(paper, figure, **kw):
+    return {"paper_id": paper, "figure_id": figure, "decision": "unassigned", **kw}
+
+
+def test_merge_keeps_existing_records_and_tags_sources():
+    old = [rec("2", "20"), rec("1", "10", image_source="data_raw")]
+    new = [rec("3", "30")]
+    merged = merge_candidate_records(old, new, "starrydata_work", old_source="data_raw")
+    assert [r["figure_id"] for r in merged] == ["10", "20", "30"]
+    assert [r["image_source"] for r in merged] == ["data_raw", "data_raw", "starrydata_work"]
+    assert old[0] == rec("2", "20")  # inputs are not mutated
+
+
+def test_merge_rejects_a_paper_already_present():
+    with pytest.raises(ValueError, match="paper 1"):
+        merge_candidate_records([rec("1", "10")], [rec("1", "11")], "x", old_source="y")
+
+
+def test_merge_sorts_numerically():
+    merged = merge_candidate_records([rec("9", "1")], [rec("10", "1")], "n", old_source="o")
+    assert [r["paper_id"] for r in merged] == ["9", "10"]
 
 
 @dataclass

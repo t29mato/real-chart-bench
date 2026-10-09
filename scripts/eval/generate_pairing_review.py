@@ -97,7 +97,11 @@ TEMPLATE = pathlib.Path(__file__).with_name("_pairing_review_template.html")
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out", nargs="?", type=pathlib.Path, default=REPO / "build/pairing_review.html")
-    ap.add_argument("--images-root", type=pathlib.Path, default=REPO / "data/raw/images")
+    ap.add_argument("--images-root", type=pathlib.Path, default=REPO / "data/raw/images",
+                    help="root for image_source data_raw_refetch")
+    ap.add_argument("--work-root", type=pathlib.Path,
+                    default=pathlib.Path.home() / ".cache/real-chart-bench/starrydata-work/images",
+                    help="root for image_source starrydata_work")
     ap.add_argument("--candidates", type=pathlib.Path,
                     default=REPO / "data/manifest/v0/pairing_candidates.json")
     ap.add_argument("--overlays", type=pathlib.Path, default=REPO / "build/pairing_overlays.json")
@@ -109,10 +113,12 @@ def main() -> None:
     sections: dict[str, list[str]] = {"proposed_high": [], "proposed_review": []}
     cache: dict = {}
     for c in todo:
-        if c["image"] not in cache:
+        root = args.work_root if c.get("image_source") == "starrydata_work" else args.images_root
+        key = (str(root), c["image"])
+        if key not in cache:
             cache.clear()
-            cache[c["image"]] = load_rgb(args.images_root / c["image"])
-        rgb = cache[c["image"]]
+            cache[key] = load_rgb(root / c["image"])
+        rgb = cache[key]
         plain, over = render(rgb, c["frame_bbox"], overlays[c["candidate_id"]])
         sections[c["decision"]].append(tile(c, plain, over))
     body = ""

@@ -301,3 +301,26 @@ flowchart LR
 (`PairScore.eligible`)なら、ページ描画の枠を落とす(埋込のほうが画質がよく、ベンチマーク画像として使える)。
 別の図を写しているページ描画の枠(埋込と共有する適格図なし)は残す。落とした枠は競合にも候補にも数えない。
 実装: `usecase/pairing_candidates.prefer_embedded_frames`(純関数)。
+
+### 12.6 第2の画像ソース: starrydata-work(2026-10-10)
+
+`~/.cache/real-chart-bench/starrydata-work/images/<paper>/`(72論文、すべて papers.json で CC BY)も同じ候補パイプラインに通す。
+`scripts/train/starrydata_fetch.py` の出力で、**ネットワークは使わない**(ローカル済み)。既に候補ファイルにある論文
+(data/raw と重なる26件)・ベンチマーク登録論文は**再処理しない**。新規は46論文 / Starrydata図183(public 128)。
+
+`pairing_candidates.json` は同じファイルに追記し、各レコードに `image_source`
+(`data_raw_refetch` | `starrydata_work`)を持たせる。既存レコードは値を変えない(`image_source` の追記のみ。
+`decided_by` は決めたルールのコミットのまま)。生成は増分(`usecase/pairing_candidates.merge_candidate_records`)。
+
+**出自(provenance)の差異** — data/raw と同等ではない:
+
+| | data_raw_refetch | starrydata_work |
+|---|---|---|
+| PDF取得 | `refetch_cc_by_pdfs.py`: 全 OA ロケーションを試行、`refetch_log.json` に経路URL・`pdf_sha256`・画像sha | `starrydata_fetch.py`: Unpaywall の最初に取れたURL。URLは**記録なし**(`fetch_status.json` は状態のみ) |
+| 画像抽出 | `PyMuPdfFigureExtractor`、ページ描画150dpi、`.jpg`/`.png` | 同抽出器、ページ描画**200 dpi**、埋込画像は生バイトの `.img` |
+| sha | refetch_log に画像sha | 保存ファイルから計算。PDF shaは `work_pdf_sha256`(ローカルPDFから計算) |
+
+重なる26論文で画像shaを突き合わせると多くが一致しない(PDFの入手元が異なる版、描画dpiが違う)。したがって
+同一論文でも2ソースの画像は別物として扱い、論文の重複処理はしない。ライセンスは両ソースとも論文単位(今日の Unpaywall
+で再確認済みなのは refetch 側のみ。work 側は `starrydata_fetch.py` が取得時に確認)。図単位のライセンス確認(§11)は未了で、
+`licence_figure_verified: false` のまま。

@@ -141,3 +141,26 @@ def decide_paper(
             "paper_rank": rank[fig.figure_id],
         })
     return records
+
+
+def merge_candidate_records(
+    existing: Sequence[Mapping],
+    new: Sequence[Mapping],
+    new_source: str,
+    *,
+    old_source: str,
+) -> list[dict]:
+    """Add a new image source's records to the committed candidates.
+
+    Existing records are kept as they are (only `image_source` is filled in
+    when missing); a paper that already has records is never reprocessed, so a
+    paper appearing in both is an error.
+    """
+    seen = {r["paper_id"] for r in existing}
+    clash = sorted({r["paper_id"] for r in new} & seen, key=int)
+    if clash:
+        raise ValueError(f"paper {clash[0]} already has candidate records")
+    merged = [{**r, "image_source": r.get("image_source", old_source)} for r in existing]
+    merged += [{**r, "image_source": new_source} for r in new]
+    merged.sort(key=lambda r: (int(r["paper_id"]), int(r["figure_id"])))
+    return merged
