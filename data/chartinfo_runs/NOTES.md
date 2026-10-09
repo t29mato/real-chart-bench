@@ -8,6 +8,37 @@
   series, so series matching (one to one) scores 0.091 point F1 and ~0 data score.
 - **batch01 fig_27** (PMC5575873 Fig5): the ground truth splits points by colour
   into five series; both models returned one series with all six points.
+- **batch10 fig_26** (PMC4341850 CMMM2015-127010.006): the x axis has no tick
+  labels at all (task2 has only the y ticks; task4 `x-axis` is empty). The ground
+  truth x is the position inside the plot frame, 0-1: x = (pixel x - plot_bb.x0)
+  / plot_bb.width, e.g. (178.67 - 81) / 552 = 0.17693, as stored. This is the
+  "no numeric ticks -> 0-1 inside the frame" convention of design 7.86 (90/91
+  outside the evaluation set). Opus, Fable and Sonnet returned x as the category
+  index 1-4 (series 2 at 1.05, 2.51, 3.95) and y within 0.003 of the ground truth;
+  giving their points the ground-truth x in left-to-right order scores point F1
+  1.00 for all three. GPT-6.1-Sol returned `[]` ("its x-axis scale is unreadable",
+  `gpt-6.1-sol.last_message.txt`). Convention mismatch for the three Claude
+  models; an empty answer for GPT. Checked against the image and task4/task6.
+- **batch02 fig_10** (PMC5575686 nanomaterials-07-00204-g003): linear x axis,
+  ticks at pixel 121 / 294 / 466 / 639 printed "0.0", "5.0x10^{19}",
+  "1.0x10^{20}", "1.5x10^{20}". The ground truth x for the markers above those
+  ticks is 4.99 (at pixel 294.7), 1.01 (467.7) and 1.51 (638.7), and 0.94 / 1.93
+  for the 1x10^19 / 2x10^19 markers: the tick mantissas with the x10^n exponent
+  dropped, so x is not monotonic in pixel position (5.0 left of 1.0). All four
+  models read the doses in full (1e19, 2e19, 5e19, 1e20, 1.5e20) with y close to
+  the ground truth. No single power of ten fixes it (x * 1e-19: 0.65-0.71, x *
+  1e-20: 0.26-0.27; the 4.8.2 rescale table only tries k = -9..9). Dividing x by
+  1e19 below 7.5e19 and by 1e20 above (mimicking the dropped exponent, diagnostic
+  only) gives point F1 0.97 Opus, 0.93 Fable, 0.90 Sonnet, 0.90 GPT. Read as an
+  annotation error rather than a convention: the annotated x contradicts the
+  axis. The `log_x` flag in `batch02/error_analysis.md` is presumably a side effect
+  of fitting these non-monotonic (pixel, value) pairs (not checked); the printed axis is linear. Design 7.86 did
+  not adopt a rule for per-tick a x 10^b (8/9 outside the evaluation set, with a
+  counterexample); whether this figure is the same kind was not checked.
+- Neither figure points at our scorer: the readings agree with the image, and
+  the zero comes from the ground-truth x values themselves. Scoring rules were not
+  changed. Diagnostic script: hypothetical rescoring with the error analysis's
+  point F1 (`export_chartinfo_viewer.matches`), run from a scratchpad, not committed.
 
 The prompt (`data/chartinfo_pilot/prompt_v2.md`) is kept unchanged for the whole
 measurement so batches stay comparable; this class of mismatch is reported
