@@ -268,7 +268,10 @@ def calibrate_frame(
                 n = len(fit.ticks) if fit else 0
                 if n > best_n:
                     best, best_n = (fit, ws, len(rd)), n
-                if n >= 4:
+                # stop on a good fit that explains every label read; a fit that
+                # leaves labels unexplained (a mis-split merged word) lets the
+                # other reading mode try (14649: 4 of 6 labels, psm 11 reads 7)
+                if n >= 4 and n >= len(rd):
                     return best
             if best_n >= 3:
                 break
@@ -326,12 +329,17 @@ def calibrate_frames(
     split_merged: bool = True,
     max_frames: int = 6,
     v3: bool = True,
+    both_y_sides: bool = False,
 ) -> list[ImageCalibration]:
     """Every plot frame of the image whose two axes calibrate (a pairing
     candidate pool, design pairing-automation.md §12): unlike
     `calibrate_image`, which stops at the first panel, all of them are kept,
     largest first. Frames that do not calibrate are not returned -- they
-    cannot project ground truth."""
+    cannot project ground truth.
+
+    both_y_sides (design pairing-automation.md 12.8): a plot with a y axis on
+    each side holds two quantities; every side that calibrates is returned as
+    its own entry (same frame, y_side left / right) instead of only the first."""
     gray = to_gray(rgb)
     dark = gray < DARK
     uniq = _candidate_frames(dark, right_axes)
@@ -346,7 +354,8 @@ def calibrate_frames(
             c = ImageCalibration(f, cal["x_fit"], cal["y_fit"], len(uniq), s)
             if c.ok:
                 out.append(c)
-                break
+                if not both_y_sides:
+                    break
     return out
 
 

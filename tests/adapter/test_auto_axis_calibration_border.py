@@ -49,3 +49,30 @@ def test_without_v3_nothing_changes(monkeypatch):
     g = _image()
     cal = A.calibrate_frame(g, g < A.DARK, FRAME, v3=False, split_merged=True)
     assert cal["x_fit"] is not None  # v3-off never dropped it
+
+
+def test_a_four_tick_fit_that_leaves_labels_unexplained_does_not_stop_the_second_read(
+    monkeypatch,
+):
+    # psm 6 returns one merged word whose split places two labels wrongly (4 of 6
+    # readings agree); psm 11 reads all eleven labels. The better fit must win.
+    def ocr(strip, psm=11, **_):
+        if strip.shape[1] <= strip.shape[0]:
+            return _fake_ocr(strip, psm)
+        sx0 = 7  # strip origin: int(40 - 0.1 * 330)
+
+        def word(text, k):
+            return (text, X_TICKS[k] - sx0 - 9.0, 5.0, X_TICKS[k] - sx0 + 9.0, 15.0, 90.0)
+
+        if psm == 6:  # four right labels, two misplaced
+            return [word(str(300 + 20 * k), k) for k in range(4)] + [word("380", 9),
+                                                                    word("400", 8)]
+        sx0 = 7  # strip origin: int(40 - 0.1 * 330)
+        return [(str(300 + 20 * k), X_TICKS[k] - sx0 - 9.0, 5.0, X_TICKS[k] - sx0 + 9.0, 15.0,
+                 90.0) for k in range(11)]
+
+    monkeypatch.setattr(A, "ocr_words", ocr)
+    g = _image()
+    cal = A.calibrate_frame(g, g < A.DARK, FRAME, v3=True, split_merged=True)
+    assert cal["x_fit"] is not None
+    assert len(cal["x_fit"].ticks) >= 10

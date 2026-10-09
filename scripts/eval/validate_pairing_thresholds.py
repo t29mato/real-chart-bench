@@ -49,6 +49,7 @@ CURVES_CSV = (
 )
 RAW = ROOT / "build/pairing_validation_raw.json"
 REGISTRY = ROOT / "data/verified_pairs/registry.json"
+BOTH_Y = False  # set by --both-y-sides (design 12.8)
 MIN_IMAGE_PX = 200  # same filters as scripts/collect/generate_pairing_candidates.py
 MAX_DARK_SHARE = 0.4
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".img", ".gif", ".bmp", ".webp", ".tif", ".tiff"}
@@ -71,7 +72,7 @@ def _work(job):
             continue
         ink = ink_mask(rgb)
         n_frames = 0
-        for k, cal in enumerate(calibrate_frames(rgb)):
+        for k, cal in enumerate(calibrate_frames(rgb, both_y_sides=BOTH_Y)):
             n_frames += 1
             fid = f"{key}#{k}"
             frames.append(FrameInfo(fid, key, tuple(cal.frame), cal.y_side))
@@ -116,6 +117,8 @@ def _local_images(paper: str, roots: dict[str, pathlib.Path]) -> list[tuple[str,
 
 
 def collect(args) -> None:
+    global BOTH_Y
+    BOTH_Y = args.both_y_sides
     from real_chart_bench.adapter.starrydata_figure_gt import load_figure_gt
 
     registry = json.loads(REGISTRY.read_text())
@@ -328,6 +331,8 @@ def main() -> None:
     c.add_argument("--extra-root", action="append", default=[],
                    help="LABEL=DIR holding <paper_id>/<images>; repeatable")
     c.add_argument("--workers", type=int, default=8)
+    c.add_argument("--both-y-sides", action="store_true",
+                   help="keep left and right y calibrations as separate frames (design 12.8)")
     c.add_argument("--raw", type=pathlib.Path, default=RAW)
     a = sub.add_parser("analyse")
     a.add_argument("--raw", type=pathlib.Path, default=RAW)

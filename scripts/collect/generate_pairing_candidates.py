@@ -50,6 +50,7 @@ WORK = pathlib.Path.home() / ".cache/real-chart-bench/starrydata-work"
 CURVES_CSV = WORK / "ThermoelectricMaterials_curves.csv.gz"
 SRC_RAW = "data_raw_refetch"
 SRC_WORK = "starrydata_work"
+BOTH_Y = False  # --both-y-sides: keep left and right y calibrations (design 12.8)
 MIN_IMAGE_PX = 200
 MAX_DARK_SHARE = 0.4  # a photograph or micrograph
 
@@ -66,7 +67,7 @@ def _work(job):
             continue
         n_images += 1
         ink = None
-        for k, cal in enumerate(calibrate_frames(rgb)):
+        for k, cal in enumerate(calibrate_frames(rgb, both_y_sides=BOTH_Y)):
             fid = f"{name}#{k}"
             frames.append(FrameInfo(fid, f"{paper_id}/{name}", tuple(cal.frame), cal.y_side))
             ink = ink_mask(rgb) if ink is None else ink
@@ -104,7 +105,11 @@ def main() -> None:
                     help="re-decide every paper with the current rule and replace the file "
                          "(default: incremental, existing papers are never re-decided). Only "
                          "while no human verdict refers to the records.")
+    ap.add_argument("--both-y-sides", action="store_true",
+                    help="keep left and right y calibrations as separate frames (design 12.8)")
     args = ap.parse_args()
+    global BOTH_Y
+    BOTH_Y = args.both_y_sides
 
     prev = json.loads(args.out.read_text()) if args.out.exists() else {"candidates": []}
     old_papers = {r["paper_id"] for r in prev["candidates"]}
