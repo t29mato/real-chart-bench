@@ -20,6 +20,7 @@ from enum import Enum
 
 from real_chart_bench.domain.dataset_subset import DatasetSubset
 from real_chart_bench.domain.licensing import LicenseStatus, classify_figure_license
+from real_chart_bench.usecase.dataset_subsets import subset_fields
 from real_chart_bench.usecase.figure_extraction import FigureExtractionPort, canonical_image_name
 from real_chart_bench.usecase.oa_lookup import OaRecord
 from real_chart_bench.usecase.pdf_fetch import PdfFetchPort, PdfFetchStatus
@@ -96,8 +97,8 @@ class RefetchOutcome:
             "detail": self.detail,
         }
         # core stays implicit, so the log format of the existing entries holds
-        if self.subset is not None and self.subset is not DatasetSubset.CORE:
-            entry["subset"] = self.subset.value
+        if self.subset is not None:
+            entry.update(subset_fields(self.subset))
         return entry
 
 

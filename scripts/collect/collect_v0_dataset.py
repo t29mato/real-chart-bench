@@ -21,9 +21,9 @@ can be tailed. Two-tier output (design §7.11):
 
 Licence subsets (design §7.88 / §7.88.1): CC BY / BY-SA / CC0 papers are
 ``core``, CC BY-NC / BY-NC-SA papers are ``nc`` (admitted since 2026-10-09,
-distributed and scored separately), ND is still dropped. Every new
-papers.json / figures.json entry records its ``subset``; entries written before
-that have no key and are all ``core``.
+distributed and scored separately), ND is still dropped. A new ``nc``
+papers.json / figures.json entry records ``"subset": "nc"``; ``core`` entries,
+old and new, carry no key (no key means ``core``, usecase/dataset_subsets.py).
 
 PDF requests are spaced PDF_FETCH_DELAY_S = 60 s apart (design §7.87: the lab
 IP is shared with the owner's browser; RSC answered 429 at 1 s spacing).
@@ -54,7 +54,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 from real_chart_bench.adapter.figure_extraction import PyMuPdfFigureExtractor  # noqa: E402
 from real_chart_bench.adapter.pdf_fetch import HttpPdfFetchAdapter  # noqa: E402
 from real_chart_bench.adapter.starrydata_csv import parse_curve_row  # noqa: E402
-from real_chart_bench.domain.collection_records import PaperRecord  # noqa: E402
+from real_chart_bench.domain.collection_records import FigureRecord, PaperRecord  # noqa: E402
 from real_chart_bench.domain.dataset_subset import DatasetSubset  # noqa: E402
 from real_chart_bench.domain.licensing import (  # noqa: E402
     LicenseStatus,
@@ -63,6 +63,7 @@ from real_chart_bench.domain.licensing import (  # noqa: E402
 from real_chart_bench.usecase.build_ground_truth_manifest import (  # noqa: E402
     build_ground_truth_for_paper,
 )
+from real_chart_bench.usecase.dataset_subsets import subset_fields  # noqa: E402
 from real_chart_bench.usecase.pdf_fetch import PdfFetchStatus  # noqa: E402
 
 RELEASE_BASE = "https://github.com/starrydata/starrydata_datasets/releases/download/latest"
@@ -143,6 +144,27 @@ def classify_all_papers(dois: list[str], cache_path: pathlib.Path) -> dict[str, 
 
     _save_cache(cache_path, cache)
     return cache
+
+
+def paper_manifest_entry(
+    paper: PaperRecord, *, n_figures: int, n_curves: int,
+    n_extracted_images: int | None, pdf_status: str | None,
+) -> dict:
+    """One papers.json row; ``subset`` only for nc (design §7.88.1)."""
+    return {
+        "paper_id": paper.paper_id, "doi": paper.doi, "license_id": paper.license_id,
+        "n_figures": n_figures, "n_curves": n_curves, "n_extracted_images": n_extracted_images,
+        "pdf_status": pdf_status, **subset_fields(paper.subset),
+    }
+
+
+def figure_manifest_entry(figure: FigureRecord) -> dict:
+    """One figures.json row; ``subset`` only for nc (design §7.88.1)."""
+    return {
+        "figure_id": figure.figure_id, "paper_id": figure.paper_id,
+        "figure_reference": figure.figure_reference, "split": figure.split.value,
+        **subset_fields(figure.subset),
+    }
 
 
 def main() -> None:
@@ -289,18 +311,12 @@ def main() -> None:
             time.sleep(PDF_FETCH_DELAY_S)
 
         all_papers.append(
-            {
-                "paper_id": sid, "doi": doi, "license_id": paper.license_id,
-                "n_figures": len(figures), "n_curves": len(curves), "n_extracted_images": n_images,
-                "pdf_status": pdf_status, "subset": paper.subset.value,
-            }
+            paper_manifest_entry(
+                paper, n_figures=len(figures), n_curves=len(curves),
+                n_extracted_images=n_images, pdf_status=pdf_status,
+            )
         )
-        all_figures.extend(
-            {"figure_id": f.figure_id, "paper_id": f.paper_id,
-             "figure_reference": f.figure_reference, "split": f.split.value,
-             "subset": f.subset.value}
-            for f in figures
-        )
+        all_figures.extend(figure_manifest_entry(f) for f in figures)
         all_curves.extend(
             {"curve_id": c.curve_id, "figure_id": c.figure_id, "series_label": c.series_label,
              "n_points": len(c.x_values), "license": c.license}

@@ -92,3 +92,22 @@ def test_nc_document_states_non_commercial_and_share_alike():
     assert "share" in text.lower() and "alike" in text.lower()
     assert "verified_pairs_nc" in text
     assert text.endswith("| r |\n")
+
+
+# --- review M1: only files whose licence is admitted for the subset are attributed --
+
+
+def test_entry_without_an_admitted_licence_is_not_attributed_as_distributed():
+    import pytest as _pytest
+
+    for license_id in (None, "cc-by-nd", "other-oa"):
+        rows = _rows([_pairing("1", license_id=license_id)], DatasetSubset.CORE)
+        assert rows == [], license_id
+    with _pytest.raises(ValueError):
+        _pairing("1", license_id="cc-by-nc")  # contradicts the default core subset
+
+
+def test_nd_entry_explicitly_marked_nc_is_not_attributed():
+    rows = _rows([_pairing("1", license_id="cc-by-nc-nd", subset=DatasetSubset.NC)],
+                 DatasetSubset.NC)
+    assert rows == []

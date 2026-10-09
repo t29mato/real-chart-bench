@@ -20,7 +20,8 @@ data/manifest/v0/ + data/raw/images/, not itself a source of truth):
 Dataset subsets (design §7.88.1): only ``core`` papers (CC BY / BY-SA / CC0)
 go into data/hf_dataset/. ``nc`` papers (CC BY-NC / BY-NC-SA) go into their own
 directory, data/hf_dataset_nc/ (gitignored), with their own card
-(``license: cc-by-nc-4.0``, non-commercial use only) -- a separate HF dataset
+(non-commercial use only; its licence metadata is derived from the rows by
+usecase/dataset_card.py, ``license: other`` when they mix licences) -- a separate HF dataset
 (or config) at upload time, never mixed into the core one. It is only written
 when at least one nc paper has images.
 
@@ -42,6 +43,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
 from real_chart_bench.domain.dataset_subset import DatasetSubset  # noqa: E402
+from real_chart_bench.usecase.dataset_card import render_nc_dataset_card  # noqa: E402
 from real_chart_bench.usecase.dataset_subsets import manifest_entry_subset  # noqa: E402
 
 REPO_ID = "real-chart-bench/thermoelectric-v0"  # placeholder, confirm with 司令塔 before real use
@@ -76,36 +78,6 @@ by [Starrydata](https://www.starrydata2.org/) (CC BY 4.0, NIMS MDR).
 
 See `docs/design/benchmark-architecture.md` (real-chart-bench repository)
 for the full collection methodology.
-"""
-
-
-NC_DATASET_CARD = """\
----
-license: cc-by-nc-4.0
-task_categories:
-- image-to-text
-- table-question-answering
-tags:
-- chart-data-extraction
-- scientific-figures
-- thermoelectric-materials
-pretty_name: real-chart-bench v0 NC subset (non-commercial use only)
----
-
-# real-chart-bench v0 — NC subset (non-commercial use only)
-
-**Non-commercial use only.** The figure images here come from open-access
-papers published under CC BY-NC or CC BY-NC-SA (see each row's `license`). They
-are kept apart from the core dataset (CC BY / CC BY-SA / CC0), which has no such
-restriction, and are scored separately -- never pooled with the core numbers
-(design doc `docs/design/benchmark-architecture.md` §7.88).
-
-- **Figure image license**: CC BY-NC or CC BY-NC-SA, per row. Rows under
-  CC BY-NC-SA carry its ShareAlike condition: anything you build from them must
-  be distributed under the same licence.
-- **Ground truth license**: CC BY 4.0 (Starrydata / NIMS MDR), as in the core set.
-- **Caveat**: as in the core set, `image_files` is the per-paper candidate pool,
-  not yet matched to a specific `figure_id`.
 """
 
 
@@ -198,13 +170,14 @@ def main() -> None:
     parser.add_argument("--upload", action="store_true", help="refuses unless HF_TOKEN is set")
     args = parser.parse_args()
 
-    for subset, out_dir, card in (
-        (DatasetSubset.CORE, args.out_dir, DATASET_CARD),
-        (DatasetSubset.NC, args.out_dir.with_name(args.out_dir.name + "_nc"), NC_DATASET_CARD),
+    for subset, out_dir in (
+        (DatasetSubset.CORE, args.out_dir),
+        (DatasetSubset.NC, args.out_dir.with_name(args.out_dir.name + "_nc")),
     ):
         rows = build_metadata(args.manifest_dir, args.raw_images_dir, subset)
         if subset is not DatasetSubset.CORE and not rows:
             continue
+        card = DATASET_CARD if subset is DatasetSubset.CORE else render_nc_dataset_card(rows)
         out_dir.mkdir(parents=True, exist_ok=True)
         with (out_dir / "metadata.jsonl").open("w") as f:
             for row in rows:

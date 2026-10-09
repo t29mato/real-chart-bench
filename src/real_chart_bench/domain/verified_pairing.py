@@ -21,7 +21,7 @@ from enum import Enum
 
 from real_chart_bench.domain.curve import ScaleType
 from real_chart_bench.domain.dataset_subset import DatasetSubset, distribution_dir_name
-from real_chart_bench.domain.licensing import LicenseStatus, license_subset
+from real_chart_bench.domain.licensing import licence_admitted_for
 
 
 class VerificationStatus(Enum):
@@ -354,13 +354,9 @@ class VerifiedPairing:
         self._check_invariants()
 
     def _check_subset(self) -> None:
-        decided = license_subset(self.license_id)
-        if decided.status is LicenseStatus.REDISTRIBUTABLE and decided.subset is not self.subset:
-            raise ValueError(
-                f"subset {self.subset.value!r} contradicts license_id {self.license_id!r} "
-                f"(which puts the figure in {decided.subset.value!r}); the subset follows "
-                "the licence and is never set by hand (design §7.88)"
-            )
+        # raises when the licence admits the figure to the other subset; the
+        # subset follows the licence and is never set by hand (design §7.88)
+        licence_admitted_for(self.license_id, self.subset)
         # a committed figure (a path with a directory) must sit in its own
         # subset's distribution directory -- the nc figures ship separately
         if self.image_path and "/" in self.image_path:
@@ -458,6 +454,14 @@ class VerifiedPairing:
                 "final_sha256 must be a lowercase hex sha256 digest "
                 f"({_SHA256_HEX_LENGTH} chars), got {self.final_sha256!r}"
             )
+
+    @property
+    def is_licence_admitted(self) -> bool:
+        """True iff license_id admits this figure to its subset (design
+        §7.88.1). False for ND, unknown and missing licences, whatever subset
+        the entry says: such an entry stays loadable but is neither scored
+        nor distributed."""
+        return licence_admitted_for(self.license_id, self.subset)
 
     @property
     def is_reproducible_crop(self) -> bool:

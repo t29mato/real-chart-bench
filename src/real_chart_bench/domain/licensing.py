@@ -100,10 +100,44 @@ class LicenseDecision:
     normalized: str
 
 
-_CC_LICENSE_URL = re.compile(r"creativecommons\.org/licenses/([a-z-]+)(?:/(\d+(?:\.\d+)*))?")
-_VERSION_SUFFIX = re.compile(r"-\d+(?:\.\d+)*$")
+_CC_LICENSE_URL = re.compile(
+    r"creativecommons\.org/licenses/([a-z-]+)(?:/(\d+(?:\.\d+)*))?(?:/(igo))?"
+)
+_VERSION_TOKEN = re.compile(r"\d+(?:\.\d+)*")
+# typographic hyphens and dashes that turn up in licence strings
+_DASHES = re.compile("[‐-―−]")
 _PUBLIC_DOMAIN = frozenset({"cc0", "cc-zero", "public-domain", "pd"})
+_CC0 = frozenset({"cc0", "cc-zero"})
 _CC_ELEMENTS = frozenset({"nc", "nd", "sa"})
+# the versions Creative Commons actually published; anything else is a typo or
+# a value we do not understand, and goes to review rather than being guessed
+_CC_VERSIONS = frozenset({"1.0", "2.0", "2.5", "3.0", "4.0"})
+_CC0_VERSIONS = frozenset({"1.0"})
+_IGO_VERSION = "3.0"
+
+
+def _split_suffix(normalized: str) -> tuple[str, str | None, bool]:
+    """``"cc-by-nc-3.0-igo"`` -> (``"cc-by-nc"``, ``"3.0"``, True)."""
+    tokens = normalized.split("-")
+    igo = len(tokens) > 1 and tokens[-1] == "igo"
+    if igo:
+        tokens.pop()
+    version = None
+    if len(tokens) > 1 and _VERSION_TOKEN.fullmatch(tokens[-1]):
+        version = tokens.pop()
+    return "-".join(tokens), version, igo
+
+
+def _version_is_known(base: str, version: str | None, igo: bool) -> bool:
+    if igo and version != _IGO_VERSION:
+        return False
+    if version is None:
+        return True
+    if base in _CC0:
+        return version in _CC0_VERSIONS
+    if base in _PUBLIC_DOMAIN:
+        return False
+    return version in _CC_VERSIONS
 
 
 def normalize_license_id(license_id: str | None) -> str:
@@ -111,7 +145,7 @@ def normalize_license_id(license_id: str | None) -> str:
     words, version kept as a suffix (``"CC BY-NC-SA 4.0"`` ->
     ``"cc-by-nc-sa-4.0"``); creativecommons.org URLs map to the same form.
     Empty / missing -> ``""``."""
-    text = (license_id or "").strip().lower()
+    text = _DASHES.sub("-", (license_id or "").strip().lower())
     if not text:
         return ""
     if "creativecommons.org/publicdomain/zero" in text:
@@ -121,8 +155,9 @@ def normalize_license_id(license_id: str | None) -> str:
     url = _CC_LICENSE_URL.search(text)
     if url:
         version = f"-{url.group(2)}" if url.group(2) else ""
-        return f"cc-{url.group(1).strip('-')}{version}"
-    text = re.sub(r"[\s_]+", "-", text)
+        igo = "-igo" if url.group(3) else ""
+        return f"cc-{url.group(1).strip('-')}{version}{igo}"
+    text = re.sub(r"[\s_/]+", "-", text)
     return re.sub(r"-{2,}", "-", text).strip("-")
 
 
@@ -131,19 +166,41 @@ def license_subset(license_id: str | None) -> LicenseDecision:
     (design §7.88): BY / BY-SA / CC0 / public domain -> ``core``; BY-NC /
     BY-NC-SA -> ``nc``; anything with ND -> EXCLUDED (we redistribute crops,
     i.e. derivatives); empty or unrecognised -> NEEDS_REVIEW (manual queue).
-    An unrecognised CC element (``cc-by-foo``) is not guessed at."""
+    An unrecognised CC element (``cc-by-foo``) or a version CC never published
+    (``cc-by-99``) is not guessed at: review. The 3.0 IGO ports are accepted."""
     normalized = normalize_license_id(license_id)
-    base = _VERSION_SUFFIX.sub("", normalized)
+    base, version, igo = _split_suffix(normalized)
+    review = LicenseDecision(LicenseStatus.NEEDS_REVIEW, None, normalized)
     if base in _PUBLIC_DOMAIN:
+        if not _version_is_known(base, version, igo):
+            return review
         return LicenseDecision(LicenseStatus.REDISTRIBUTABLE, DatasetSubset.CORE, normalized)
     if base == "cc-by" or base.startswith("cc-by-"):
         elements = set(base[len("cc-by") :].split("-")) - {""}
         if elements <= _CC_ELEMENTS:
-            if "nd" in elements:
+            if "nd" in elements:  # out whatever the version says
                 return LicenseDecision(LicenseStatus.EXCLUDED, None, normalized)
+            if not _version_is_known(base, version, igo):
+                return review
             subset = DatasetSubset.NC if "nc" in elements else DatasetSubset.CORE
             return LicenseDecision(LicenseStatus.REDISTRIBUTABLE, subset, normalized)
-    return LicenseDecision(LicenseStatus.NEEDS_REVIEW, None, normalized)
+    return review
+
+
+def licence_admitted_for(license_id: str | None, subset: DatasetSubset) -> bool:
+    """True iff the licence admits a figure to ``subset`` (design §7.88.1) --
+    the gate for what is distributed and scored. ND, unknown and missing
+    licences admit to no subset. A licence that admits to the *other* subset
+    raises: the subset follows the licence and is never set by hand."""
+    decided = license_subset(license_id)
+    if decided.status is not LicenseStatus.REDISTRIBUTABLE:
+        return False
+    if decided.subset is not subset:
+        raise ValueError(
+            f"subset {subset.value!r} contradicts licence {license_id!r} "
+            f"(which admits to {decided.subset.value!r})"
+        )
+    return True
 
 
 def classify_figure_license(

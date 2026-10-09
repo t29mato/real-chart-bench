@@ -304,3 +304,17 @@ def test_nc_paper_whose_licence_moved_to_nc_nd_is_not_fetched():
     )
     assert outcome.status is RefetchStatus.LICENCE_CHANGED
     assert fetcher.calls == []
+
+
+def test_nc_paper_whose_licence_moved_to_cc_by_is_reported_not_fetched():
+    # nc -> core is a subset move too: reported, never applied by the fetch
+    fetcher = _ScriptedFetcher({})
+    outcome = refetch_paper(
+        _record(_loc("https://a/x.pdf"), license_id="cc-by"),
+        fetcher,
+        _FixedExtractor([]),
+        expected_subset=DatasetSubset.NC,
+    )
+    assert outcome.status is RefetchStatus.LICENCE_CHANGED
+    assert outcome.licence_today == "cc-by"
+    assert fetcher.calls == []

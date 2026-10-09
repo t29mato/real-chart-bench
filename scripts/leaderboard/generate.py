@@ -491,6 +491,20 @@ def _render_sections_html(
     return "\n".join(sections)
 
 
+def latest_banner(scored_rows: list) -> tuple[str | None, str]:
+    """(dataset_version, run_at) of the most recently run scored row, for the
+    version banner. design 7.88.1: core rows only -- the banner names the
+    headline (core) figure set, never the separate nc subset."""
+    core_rows = [
+        r for r in scored_rows
+        if subset_of_dataset_version(r.dataset_version) is DatasetSubset.CORE
+    ]
+    if not core_rows:
+        return "(no scored runs yet)", "-"
+    latest = max(core_rows, key=lambda r: r.run_at)
+    return latest.dataset_version, latest.run_at
+
+
 def _render_pending_section_html(pending_rows: list) -> str:
     if not pending_rows:
         return ""
@@ -533,13 +547,7 @@ def main() -> None:
     # exactly what went stale across the 1->10->20-pair registry expansions
     # (results/*.json's own dataset_version had the same bug, fixed in
     # scripts/eval/run_baselines.py the same day).
-    if scored_rows:
-        latest = max(scored_rows, key=lambda r: r.run_at)
-        latest_dataset_version = latest.dataset_version
-        latest_run_at = latest.run_at
-    else:
-        latest_dataset_version = "(no scored runs yet)"
-        latest_run_at = "-"
+    latest_dataset_version, latest_run_at = latest_banner(scored_rows)
 
     SITE_DIR.mkdir(exist_ok=True)
     (SITE_DIR / "index.html").write_text(

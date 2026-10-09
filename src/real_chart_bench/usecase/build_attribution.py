@@ -81,8 +81,8 @@ def attribution_rows(
     crops_prefix = f"data/{distribution_dir_name(subset)}/crops/"
     rows = []
     for pairing in registry:
-        if pairing.subset is not subset:
-            continue
+        if pairing.subset is not subset or not pairing.is_licence_admitted:
+            continue  # design §7.88.1: only what the licence lets us ship here
         if pairing.status is not VerificationStatus.VERIFIED or not pairing.image_path:
             continue
         if "/" not in pairing.image_path:

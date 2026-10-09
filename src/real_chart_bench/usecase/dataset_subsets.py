@@ -13,7 +13,33 @@ from real_chart_bench.domain.dataset_subset import (
     parse_subset,
     subset_of_dataset_version,
 )
-from real_chart_bench.domain.licensing import LicenseStatus, license_subset
+from real_chart_bench.domain.licensing import (
+    LicenseStatus,
+    licence_admitted_for,
+    license_subset,
+)
+
+
+def declared_subset(entry: Mapping[str, Any]) -> DatasetSubset:
+    """The one default rule for the subset a JSON record (registry entry,
+    papers.json / figures.json row) declares: its ``subset`` key if present,
+    else the subset its ``license_id`` admits it to, else ``core`` (every
+    record written before the subset existed). Whether the licence actually
+    admits the record is a separate question -- ``manifest_entry_subset`` /
+    ``VerifiedPairing.is_licence_admitted``."""
+    if "subset" in entry:
+        return parse_subset(entry["subset"])
+    decided = license_subset(entry.get("license_id"))
+    if decided.status is LicenseStatus.REDISTRIBUTABLE and decided.subset is not None:
+        return decided.subset
+    return DatasetSubset.CORE
+
+
+def subset_fields(subset: DatasetSubset) -> dict[str, str]:
+    """The ``subset`` key to write on a new record: none for ``core`` (the
+    default, so core records look exactly as they always have), explicit for
+    ``nc`` (design §7.88.1)."""
+    return {} if subset is DatasetSubset.CORE else {"subset": subset.value}
 
 
 def manifest_entry_subset(entry: Mapping[str, Any]) -> DatasetSubset | None:
@@ -21,20 +47,18 @@ def manifest_entry_subset(entry: Mapping[str, Any]) -> DatasetSubset | None:
     entry's licence admits it to neither subset (ND, unknown, missing).
 
     An entry with no ``license_id`` key at all (figures.json) is read from its
-    ``subset`` key alone. An explicit ``subset`` that contradicts the licence
+    declared subset alone. An explicit ``subset`` that contradicts the licence
     raises -- the subset follows the licence, never a hand edit (§7.88)."""
-    explicit = parse_subset(entry["subset"]) if "subset" in entry else None
+    subset = declared_subset(entry)
     if "license_id" not in entry:
-        return explicit or DatasetSubset.CORE
-    decided = license_subset(entry["license_id"])
-    if decided.status is not LicenseStatus.REDISTRIBUTABLE:
-        return None
-    if explicit is not None and explicit is not decided.subset:
+        return subset
+    try:
+        admitted = licence_admitted_for(entry["license_id"], subset)
+    except ValueError as exc:
         raise ValueError(
-            f"manifest entry {entry.get('paper_id') or entry.get('figure_id')}: subset "
-            f"{explicit.value!r} contradicts license_id {entry['license_id']!r}"
-        )
-    return decided.subset
+            f"manifest entry {entry.get('paper_id') or entry.get('figure_id')}: {exc}"
+        ) from exc
+    return subset if admitted else None
 
 
 def result_subset(result: Mapping[str, Any]) -> DatasetSubset:

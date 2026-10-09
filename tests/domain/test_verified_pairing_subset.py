@@ -72,12 +72,35 @@ def test_bare_raw_filename_is_not_a_committed_file_and_passes():
     assert p.subset is DatasetSubset.NC
 
 
-def test_entry_without_licence_keeps_whatever_subset_it_was_given():
-    # legacy entries have no license_id; nothing to check against
-    assert _pairing(license_id=None).subset is DatasetSubset.CORE
+def test_entry_without_licence_loads_but_is_not_admitted():
+    # legacy-shaped entry: constructible (the registry must stay loadable), but
+    # with no licence on record it is admitted to no subset
+    p = _pairing(license_id=None)
+    assert p.subset is DatasetSubset.CORE
+    assert p.is_licence_admitted is False
 
 
-def test_excluded_licence_does_not_constrain_subset():
-    # e.g. a licence that drifted to ND: excluded via excluded_reason, its
-    # recorded subset stays what it was
-    assert _pairing(license_id="cc-by-nc-nd").subset is DatasetSubset.CORE
+@pytest.mark.parametrize("license_id", ["cc-by-nd", "cc-by-nc-nd", "other-oa", "cc-by-99"])
+def test_entry_whose_licence_is_not_admitted_loads_but_is_not_admitted(license_id):
+    # e.g. a licence that drifted to ND: the entry stays loadable (it is
+    # excluded via excluded_reason), but no subset admits it
+    assert _pairing(license_id=license_id).is_licence_admitted is False
+
+
+@pytest.mark.parametrize("subset", [DatasetSubset.CORE, DatasetSubset.NC])
+def test_explicit_subset_does_not_admit_an_nd_licence(subset):
+    root = "verified_pairs_nc" if subset is DatasetSubset.NC else "verified_pairs"
+    p = _pairing(
+        license_id="cc-by-nc-nd", subset=subset, image_path=f"data/{root}/crops/1/a.png"
+    )
+    assert p.is_licence_admitted is False
+
+
+def test_admitted_core_and_nc_entries():
+    assert _pairing().is_licence_admitted is True
+    nc = _pairing(
+        license_id="cc-by-nc",
+        subset=DatasetSubset.NC,
+        image_path="data/verified_pairs_nc/crops/1/a.png",
+    )
+    assert nc.is_licence_admitted is True

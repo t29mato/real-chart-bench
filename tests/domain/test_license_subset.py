@@ -14,6 +14,7 @@ from real_chart_bench.domain.licensing import (
     DriftKind,
     LicenseStatus,
     classify_figure_license,
+    licence_admitted_for,
     license_drift,
     license_subset,
     normalize_license_id,
@@ -230,3 +231,66 @@ def test_drift_reports_both_subsets_on_a_move():
 def test_drift_of_an_unrecognised_recorded_licence_is_review():
     # nothing to compare against -- a person must look at it
     assert license_drift("publisher-specific", "cc-by").kind is DriftKind.REVIEW
+
+
+# --- review follow-ups: more spellings, and versions that do not exist ---------------
+
+
+@pytest.mark.parametrize(
+    ("license_id", "status", "subset"),
+    [
+        # ND as a URL without a version is still ND
+        ("https://creativecommons.org/licenses/by-nd/", LicenseStatus.EXCLUDED, None),
+        ("http://creativecommons.org/licenses/by-nc-nd", LicenseStatus.EXCLUDED, None),
+        # the IGO ports of 3.0
+        ("cc-by-3.0-igo", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.CORE),
+        ("CC BY-NC-SA 3.0 IGO", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.NC),
+        ("https://creativecommons.org/licenses/by-nc/3.0/igo/", LicenseStatus.REDISTRIBUTABLE,
+         DatasetSubset.NC),
+        # slash form and typographic dashes
+        ("CC BY/NC", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.NC),
+        ("cc-by/nc-sa/4.0", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.NC),
+        ("CC BY—NC 4.0", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.NC),  # em dash
+        ("CC BY–NC–ND", LicenseStatus.EXCLUDED, None),  # en dash
+        # element order is not significant
+        ("cc-by-sa-nc", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.NC),
+        # versions CC never published -> do not guess
+        ("cc-by-99", LicenseStatus.NEEDS_REVIEW, None),
+        ("cc-by-0", LicenseStatus.NEEDS_REVIEW, None),
+        ("cc-by-nc-5.0", LicenseStatus.NEEDS_REVIEW, None),
+        ("cc-by-4.0.1", LicenseStatus.NEEDS_REVIEW, None),
+        ("cc0-2.0", LicenseStatus.NEEDS_REVIEW, None),
+        # versions CC did publish
+        ("cc-by-1.0", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.CORE),
+        ("cc-by-2.5", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.CORE),
+        ("cc0-1.0", LicenseStatus.REDISTRIBUTABLE, DatasetSubset.CORE),
+    ],
+)
+def test_more_spellings_and_versions(license_id, status, subset):
+    decision = license_subset(license_id)
+    assert decision.status is status
+    assert decision.subset is subset
+
+
+@pytest.mark.parametrize(
+    ("license_id", "subset", "admitted"),
+    [
+        ("cc-by", DatasetSubset.CORE, True),
+        ("cc-by-nc", DatasetSubset.NC, True),
+        ("cc-by-nd", DatasetSubset.CORE, False),
+        ("cc-by-nc-nd", DatasetSubset.NC, False),
+        ("other-oa", DatasetSubset.CORE, False),
+        (None, DatasetSubset.CORE, False),
+    ],
+)
+def test_licence_admitted_for_subset(license_id, subset, admitted):
+    assert licence_admitted_for(license_id, subset) is admitted
+
+
+@pytest.mark.parametrize(
+    ("license_id", "subset"),
+    [("cc-by", DatasetSubset.NC), ("cc-by-nc-sa", DatasetSubset.CORE)],
+)
+def test_licence_admitted_for_a_contradicting_subset_raises(license_id, subset):
+    with pytest.raises(ValueError, match="subset"):
+        licence_admitted_for(license_id, subset)

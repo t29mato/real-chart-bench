@@ -4,8 +4,10 @@ import pytest
 
 from real_chart_bench.domain.dataset_subset import DatasetSubset
 from real_chart_bench.usecase.dataset_subsets import (
+    declared_subset,
     manifest_entry_subset,
     result_subset,
+    subset_fields,
 )
 
 # --- papers.json / figures.json entries -------------------------------------------
@@ -58,3 +60,29 @@ def test_nc_flag_on_a_core_dataset_version_is_refused():
 def test_nc_dataset_version_without_the_flag_is_refused():
     with pytest.raises(ValueError, match="pool"):
         result_subset({"dataset_version": "nc-v0-eval-pilot-n12"})
+
+
+# --- review L4: one default rule for a record's declared subset ---------------------
+
+
+@pytest.mark.parametrize(
+    ("entry", "subset"),
+    [
+        ({}, DatasetSubset.CORE),
+        ({"license_id": "cc-by"}, DatasetSubset.CORE),
+        ({"license_id": None}, DatasetSubset.CORE),
+        ({"license_id": "cc-by-nc-nd"}, DatasetSubset.CORE),  # admitted nowhere
+        ({"license_id": "cc-by-nc"}, DatasetSubset.NC),
+        ({"license_id": "cc-by-nc-nd", "subset": "nc"}, DatasetSubset.NC),
+    ],
+)
+def test_declared_subset(entry, subset):
+    assert declared_subset(entry) is subset
+
+
+# --- review L3: core stays implicit when written ------------------------------------
+
+
+def test_subset_fields_are_empty_for_core_and_explicit_for_nc():
+    assert subset_fields(DatasetSubset.CORE) == {}
+    assert subset_fields(DatasetSubset.NC) == {"subset": "nc"}

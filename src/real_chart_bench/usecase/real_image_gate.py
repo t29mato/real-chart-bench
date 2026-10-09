@@ -15,7 +15,9 @@ just not includable in scoring until the relevant harness gap closes.
 Selection is per dataset subset (design §7.88.1): ``core`` by default, so
 every existing caller keeps scoring exactly the figures it always did; the
 ``nc`` figures are selected separately and scored on their own
-dataset_version, never pooled with ``core``.
+dataset_version, never pooled with ``core``. An entry whose licence is not
+admitted for its subset (ND, unknown, none on record) is never selected,
+whatever its ``subset`` says.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ def select_verified_pairings(
         if p.status is VerificationStatus.VERIFIED
         and p.excluded_reason is None
         and p.subset is subset
+        and p.is_licence_admitted  # design §7.88.1: ND / unknown / no licence -> out
     ]
 
 

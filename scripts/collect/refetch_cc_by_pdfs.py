@@ -78,6 +78,8 @@ PAPERS_PATH = ROOT / "data/manifest/v0/papers.json"
 FIGURES_PATH = ROOT / "data/manifest/v0/figures.json"
 SUMMARY_PATH = ROOT / "data/manifest/v0/summary.json"
 LOG_PATH = ROOT / "data/manifest/v0/refetch_log.json"
+# design §7.87 (owner, 2026-10-09): the lab IP is shared with the owner's browser
+MIN_PDF_GAP_S = 60.0
 TRANSIENT = {RefetchStatus.LOOKUP_FAILED.value, RefetchStatus.CONNECTION_ERROR.value}
 
 
@@ -285,6 +287,8 @@ def main() -> None:
     args = ap.parse_args()
     if args.delay < 1.0:
         ap.error("--delay must be >= 1.0 s (politeness, design §6.3)")
+    if args.pdf_gap < MIN_PDF_GAP_S:
+        ap.error(f"--pdf-gap must be >= {MIN_PDF_GAP_S:g} s (owner instruction, design §7.87)")
     if args.report:
         report(load_log())
     elif args.update_manifest:

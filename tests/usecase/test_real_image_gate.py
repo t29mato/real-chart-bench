@@ -1,8 +1,10 @@
+import pytest
+
 from real_chart_bench.domain.verified_pairing import VerificationStatus, VerifiedPairing
 from real_chart_bench.usecase.real_image_gate import is_verified, select_verified_pairings
 
 
-def _pairing(paper_id, figure_id, status, *, excluded_reason=None):
+def _pairing(paper_id, figure_id, status, *, excluded_reason=None, license_id="cc-by"):
     return VerifiedPairing(
         paper_id=paper_id,
         figure_id=figure_id,
@@ -14,6 +16,7 @@ def _pairing(paper_id, figure_id, status, *, excluded_reason=None):
         verified_at="2026-08-16",
         evidence="test",
         excluded_reason=excluded_reason,
+        license_id=license_id,
     )
 
 
@@ -131,3 +134,23 @@ def test_select_verified_pairings_nc_only():
     ]
     selected = select_verified_pairings(registry, subset=DatasetSubset.NC)
     assert [p.figure_id for p in selected] == ["11"]
+
+
+# --- review M1: the licence gate is enforced where figures are scored --------------
+
+
+@pytest.mark.parametrize("license_id", [None, "cc-by-nd", "cc-by-nc-nd", "other-oa", "cc-by-99"])
+def test_verified_entry_without_an_admitted_licence_is_not_scored(license_id):
+    registry = [
+        _pairing("1", "10", VerificationStatus.VERIFIED),
+        _pairing("2", "20", VerificationStatus.VERIFIED, license_id=license_id),
+    ]
+    assert [p.figure_id for p in select_verified_pairings(registry)] == ["10"]
+
+
+def test_nd_entry_is_not_scored_in_nc_either():
+    from real_chart_bench.domain.dataset_subset import DatasetSubset
+
+    registry = [_pairing("2", "20", VerificationStatus.VERIFIED, license_id="cc-by-nc-nd")]
+    assert select_verified_pairings(registry, subset=DatasetSubset.NC) == []
+
