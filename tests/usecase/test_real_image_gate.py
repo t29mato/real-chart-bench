@@ -87,3 +87,47 @@ def test_benchmark_paper_ids_cover_every_status_not_only_the_scored_set():
     ]
 
     assert benchmark_paper_ids(registry) == {"1", "2", "3"}
+
+
+# --- design §7.88.1: core and nc are selected separately, never pooled -------------
+
+
+def _subset_pairing(figure_id, subset):
+    from real_chart_bench.domain.dataset_subset import DatasetSubset
+
+    nc = subset is DatasetSubset.NC
+    root = "verified_pairs_nc" if nc else "verified_pairs"
+    return VerifiedPairing(
+        paper_id="1",
+        figure_id=figure_id,
+        image_path=f"data/{root}/crops/1/{figure_id}.png",
+        panel_label=None,
+        x_range=(0.0, 1.0),
+        y_range=(0.0, 1.0),
+        status=VerificationStatus.VERIFIED,
+        verified_at="2026-10-10",
+        evidence="test",
+        license_id="cc-by-nc" if nc else "cc-by",
+        subset=subset,
+    )
+
+
+def test_select_verified_pairings_defaults_to_core_only():
+    from real_chart_bench.domain.dataset_subset import DatasetSubset
+
+    registry = [
+        _subset_pairing("10", DatasetSubset.CORE),
+        _subset_pairing("11", DatasetSubset.NC),
+    ]
+    assert [p.figure_id for p in select_verified_pairings(registry)] == ["10"]
+
+
+def test_select_verified_pairings_nc_only():
+    from real_chart_bench.domain.dataset_subset import DatasetSubset
+
+    registry = [
+        _subset_pairing("10", DatasetSubset.CORE),
+        _subset_pairing("11", DatasetSubset.NC),
+    ]
+    selected = select_verified_pairings(registry, subset=DatasetSubset.NC)
+    assert [p.figure_id for p in selected] == ["11"]

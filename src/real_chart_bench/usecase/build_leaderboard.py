@@ -64,11 +64,21 @@ A result marked ``"diagnostic": true`` is left out of both tables. It is a
 scored, archived side measurement -- e.g. the v3 Sonnet first attempts made
 without image tools (design §7.73 (2)) -- that answers a question about one
 run rather than entering the ranking.
+
+Dataset subsets (design §7.88.1): a result scored on the ``nc`` (non-commercial)
+figures has ``"subset": "nc"`` and an ``nc-`` dataset_version, so it is always a
+group of its own; every ``nc`` group is ordered after every ``core`` group, and
+inside the ``nc`` groups the same main-condition / figure-count order applies.
+A result whose ``subset`` and dataset_version disagree is refused
+(usecase/dataset_subsets.result_subset) -- the two subsets are never pooled.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from real_chart_bench.domain.dataset_subset import DatasetSubset, strip_subset_prefix
+from real_chart_bench.usecase.dataset_subsets import result_subset
 
 _PENDING_STATUS = "pending_external_run"
 _SCORED_STATUS = "scored"
@@ -144,6 +154,7 @@ _REAL_FIGURE_PREFIX = "v0-eval-pilot-"
 
 
 def _main_condition_rank(group_key: str | None) -> int:
+    group_key = strip_subset_prefix(group_key)
     if group_key and group_key.startswith(_REAL_FIGURE_PREFIX):
         for i, suffix in enumerate(_MAIN_CONDITION_SUFFIXES):
             if group_key.endswith(suffix) and "-llm-subset-" not in group_key:
@@ -163,9 +174,10 @@ def select_shown_results(results: list[dict]) -> list[dict]:
     the untrained CV baselines stay in results/ but are not shown."""
     shown = []
     for r in results:
+        result_subset(r)  # refuses a result that would pool core and nc
         if str(r.get("model_id", "")).startswith(_UNTRAINED_BASELINE_PREFIXES):
             continue
-        version = r.get("dataset_version")
+        version = strip_subset_prefix(r.get("dataset_version"))
         if version and version.startswith(_REAL_FIGURE_PREFIX):
             if _main_condition_rank(version) == len(_MAIN_CONDITION_SUFFIXES):
                 continue
@@ -177,7 +189,10 @@ def _group_sort_key(group_key: str | None, groups: dict[str | None, list[dict]])
     group_results = groups[group_key]
     n_figures = max((r.get("n_figures") or 0) for r in group_results)
     is_unlabeled = group_key is None
-    return (is_unlabeled, _main_condition_rank(group_key), -n_figures, group_key or "")
+    # design §7.88.1: core sections first (False sorts first); for core this
+    # adds a constant to the key, so the existing order is unchanged
+    is_nc = result_subset(group_results[0]) is DatasetSubset.NC
+    return (is_nc, is_unlabeled, _main_condition_rank(group_key), -n_figures, group_key or "")
 
 
 def _scored_row(result: dict, rank: int) -> LeaderboardRow:
@@ -218,6 +233,7 @@ def _pending_row(result: dict) -> LeaderboardRow:
 def _ordered_groups(scored: list[dict]) -> list[tuple[str | None, list[dict]]]:
     groups: dict[str | None, list[dict]] = {}
     for r in scored:
+        result_subset(r)  # refuses a result that would pool core and nc
         groups.setdefault(r.get("dataset_version"), []).append(r)
     return [(k, groups[k]) for k in sorted(groups, key=lambda k: _group_sort_key(k, groups))]
 

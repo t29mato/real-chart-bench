@@ -12,6 +12,9 @@ already disambiguates panels/curves without needing figure_name parsing —
 see design §7.9 point 5. Pairing an extracted PDF image to a given
 figure_id is a *separate*, still-open problem (§7.10) and is not attempted
 here; FigureRecord.image_uri stays unset until that's solved.
+
+Each figure inherits the paper's ``subset`` (design §7.88.1): an NC paper's
+figures are ``nc``, distributed and scored apart from ``core``.
 """
 
 from __future__ import annotations
@@ -57,6 +60,7 @@ def build_ground_truth_for_paper(
             paper_id=paper.paper_id,
             figure_reference=rows[0].figure_name,
             split=split,
+            subset=paper.subset,
         )
         for figure_id, rows in rows_by_figure.items()
     )

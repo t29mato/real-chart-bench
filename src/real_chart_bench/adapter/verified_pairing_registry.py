@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from real_chart_bench.domain.curve import ScaleType
+from real_chart_bench.domain.dataset_subset import DatasetSubset, parse_subset
+from real_chart_bench.domain.licensing import LicenseStatus, license_subset
 from real_chart_bench.domain.verified_pairing import (
     CropRecipe,
     FigureKind,
@@ -57,6 +59,19 @@ def _parse_crop(raw: dict[str, Any] | None) -> CropRecipe | None:
         box=tuple(raw["box"]),
         rotation_deg=raw.get("rotation_deg", 0),
     )
+
+
+def _parse_entry_subset(raw: dict[str, Any]) -> DatasetSubset:
+    """design §7.88.1: an explicit ``subset`` key is taken as written (and
+    checked against the licence by VerifiedPairing); without one, the licence
+    decides, and an entry with no redistributable licence on record is core
+    (every entry written before the subset existed)."""
+    if "subset" in raw:
+        return parse_subset(raw["subset"])
+    decided = license_subset(raw.get("license_id"))
+    if decided.status is LicenseStatus.REDISTRIBUTABLE and decided.subset is not None:
+        return decided.subset
+    return DatasetSubset.CORE
 
 
 def _parse_entry(raw: dict[str, Any]) -> VerifiedPairing:
@@ -104,6 +119,7 @@ def _parse_entry(raw: dict[str, Any]) -> VerifiedPairing:
         figure_tags=tuple(raw["figure_tags"]) if "figure_tags" in raw else (),
         crop=_parse_crop(raw.get("crop")),
         final_sha256=raw.get("final_sha256"),
+        subset=_parse_entry_subset(raw),
     )
 
 
@@ -224,6 +240,11 @@ def serialize_entry(
     else:
         out.pop("crop", None)
         out.pop("final_sha256", None)
+
+    # design §7.88.1: core is the default and stays implicit, so the entries
+    # written before the subset existed round-trip byte for byte
+    if pairing.subset is not DatasetSubset.CORE or "subset" in out:
+        out["subset"] = pairing.subset.value
 
     return out
 

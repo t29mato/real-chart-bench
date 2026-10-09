@@ -4975,6 +4975,63 @@ best_oa_location で取れたのは 28、2本目以降で取れたのが 18)。�
 **取得は今週は行わない**(RSC の 429 を受けたオーナー判断「論文取得の件は、今週ストップ」)。
 再開時は §7.87 の決まり(PDF 要求の間隔 60 秒以上、403/429 を返したホストには再度アクセスしない)に従う。
 
+#### 7.88.1 実装設計: `nc` を通す配管(2026-10-10、取得再開前に入れておく)
+
+目的: 取得を再開したとき、NC 論文がコード変更なしで `nc` として流れ、`core` の結果は1バイトも変わらないこと。
+
+**ドメイン(`domain/licensing.py`、純関数)**
+
+- `DatasetSubset`(`core` / `nc`)と `LicenseDecision(status, subset, normalized)` を足す。`subset` は status が REDISTRIBUTABLE のときだけ入る。
+- `normalize_license_id`: 大文字小文字・空白・`_`・URL 形(`creativecommons.org/licenses/by-nc/4.0/`)・バージョン(`4.0` 等)の表記ゆれを `cc-by-nc-sa` のような正規形にそろえる。
+- `license_subset(license_id)`(ライセンス文字列だけで決める写像): CC BY / BY-SA / CC0 / public-domain → `core`、BY-NC / BY-NC-SA → `nc`、ND を含むもの → EXCLUDED、空・未知の文字列 → NEEDS_REVIEW(人手確認キュー)。
+- `classify_figure_license(license_id, crossref_license_id=, is_oa=)`: §1.3 の判定に `nc` を足したもの。`is_oa=False` は除外、OpenAlex が空なら Crossref で裏取り、という順序は §1.3 のまま。
+  既存の `classify_license` は「`core` だけを通す」旧来の関数として残す(呼び出し元の意味を変えない)。
+- `license_drift(recorded, current)`: ライセンス再確認の判定。`unchanged` / `subset_move`(core ↔ nc)/ `exclude`(ND・closed)/ `review`(空・未知)/ `lookup_error`。**報告するだけで何も書き換えない**。
+- `distribution_dir_name(subset)`: `core` → `verified_pairs`、`nc` → `verified_pairs_nc`。`nc_dataset_version(base)`: `"nc-" + base`。
+
+**スキーマ(後方互換)**: `PaperRecord` / `FigureRecord` / `VerifiedPairing` に `subset`(既定 `core`)。
+JSON(`papers.json` / `figures.json` / `registry.json`)では `subset` キーが**無ければ `core`**。新規の `nc` エントリにだけ書く(既存ファイルはバイト一致のまま)。
+registry 読み込み時、`subset` と `license_id` から決まる subset が食い違えばエラー(手で上書きしない、§7.88)。
+
+**流れ**
+
+```mermaid
+flowchart LR
+  L[license string] --> N[normalize_license_id]
+  N --> S{license_subset}
+  S -->|BY / BY-SA / CC0| C[core]
+  S -->|BY-NC / BY-NC-SA| NC[nc]
+  S -->|*-ND*| X[excluded]
+  S -->|empty / unknown| R[manual review queue]
+  C --> DC[data/verified_pairs/ + ATTRIBUTION.md]
+  NC --> DN[data/verified_pairs_nc/ + ATTRIBUTION.md<br/>non-commercial notice, SA noted]
+  C --> SC[select_verified_pairings subset=core<br/>dataset_version v0-eval-pilot-nN...]
+  NC --> SN[select_verified_pairings subset=nc<br/>dataset_version nc-v0-eval-pilot-nN...]
+  SC --> LB[leaderboard: separate sections, never pooled]
+  SN --> LB
+```
+
+- **収集**: `collect_v0_dataset.py` と `pdf_refetch.refetch_paper` は `classify_figure_license` を使い、`nc` を落とさず `subset` 付きで記録する。ND は従来どおり落とす。
+  `refetch_cc_by_pdfs.py` の候補は `license_subset` が `core` か `nc` の論文。
+  `collect_v0_dataset.py --candidates-only out.json` はライセンス判定(OpenAlex、キャッシュ付き)だけを行い、論文ごとの subset 一覧を書いて終わる(PDF には触れない)。
+  同スクリプトの PDF 取得間隔は §7.87 に合わせ 60 秒に上げる。
+- **採点**: `select_verified_pairings(registry, subset=core)` が既定。既存の全呼び出しは引数なしのまま `core` だけを受け取る。
+  `nc` は `subset=nc` で別に選び、結果ファイルは `"subset": "nc"`、`dataset_version` は `nc-` 接頭辞(`run_baselines.py --subset nc` が最初の実装)。
+  リーダーボードは `dataset_version` ごとに区切る既存の仕組みでそのまま別セクションになり、`nc` のセクションは `core` の後ろに「非商用サブセット」と見出しを付けて出す。
+  結果ファイルの `subset` と `dataset_version` の接頭辞が食い違えばエラー(混ぜた数字を出さない)。
+- **配布**: `generate_attribution.py` は subset ごとに ATTRIBUTION を書く。`core` は従来の `data/verified_pairs/ATTRIBUTION.md`(文面不変)。
+  `nc` は `data/verified_pairs_nc/ATTRIBUTION.md` に「非商用に限る」「NC-SA は同一ライセンス継承」を明記する。`nc` の図が1枚も無いうちは書かない。
+  図の置き場所が subset と食い違う(`core` の図が `verified_pairs_nc/` にある等)ときはエラー。`prepare_hf_dataset.py` も `nc` を別ディレクトリ・別カード(`license: cc-by-nc-4.0`)に分ける。
+- **再確認**: `recheck_figure_licenses.py` は `license_drift` で分類し、`nc`(`verified_pairs_nc/ATTRIBUTION.md`)も対象にする。NC → NC-ND は除外候補、CC BY → NC は subset 移動候補として**報告だけ**する。
+
+**確認**: 既存の結果がすべて `core` なので、`rescore_all.py` で `results/`・`site/` を作り直し、`run_at` 以外がバイト一致することを確かめる。
+
+**NC 92 論文の一覧はリポジトリに無い**(2026-10-10 確認)。2026-10-07 の再スクリーニングは `/tmp/rescreen.py` と
+その Unpaywall キャッシュで行われ、どちらも残っていない(`~/.cache/real-chart-bench/starrydata-work/unpaywall.json` は
+557 論文分だけで、cc-by-nc は 1 本)。再開時は
+`collect_v0_dataset.py --candidates-only <out.json>`(OpenAlex、論文ごとの subset 一覧を書くだけで PDF に触れない)で作り直す。
+OpenAlex の `primary_location.license` と Unpaywall の `best_oa_location.license` は数%ずれるので、本数が 92 と一致するとは限らない。
+
 ### 7.89 再取得画像のペアリング候補とレビュー画面(2026-10-09、設計は pairing-automation.md §12)
 
 §7.87 の46論文について、自動校正+Hungarian 割当で画像↔Starrydata GT の候補を生成し、

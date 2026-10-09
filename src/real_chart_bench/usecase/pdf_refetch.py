@@ -12,12 +12,14 @@ publisher's 403, which a single "failed" bucket would have hidden).
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from real_chart_bench.domain.licensing import LicenseStatus, classify_license
+from real_chart_bench.domain.dataset_subset import DatasetSubset
+from real_chart_bench.domain.licensing import LicenseStatus, classify_figure_license
 from real_chart_bench.usecase.figure_extraction import FigureExtractionPort, canonical_image_name
 from real_chart_bench.usecase.oa_lookup import OaRecord
 from real_chart_bench.usecase.pdf_fetch import PdfFetchPort, PdfFetchStatus
@@ -68,13 +70,16 @@ class RefetchOutcome:
     pdf_sha256: str | None = None
     images: tuple[NamedImage, ...] = ()
     detail: str | None = None
+    # design §7.88.1: the subset today's licence puts the paper in; set once
+    # the licence check has passed (None before that)
+    subset: DatasetSubset | None = None
 
     @property
     def n_images(self) -> int:
         return len(self.images)
 
     def to_log_entry(self) -> dict:
-        return {
+        entry = {
             "status": self.status.value,
             "licence_today": self.licence_today,
             "route": (
@@ -90,6 +95,10 @@ class RefetchOutcome:
             ],
             "detail": self.detail,
         }
+        # core stays implicit, so the log format of the existing entries holds
+        if self.subset is not None and self.subset is not DatasetSubset.CORE:
+            entry["subset"] = self.subset.value
+        return entry
 
 
 def _sha256(data: bytes) -> str:
@@ -102,16 +111,37 @@ def refetch_paper(
     extractor: FigureExtractionPort,
     *,
     pause: Callable[[], None] = lambda: None,
+    expected_subset: DatasetSubset = DatasetSubset.CORE,
 ) -> RefetchOutcome:
     """``pause`` is called between consecutive PDF requests (the rate-limit
-    policy belongs to the caller; this function only guarantees it is consulted)."""
+    policy belongs to the caller; this function only guarantees it is consulted).
+
+    ``expected_subset`` is the subset the paper was collected under (design
+    §7.88.1). Today's licence must put it in that same subset: ND / closed /
+    unknown and a core <-> nc move alike come back ``licence_changed`` without
+    a fetch -- a subset move is for a person to decide, never applied here."""
     if record is None:
         return RefetchOutcome(status=RefetchStatus.LOOKUP_FAILED)
 
     licence = record.best_license
-    if classify_license(licence, is_oa=record.is_oa) is not LicenseStatus.REDISTRIBUTABLE:
+    decision = classify_figure_license(licence, is_oa=record.is_oa)
+    if (
+        decision.status is not LicenseStatus.REDISTRIBUTABLE
+        or decision.subset is not expected_subset
+    ):
         return RefetchOutcome(status=RefetchStatus.LICENCE_CHANGED, licence_today=licence)
+    return dataclasses.replace(
+        _fetch(record, licence, fetcher, extractor, pause), subset=decision.subset
+    )
 
+
+def _fetch(
+    record: OaRecord,
+    licence: str | None,
+    fetcher: PdfFetchPort,
+    extractor: FigureExtractionPort,
+    pause: Callable[[], None],
+) -> RefetchOutcome:
     urls = record.pdf_urls()
     if not urls:
         return RefetchOutcome(status=RefetchStatus.NO_URL, licence_today=licence)

@@ -17,6 +17,13 @@ data/manifest/v0/ + data/raw/images/, not itself a source of truth):
                              # copied — avoids duplicating 546MB until the
                              # actual upload step)
 
+Dataset subsets (design §7.88.1): only ``core`` papers (CC BY / BY-SA / CC0)
+go into data/hf_dataset/. ``nc`` papers (CC BY-NC / BY-NC-SA) go into their own
+directory, data/hf_dataset_nc/ (gitignored), with their own card
+(``license: cc-by-nc-4.0``, non-commercial use only) -- a separate HF dataset
+(or config) at upload time, never mixed into the core one. It is only written
+when at least one nc paper has images.
+
 Usage:
     python scripts/publish/prepare_hf_dataset.py              # prepare only
     python scripts/publish/prepare_hf_dataset.py --upload      # refuses
@@ -31,6 +38,11 @@ import json
 import os
 import pathlib
 import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
+
+from real_chart_bench.domain.dataset_subset import DatasetSubset  # noqa: E402
+from real_chart_bench.usecase.dataset_subsets import manifest_entry_subset  # noqa: E402
 
 REPO_ID = "real-chart-bench/thermoelectric-v0"  # placeholder, confirm with 司令塔 before real use
 DATASET_CARD = """\
@@ -67,7 +79,41 @@ for the full collection methodology.
 """
 
 
-def build_metadata(manifest_dir: pathlib.Path, raw_images_dir: pathlib.Path) -> list[dict]:
+NC_DATASET_CARD = """\
+---
+license: cc-by-nc-4.0
+task_categories:
+- image-to-text
+- table-question-answering
+tags:
+- chart-data-extraction
+- scientific-figures
+- thermoelectric-materials
+pretty_name: real-chart-bench v0 NC subset (non-commercial use only)
+---
+
+# real-chart-bench v0 — NC subset (non-commercial use only)
+
+**Non-commercial use only.** The figure images here come from open-access
+papers published under CC BY-NC or CC BY-NC-SA (see each row's `license`). They
+are kept apart from the core dataset (CC BY / CC BY-SA / CC0), which has no such
+restriction, and are scored separately -- never pooled with the core numbers
+(design doc `docs/design/benchmark-architecture.md` §7.88).
+
+- **Figure image license**: CC BY-NC or CC BY-NC-SA, per row. Rows under
+  CC BY-NC-SA carry its ShareAlike condition: anything you build from them must
+  be distributed under the same licence.
+- **Ground truth license**: CC BY 4.0 (Starrydata / NIMS MDR), as in the core set.
+- **Caveat**: as in the core set, `image_files` is the per-paper candidate pool,
+  not yet matched to a specific `figure_id`.
+"""
+
+
+def build_metadata(
+    manifest_dir: pathlib.Path,
+    raw_images_dir: pathlib.Path,
+    subset: DatasetSubset = DatasetSubset.CORE,
+) -> list[dict]:
     papers = json.loads((manifest_dir / "papers.json").read_text())
     figures = json.loads((manifest_dir / "figures.json").read_text())
     curves = json.loads((manifest_dir / "curves.json").read_text())
@@ -83,6 +129,8 @@ def build_metadata(manifest_dir: pathlib.Path, raw_images_dir: pathlib.Path) -> 
     for paper in papers:
         if not paper.get("n_extracted_images"):
             continue  # Tier 1 only (no image pool) — not part of the HF dataset
+        if manifest_entry_subset(paper) is not subset:
+            continue  # design 7.88.1: one subset per dataset, never mixed
 
         paper_id = paper["paper_id"]
         image_dir = raw_images_dir / paper_id
@@ -150,15 +198,21 @@ def main() -> None:
     parser.add_argument("--upload", action="store_true", help="refuses unless HF_TOKEN is set")
     args = parser.parse_args()
 
-    rows = build_metadata(args.manifest_dir, args.raw_images_dir)
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    with (args.out_dir / "metadata.jsonl").open("w") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    (args.out_dir / "README.md").write_text(DATASET_CARD)
+    for subset, out_dir, card in (
+        (DatasetSubset.CORE, args.out_dir, DATASET_CARD),
+        (DatasetSubset.NC, args.out_dir.with_name(args.out_dir.name + "_nc"), NC_DATASET_CARD),
+    ):
+        rows = build_metadata(args.manifest_dir, args.raw_images_dir, subset)
+        if subset is not DatasetSubset.CORE and not rows:
+            continue
+        out_dir.mkdir(parents=True, exist_ok=True)
+        with (out_dir / "metadata.jsonl").open("w") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        (out_dir / "README.md").write_text(card)
 
-    n_images = sum(len(r["image_files"]) for r in rows)
-    print(f"prepared {len(rows)} papers, {n_images} images -> {args.out_dir}")
+        n_images = sum(len(r["image_files"]) for r in rows)
+        print(f"prepared {len(rows)} {subset.value} papers, {n_images} images -> {out_dir}")
     print(f"(not uploaded; repo_id placeholder: {REPO_ID} — confirm with 司令塔 before real use)")
 
     if args.upload:

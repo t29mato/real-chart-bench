@@ -27,10 +27,20 @@ therefore uses:
     can't see)
 
 held-out papers are never used here — only PUBLIC-split figures.
+
+Dataset subsets (design §7.88.1): by default only the ``core`` figures (CC BY /
+BY-SA / CC0) are scored, exactly as before. ``--subset nc`` scores the ``nc``
+figures (CC BY-NC / BY-NC-SA) on their own: results/<model_id>-nc.json with
+``"subset": "nc"`` and an ``nc-`` dataset_version, never pooled with core.
+
+Usage:
+    python scripts/eval/run_baselines.py               # core
+    python scripts/eval/run_baselines.py --subset nc   # the nc figures, separately
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import sys
@@ -50,6 +60,10 @@ from real_chart_bench.adapter.naive_cv_extractor import NaiveCvModelRunner  # no
 from real_chart_bench.adapter.panel_layout import PyMuPdfPanelSplitter  # noqa: E402
 from real_chart_bench.adapter.verified_pairing_registry import load_registry  # noqa: E402
 from real_chart_bench.domain.curve import Curve, ScaleType  # noqa: E402
+from real_chart_bench.domain.dataset_subset import (  # noqa: E402
+    DatasetSubset,
+    dataset_version_for_subset,
+)
 from real_chart_bench.domain.verified_pairing import VerifiedPairing  # noqa: E402
 from real_chart_bench.usecase.evaluate_dataset import (  # noqa: E402
     PRIMARY_POINT_TAU,
@@ -154,13 +168,13 @@ def _dataset_item_for(pairing: VerifiedPairing) -> DatasetItem:
     return DatasetItem(figure_id=figure_id, task=task, ground_truth=_ground_truth_for(pairing))
 
 
-def _real_gold_items() -> list[DatasetItem]:
+def _real_gold_items(subset: DatasetSubset = DatasetSubset.CORE) -> list[DatasetItem]:
     """Every registry entry with status=VERIFIED (design §7.19 gate) —
     REJECTED and unverified pairings are structurally excluded, not just
     conventionally skipped. See data/verified_pairs/registry.json for the
     full audit trail of what was checked and why."""
     registry = load_registry(REGISTRY_PATH)
-    return [_dataset_item_for(p) for p in select_verified_pairings(registry)]
+    return [_dataset_item_for(p) for p in select_verified_pairings(registry, subset=subset)]
 
 
 def _synthetic_items() -> list[DatasetItem]:
@@ -219,19 +233,21 @@ def _synthetic_items() -> list[DatasetItem]:
     return items
 
 
-def build_dataset() -> tuple[list[DatasetItem], int]:
+def build_dataset(subset: DatasetSubset = DatasetSubset.CORE) -> tuple[list[DatasetItem], int]:
     """Returns (items, n_real) -- n_real is exposed separately so the results
     payload's dataset_version can encode the actual verified-pair count
     (design §7.27/HQ 2026-08-21: a hardcoded version string went stale
     across the 1->10->20-pair expansions and could be confused with older
     runs; deriving it from len(real_items) makes that impossible)."""
-    real_items = _real_gold_items()
+    real_items = _real_gold_items(subset)
     items = real_items + _synthetic_items()
     return items, len(real_items)
 
 
-def run(model_id: str, model_name: str, model) -> dict:
-    items, n_real = build_dataset()
+def run(model_id: str, model_name: str, model, subset: DatasetSubset = DatasetSubset.CORE) -> dict:
+    items, n_real = build_dataset(subset)
+    if not n_real:
+        raise SystemExit(f"no scoreable {subset.value} figures in the registry yet")
     results = evaluate_model_on_dataset(model, items, matcher_for=matcher_for_task)
 
     per_figure = [figure_result_row(r) for r in results]
@@ -250,8 +266,9 @@ def run(model_id: str, model_name: str, model) -> dict:
     payload = {
         "model_id": model_id,
         "model_name": model_name,
-        "dataset_version": (
-            f"v0-eval-pilot-n{n_real}{ground_truth_revision(GROUND_TRUTH_SUPPLEMENT_DIR)}"
+        "dataset_version": dataset_version_for_subset(
+            f"v0-eval-pilot-n{n_real}{ground_truth_revision(GROUND_TRUTH_SUPPLEMENT_DIR)}",
+            subset,
         ),
         "run_at": datetime.now(UTC).isoformat(),
         "n_figures": len(real_rows),
@@ -276,6 +293,9 @@ def run(model_id: str, model_name: str, model) -> dict:
         ),
         "per_figure": per_figure,
     }
+    if subset is not DatasetSubset.CORE:
+        # design 7.88.1: core results carry no key (byte-identical to before)
+        payload["subset"] = subset.value
     return payload
 
 
@@ -511,7 +531,34 @@ def _lineformer_recomputed_subset(subset_payload: dict) -> dict | None:
     }
 
 
+def run_nc() -> None:
+    """design 7.88.1: the two CV baselines on the nc figures alone. The
+    LineFormer-comparable and hue-zero subsets are core-only comparisons."""
+    RESULTS_DIR.mkdir(exist_ok=True)
+    for model_id, model_name, model in (
+        ("naive-cv-v0-nc", "Naive CV (hue-bucket baseline), NC subset", NaiveCvModelRunner()),
+        (
+            "achromatic-cv-v0-nc",
+            "Achromatic CV (grey-level clustering baseline), NC subset",
+            AchromaticCvModelRunner(),
+        ),
+    ):
+        payload = run(model_id, model_name, model, DatasetSubset.NC)
+        out_path = RESULTS_DIR / f"{model_id}.json"
+        out_path.write_text(json.dumps(payload, indent=2))
+        print(f"wrote {out_path} ({payload['dataset_version']})", file=sys.stderr)
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument(
+        "--subset", choices=[s.value for s in DatasetSubset], default=DatasetSubset.CORE.value
+    )
+    args = parser.parse_args()
+    if DatasetSubset(args.subset) is DatasetSubset.NC:
+        run_nc()
+        return
+
     RESULTS_DIR.mkdir(exist_ok=True)
     payload = run("naive-cv-v0", "Naive CV (hue-bucket baseline)", NaiveCvModelRunner())
     out_path = RESULTS_DIR / f"{payload['model_id']}.json"
