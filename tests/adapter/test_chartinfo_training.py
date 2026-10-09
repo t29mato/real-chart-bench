@@ -104,8 +104,9 @@ def test_no_points_gives_no_label():
 
 
 def test_excluded_pmcids_cover_every_measurement_figure_paper():
-    keys = [{"fig_01.png": {"image": "CHARTINFO_2024_Train/images/scatter/PMC9___a.jpg",
-                            "source": "CHARTINFO_2024_Train/annotations_JSON/scatter/PMC9___a.json"}},
+    root = "CHARTINFO_2024_Train"
+    keys = [{"fig_01.png": {"image": f"{root}/images/scatter/PMC9___a.jpg",
+                            "source": f"{root}/annotations_JSON/scatter/PMC9___a.json"}},
             {"fig_01.png": {"source": "x/PMC7___b.json"}}]
     pm = excluded_pmcids(keys)
     assert pm == {"PMC9", "PMC7"}
