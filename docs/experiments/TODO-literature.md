@@ -69,6 +69,18 @@ WebFetch は PDF を解析できない)ことである。
 - URL: https://arxiv.org/pdf/2212.10505(PDF は取得したが解析不能)
 - 代替: ACL Anthology の HTML 版があるはず。arXiv の ar5iv 版 https://ar5iv.labs.arxiv.org/html/2212.10505
 
+### 7. ❓ ICPR 2020 CHART-Infographics の Task 6b の 0.710 / 0.232 — **何の平均か未確認**(2026-10-09 追加)
+- **なぜ重要**: 論文 4.8 で CHART-Info 2024 の scatter 582図の結果を並べる唯一の先行値。
+  ローカルの資料が食い違っている。
+  - `docs/experiments/2026-10-06-chartinfo-dataset-audit.md` は「実図の全体 data-score 0.552 / 0.765、**scatter は 0.232 / 0.710**」と書く
+  - `scripts/eval/score_chartinfo_pilot.py` の出力の注記(各バッチの `*.score.txt`、`data/chartinfo_runs/SUMMARY.md`)は
+    「**全チャート型の平均**で、scatter 単独の name / data の分解は未公開」と書く
+- 確認したいこと: (a) 0.710 は scatter の行か全チャート型の平均か、(b) 総合スコア(名前 + データ)かデータスコアか、
+  (c) 評価セット(UB-PMC 2020 の評価セット)の scatter の図数
+- 題名: ICPR 2020 Competition on Harvesting Raw Tables from Infographics(CHART-Infographics)、Davila ら
+- 取得: **今週は取得しない**(2026-10-09 オーナー判断で論文取得を停止中)。再開後に原論文の Task 6b の表を見る
+- 確認するまで、論文 1.2 の表では脚注つき、4.8 では「全チャート型(原論文で要確認)」と表記している
+
 ## 取得方法のメモ
 
 - **ar5iv がよく効く**: `https://ar5iv.labs.arxiv.org/html/<arXiv ID>` は HTML なので解析できる。
