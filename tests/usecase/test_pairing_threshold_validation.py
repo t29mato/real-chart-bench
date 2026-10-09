@@ -148,3 +148,11 @@ def test_normalise_reference_drops_trailing_quantity_words():
     assert normalise_reference("5a Converted") == "5a"
     assert normalise_reference("FIGURE4(ZT)") == "4zt"
     assert normalise_reference("") == ""
+
+
+def test_heldout_papers_is_every_third_by_numeric_id():
+    from real_chart_bench.usecase.pairing_threshold_validation import heldout_papers
+
+    assert heldout_papers(["100", "9", "10"]) == frozenset({"100"})
+    assert heldout_papers(["1", "2"]) == frozenset()
+    assert heldout_papers([]) == frozenset()

@@ -37,6 +37,7 @@ from real_chart_bench.usecase.pairing_threshold_validation import (  # noqa: E40
     WRONG,
     LabelledAssignment,
     clopper_pearson_upper,
+    heldout_papers,
     label_assignment,
     normalise_reference,
     sweep_adoption_rules,
@@ -196,6 +197,9 @@ def analyse(args) -> None:
                 )
             rows.append((key, r, outcome))
 
+    held = heldout_papers({k[0] for k in verified})
+    subsets["dev papers"] = {k for k in evaluable if k[0] not in held}
+    subsets["held-out papers"] = {k for k in evaluable if k[0] in held}
     for name, keys in subsets.items():
         print(f"\n## Lanes vs human pairing — {name} (n={len(keys)})\n")
         by = defaultdict(Counter)

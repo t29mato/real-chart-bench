@@ -239,31 +239,38 @@ def calibrate_frame(
         """Block mode (psm 6) reads a label column best; sparse mode (psm
         11) rescues scattered labels. Keep whichever fits more ticks."""
         best, best_n = (None, [], 0), -1
-        for psm in (6, 11):
-            raw = ocr_words(strip, psm=psm)
-            if superscripts:
-                raw = _exponent_rescue(strip, raw)
-            ws = [(t, a + ox, b + oy, c + ox, d + oy, conf) for t, a, b, c, d, conf in raw]
-            if v3:
-                ws = [wd for wd in ws if not touches_border(wd[1:5], (w, h))]
-                ws = _fix_glyphs(gray, ws, ox, ox + strip.shape[1])
-            if split_merged:
-                if axis == "x":
-                    ws = _split_line(gray, ws)
-                ws = _split_merged(gray, ws)
-            mw = _mirror_words(ws, w) if mirror else ws
-            rd = readings_for_axis(mw, fr, axis, ticks=ticks)
-            if superscripts:
-                # equally spaced "10..." labels as consecutive decades
-                dec = dict(decade_readings(labels_for_axis(mw, fr, axis, ticks=ticks),
-                                           direction=direction))
-                rd = [(px, rs + [r for r in dec.get(px, []) if r not in rs]) for px, rs in rd]
-            fit = fit_axis(rd, direction=direction, allow_reversed=v3, plausible_log=v3,
-                           sci=v3)
-            n = len(fit.ticks) if fit else 0
-            if n > best_n:
-                best, best_n = (fit, ws, len(rd)), n
-            if n >= 4:
+        # v3 leaves out words cut by the image border; when that leaves the
+        # axis unreadable they are kept for a second read (design
+        # pairing-automation.md 12.7): the fit still needs three agreeing ticks
+        for keep_border in ((False, True) if v3 else (False,)):
+            for psm in (6, 11):
+                raw = ocr_words(strip, psm=psm)
+                if superscripts:
+                    raw = _exponent_rescue(strip, raw)
+                ws = [(t, a + ox, b + oy, c + ox, d + oy, conf) for t, a, b, c, d, conf in raw]
+                if v3:
+                    if not keep_border:
+                        ws = [wd for wd in ws if not touches_border(wd[1:5], (w, h))]
+                    ws = _fix_glyphs(gray, ws, ox, ox + strip.shape[1])
+                if split_merged:
+                    if axis == "x":
+                        ws = _split_line(gray, ws)
+                    ws = _split_merged(gray, ws)
+                mw = _mirror_words(ws, w) if mirror else ws
+                rd = readings_for_axis(mw, fr, axis, ticks=ticks)
+                if superscripts:
+                    # equally spaced "10..." labels as consecutive decades
+                    dec = dict(decade_readings(labels_for_axis(mw, fr, axis, ticks=ticks),
+                                               direction=direction))
+                    rd = [(px, rs + [r for r in dec.get(px, []) if r not in rs]) for px, rs in rd]
+                fit = fit_axis(rd, direction=direction, allow_reversed=v3, plausible_log=v3,
+                               sci=v3)
+                n = len(fit.ticks) if fit else 0
+                if n > best_n:
+                    best, best_n = (fit, ws, len(rd)), n
+                if n >= 4:
+                    return best
+            if best_n >= 3:
                 break
         return best
 

@@ -171,3 +171,10 @@ def sweep_adoption_rules(
         RuleResult(s, m, c, adopt_stats(items, s, m, c, n_verified=n_verified))
         for s, m, c in itertools.product(s_grid, m_grid, c_grid)
     ]
+
+
+def heldout_papers(paper_ids: Iterable[str]) -> frozenset[str]:
+    """Every third paper (by numeric id, index % 3 == 2) is held out of
+    calibration development (design pairing-automation.md 12.7)."""
+    ordered = sorted(set(paper_ids), key=int)
+    return frozenset(p for i, p in enumerate(ordered) if i % 3 == 2)
