@@ -16,6 +16,9 @@ axis calibration on the scored figures, both conditions.
 
   .venv/bin/python scripts/train/marker_detector/run_hybrid.py --cache <pkl> \\
       --tuned <tune_post json> --run <name> --name <display name>
+
+A MarkerNet v2 run: the cache comes from cache_dets.py (--only bench, MPS) and
+--tuned is the checkpoint's tuned_v2.json (size / plot / legend rules).
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ from real_chart_bench.domain.marker_detection import (  # noqa: E402
 )
 
 CFG_KEYS = ("threshold", "group_threshold", "dup_frac", "same_series_frac", "embed_gate",
-            "edge_band", "frame_margin", "min_points")
+            "edge_band", "frame_margin", "min_points", "size_factor", "plot_min", "legend_max")
 
 
 def to_values(answer: list[dict], cal) -> list[dict]:
@@ -62,8 +65,9 @@ def main():
                     help="method A's post-processing (the before row), no frame restriction")
     args = ap.parse_args()
     tuned = json.loads(Path(args.tuned).read_text())
-    chosen = tuned["method_a"] if args.method_a else tuned["chosen"]
-    cfg = PostConfig(**{k: chosen[k] for k in CFG_KEYS})
+    # tuned_v2.json (tune_v2.py) calls the no-v2-rules row "baseline"
+    chosen = (tuned.get("method_a") or tuned["baseline"]) if args.method_a else tuned["chosen"]
+    cfg = PostConfig(**{k: chosen[k] for k in CFG_KEYS if k in chosen})
     ls = chosen["long_side"]
     cache = pickle.loads(Path(args.cache).read_bytes())
     pix_key = json.loads((REPO / "data/llm_run_pixcal/_key.json").read_text())
@@ -80,7 +84,7 @@ def main():
         t0 = time.time()
         cal = calibrate_image(load_rgb(REPO / lab["image_path"]))
         cal_s = time.time() - t0
-        dets = [Detection(x, y, s, m, tuple(e)) for x, y, s, m, e in row["dets"][ls]]
+        dets = [Detection(d[0], d[1], d[2], d[3], tuple(d[4]), *d[5:]) for d in row["dets"][ls]]
         t1 = time.time()
         ans = postprocess(dets, tuple(row["size"]), cal.frame if cal else None, cfg)
         post_s = time.time() - t1
@@ -110,11 +114,13 @@ def main():
     (out_dir / "pixpts_px.jsonl").write_text("\n".join(json.dumps(r) for r in pix_recs) + "\n")
     (out_dir / "noaxis.jsonl").write_text("\n".join(json.dumps(r) for r in noaxis_recs) + "\n")
     ck = cache["ckpt"]
+    device = cache.get("device", "cpu")  # v1 caches were made on the CPU
     env = {
         "kind": "detector",
         "display_name": args.name,
         "architecture": "MarkerNet: ResNet-34 (ImageNet) + U-Net decoder to stride 2, "
-        "CenterNet heatmap + offset + shape class + associative embedding",
+        "CenterNet heatmap + offset + shape class + associative embedding"
+        + (" + marker size + plot/legend region (v2)" if "baseline" in tuned else ""),
         "checkpoint": str(ck).replace(str(Path.home()), "~"),
         "data": args.data_note,
         "post_processing": chosen,
@@ -127,11 +133,11 @@ def main():
         "calibration":
         "automatic: frame rules + Tesseract tick OCR (adapter/auto_axis_calibration.py)",
         "torch": "see cache_dets.py run",
-        "gpu": None,
-        "device": "cpu",
+        "gpu": "Apple M3 Max" if device == "mps" else None,
+        "device": device,
         "cpu_threads": 16,
         "python": platform.python_version(),
-        "seconds_note": "detector forward on CPU (16 threads) + post-processing; "
+        "seconds_note": f"detector forward on {device} + post-processing; "
         "noaxis adds the automatic calibration (Tesseract)",
         "run_dir": "data/llm_run_pixcal",
     }

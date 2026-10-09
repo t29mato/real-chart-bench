@@ -30,10 +30,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data import CropDataset, collate, load_labels, open_rgb, series_points, split  # noqa: E402
 from infer import detect, to_answer  # noqa: E402
-from model import MarkerNet, embedding_loss, focal_loss  # noqa: E402
+from model import MarkerNet, embedding_loss, focal_loss, pick_device, region_loss  # noqa: E402
 from valmetric import series_point_f1  # noqa: E402
 
-from real_chart_bench.domain.marker_detection import pixel_point_f1  # noqa: E402
+from real_chart_bench.domain.marker_detection import (  # noqa: E402
+    PostConfig,
+    pixel_point_f1,
+    postprocess,
+)
 
 TRAIN_ROOT = Path.home() / ".cache/real-chart-bench/train-data"
 WEIGHTS = Path.home() / ".cache/real-chart-bench/detector/weights/resnet34-b627a593.pth"
@@ -67,6 +71,12 @@ def evaluate(
             for g in group_thresholds:
                 ans = to_answer(kept, im.size, group_threshold=g)
                 res.setdefault(f"f1@{t}/{g}", []).append(series_point_f1(ans, truth_series, lab))
+                if getattr(model, "aux", False):  # v2 post-processing, fixed default
+                    ans = postprocess(kept, im.size, None, PostConfig(
+                        threshold=t, group_threshold=g, size_factor=0.6, plot_min=0.5,
+                        legend_max=0.5))
+                    res.setdefault(f"v2f1@{t}/{g}", []).append(
+                        series_point_f1(ans, truth_series, lab))
     model.train()
     return {k: round(sum(v) / max(len(v), 1), 4) for k, v in res.items()}
 
@@ -94,7 +104,13 @@ def main():
     )
     ap.add_argument("--init", default=None, help="start from this checkpoint's weights")
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--aux", action="store_true", help="v2: size and region heads")
+    ap.add_argument("--size-weight", type=float, default=0.5)
+    ap.add_argument("--region-weight", type=float, default=0.5)
+    ap.add_argument("--amp", choices=["bf16", "fp16", "off"], default="bf16")
     args = ap.parse_args()
+    dev = pick_device()
+    amp = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(args.amp)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -112,7 +128,12 @@ def main():
         flush=True,
     )
 
-    model = MarkerNet(pretrained_path=str(WEIGHTS)).cuda()
+    if not WEIGHTS.exists():  # torchvision's ImageNet ResNet-34 (BSD-3)
+        WEIGHTS.parent.mkdir(parents=True, exist_ok=True)
+        torch.hub.download_url_to_file(
+            "https://download.pytorch.org/models/" + WEIGHTS.name, str(WEIGHTS))
+    model = MarkerNet(pretrained_path=str(WEIGHTS), aux=args.aux).to(dev)
+    print(f"デバイス {dev}、混合精度 {args.amp}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     warm = 500
 
@@ -128,7 +149,7 @@ def main():
     log = []
     ck = out / "last.pt"
     if ck.exists():
-        s = torch.load(ck, map_location="cuda", weights_only=False)
+        s = torch.load(ck, map_location=dev, weights_only=False)
         model.load_state_dict(s["model"])
         opt.load_state_dict(s["opt"])
         sched.load_state_dict(s["sched"])
@@ -136,9 +157,11 @@ def main():
         prior_seconds = s.get("train_seconds", 0.0)
         print(f"再開: step {step}, best {best}", flush=True)
     elif args.init:
-        model.load_state_dict(
-            torch.load(args.init, map_location="cuda", weights_only=False)["model"]
+        missing, _ = model.load_state_dict(
+            torch.load(args.init, map_location=dev, weights_only=False)["model"], strict=False
         )
+        if missing:  # a v1 checkpoint has no size/region heads
+            print(f"初期値にない層(新規に学習): {sorted({k.split('.')[0] for k in missing})}")
         print(f"初期値: {args.init}", flush=True)
 
     ds = CropDataset(
@@ -177,10 +200,10 @@ def main():
             persistent_workers=False,
         )
         t0 = time.time()
-        for imgs, heats, pts, neg_w in dl:
-            imgs, heats, pts = imgs.cuda(non_blocking=True), heats.cuda(), pts.cuda()
-            neg_w = neg_w.cuda()
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+        for imgs, heats, pts, neg_w, regions, known in dl:
+            imgs, heats, pts = imgs.to(dev), heats.to(dev), pts.to(dev)
+            neg_w, regions, known = neg_w.to(dev), regions.to(dev), known.to(dev)
+            with torch.autocast(dev, dtype=amp or torch.float32, enabled=amp is not None):
                 o = model(imgs)
             bi, gy, gx = pts[:, 0].long(), pts[:, 1].long(), pts[:, 2].long()
             l_heat = focal_loss(o["heat"].float(), heats, neg_weight=neg_w)
@@ -196,9 +219,17 @@ def main():
                 )
                 sid = pts[:, 6].long()
                 l_pull, l_push = embedding_loss(o["embed"], bi, gy, gx, sid)
+                sz = pts[:, 7]
+                l_size = (
+                    F.l1_loss(o["size"].float()[bi, 0, gy, gx][sz >= 0], sz[sz >= 0])
+                    if args.aux and (sz >= 0).any()
+                    else l_heat * 0
+                )
             else:
-                l_off = l_cls = l_pull = l_push = l_heat * 0
-            loss = l_heat + l_off + 0.2 * l_cls + args.embed_weight * (l_pull + l_push)
+                l_off = l_cls = l_pull = l_push = l_size = l_heat * 0
+            l_reg = region_loss(o["region"].float(), regions, known) if args.aux else l_heat * 0
+            loss = (l_heat + l_off + 0.2 * l_cls + args.embed_weight * (l_pull + l_push)
+                    + args.size_weight * l_size + args.region_weight * l_reg)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
@@ -209,7 +240,8 @@ def main():
                 print(
                     f"step {step} loss {loss.item():.3f} heat {l_heat.item():.3f} "
                     f"off {l_off.item():.3f} cls {l_cls.item():.3f} pull {l_pull.item():.3f} "
-                    f"push {l_push.item():.3f} lr {sched.get_last_lr()[0]:.2e} "
+                    f"push {l_push.item():.3f} size {l_size.item():.3f} "
+                    f"region {l_reg.item():.3f} lr {sched.get_last_lr()[0]:.2e} "
                     f"{(time.time() - t0) / 50:.2f}s/it",
                     flush=True,
                 )
@@ -226,8 +258,9 @@ def main():
                             ).items()
                         },
                     }
-                pre = "real_f1@" if real_val else "f1@"
-                score = max(v for k, v in m.items() if k.startswith(pre))
+                pre = "real_" if real_val else ""
+                score = max(v for k, v in m.items()
+                            if k.startswith(pre + "f1@") or k.startswith(pre + "v2f1@"))
                 log.append({"step": step, **m})
                 print(f"検証 step {step}: {json.dumps(m)}", flush=True)
                 if score > best:

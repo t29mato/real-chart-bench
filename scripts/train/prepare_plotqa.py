@@ -136,6 +136,9 @@ def main() -> int:
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     for split in SPLITS:
+        if not (SRC / f"{split}_annotations.json").exists():
+            print(f"{split}: no annotations in {SRC}, skipped", flush=True)
+            continue
         labels = convert(split)
         extract(split, labels)
         finish(split, labels)

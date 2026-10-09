@@ -10,6 +10,7 @@ after a fixed shuffle; Starrydata: papers 20%), the stress validation set
 the chosen setting can be scored later without the GPU; nothing is chosen
 on them.
 
+  (v2 checkpoint, MPS: add `--only bench` to cache just the scored figures)
   flock /tmp/rcb-gpu.lock ~/.cache/real-chart-bench/detector/venv/bin/python \\
       scripts/train/marker_detector/cache_dets.py --ckpt <best.pt> --out <cache.pkl>
 """
@@ -53,6 +54,7 @@ def main():
     ap.add_argument("--threshold", type=float, default=0.1)
     ap.add_argument("--only", nargs="*", default=None,
                     help="re-run only these sets, merged into an existing --out cache")
+    ap.add_argument("--limit", type=int, default=None, help="figures per set (smoke tests)")
     args = ap.parse_args()
 
     sets = val_sets(args.n_synth)
@@ -62,19 +64,20 @@ def main():
          "figure_id": k["figure_id"], "image_path": k["image_path"]}
         for f, k in sorted(key.items())
     ]
-    model = MarkerNet().to(DEVICE).eval()
-    model.load_state_dict(torch.load(args.ckpt, map_location=DEVICE, weights_only=False)["model"])
+    ck = torch.load(args.ckpt, map_location=DEVICE, weights_only=False)
+    model = MarkerNet(aux=bool((ck.get("args") or {}).get("aux"))).to(DEVICE).eval()  # v2: aux
+    model.load_state_dict(ck["model"])
     from PIL import Image
 
     detect(model, Image.new("RGB", (800, 600), "white"))
-    cache: dict = {"ckpt": args.ckpt, "threshold": args.threshold, "sets": {}}
-    if args.only:
+    cache: dict = {"ckpt": args.ckpt, "threshold": args.threshold, "sets": {}, "device": DEVICE}
+    if args.only and Path(args.out).exists():
         cache = pickle.loads(Path(args.out).read_bytes())
         sets = {k: v for k, v in sets.items() if k in args.only}
     for name, labs in sets.items():
         t0 = time.time()
         rows = []
-        for lab in labs:
+        for lab in labs[: args.limit]:
             im = open_rgb(lab["_path"])
             row = {"label": lab, "size": im.size, "dets": {}, "seconds": {}}
             for ls in args.long_sides:
@@ -82,8 +85,13 @@ def main():
                 ds = detect(model, im, long_side=ls, threshold=args.threshold)
                 if DEVICE == "cuda":
                     torch.cuda.synchronize()
+                elif DEVICE == "mps":
+                    torch.mps.synchronize()
                 row["seconds"][ls] = time.time() - t1
-                row["dets"][ls] = [(d.x, d.y, d.score, d.marker, d.embedding) for d in ds]
+                # v2 detections carry size / plot / legend as three more fields
+                row["dets"][ls] = [(d.x, d.y, d.score, d.marker, d.embedding)
+                                   + ((d.size, d.plot, d.legend) if d.size is not None else ())
+                                   for d in ds]
             rows.append(row)
         cache["sets"][name] = rows
         print(f"{name}: {len(rows)} 図 {time.time() - t0:.1f}s", flush=True)

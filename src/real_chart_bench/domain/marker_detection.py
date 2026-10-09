@@ -73,6 +73,11 @@ class Detection:
     score: float
     marker: str
     embedding: tuple[float, ...]
+    # MarkerNet v2 heads (None from v1 weights): marker diameter in image
+    # pixels, and the probabilities of lying in the plot area / in a legend
+    size: float | None = None
+    plot: float | None = None
+    legend: float | None = None
 
 
 def suppress_duplicates(dets: list[Detection], radius: float) -> list[Detection]:
@@ -227,6 +232,41 @@ def suppress_same_series_duplicates(
     return [d for d in dets if id(d) in keep]
 
 
+def suppress_by_size(
+    dets: list[Detection], factor: float, embed_threshold: float
+) -> list[Detection]:
+    """Strongest-first: drop a detection closer than factor x the larger
+    predicted marker size of a kept one of the same series (embedding within
+    `embed_threshold`) -- the extra peaks of one large or patterned marker.
+    Detections without a size are never suppressed here. Input order kept."""
+    kept: list[Detection] = []
+    for d in sorted(dets, key=lambda d: -d.score):
+        if all(
+            d.size is None
+            or k.size is None
+            or math.hypot(d.x - k.x, d.y - k.y) >= factor * max(d.size, k.size)
+            or _dist(d.embedding, k.embedding) > embed_threshold
+            for k in kept
+        ):
+            kept.append(d)
+    keep = {id(d) for d in kept}
+    return [d for d in dets if id(d) in keep]
+
+
+def gate_by_region(
+    dets: list[Detection], plot_min: float | None, legend_max: float | None
+) -> list[Detection]:
+    """Drop peaks the region head places outside the plot area (plot <
+    plot_min) or inside a legend (legend >= legend_max). A None threshold, or
+    a detection without that head's value, keeps the detection."""
+    return [
+        d
+        for d in dets
+        if not (plot_min is not None and d.plot is not None and d.plot < plot_min)
+        and not (legend_max is not None and d.legend is not None and d.legend >= legend_max)
+    ]
+
+
 @dataclass(frozen=True)
 class PostConfig:
     """Detector post-processing. With same_series_frac and frame_margin left
@@ -240,6 +280,10 @@ class PostConfig:
     frame_margin: float | None = None
     edge_band: float | None = None
     min_points: int = 2
+    # MarkerNet v2 (None = off): size-based same-series suppression, region gate
+    size_factor: float | None = None
+    plot_min: float | None = None
+    legend_max: float | None = None
 
 
 def postprocess(
@@ -253,6 +297,7 @@ def postprocess(
     suppression, same-series suppression at a wider radius (when set),
     embedding grouping."""
     kept = [d for d in dets if d.score >= cfg.threshold]
+    kept = gate_by_region(kept, cfg.plot_min, cfg.legend_max)
     if cfg.frame_margin is not None:
         kept = inside_frame(kept, frame, cfg.frame_margin)
     if cfg.edge_band is not None:
@@ -262,4 +307,6 @@ def postprocess(
         kept = suppress_same_series_duplicates(
             kept, cfg.same_series_frac * max(image_size), cfg.embed_gate
         )
+    if cfg.size_factor is not None:
+        kept = suppress_by_size(kept, cfg.size_factor, cfg.embed_gate)
     return pixel_answer(group_into_series(kept, cfg.group_threshold), min_points=cfg.min_points)

@@ -11,6 +11,12 @@ heatmap cells. Four heads on the stride-2 map:
 - embed  (E)  associative embedding: markers of one series pull together,
               different series push apart (CornerNet); this is what groups
               detections into series, learnt from colour and shape at once.
+
+v2 (aux=True, docs/design/local-model.md「方式A v2」) adds two heads:
+
+- size   (1)  log marker diameter in input pixels (CenterNet's wh, one value)
+- region (2)  plot-area and legend logits per cell (CACHED-style context:
+              peaks outside the plot or inside a legend are dropped)
 """
 
 from __future__ import annotations
@@ -50,8 +56,10 @@ def _head(cin: int, cout: int, bias: float = 0.0) -> nn.Sequential:
 
 
 class MarkerNet(nn.Module):
-    def __init__(self, embed_dim: int = 8, pretrained_path: str | None = None):
+    def __init__(self, embed_dim: int = 8, pretrained_path: str | None = None,
+                 aux: bool = False):
         super().__init__()
+        self.aux = aux
         r = torchvision.models.resnet34()
         if pretrained_path:
             r.load_state_dict(torch.load(pretrained_path, map_location="cpu", weights_only=True))
@@ -66,6 +74,9 @@ class MarkerNet(nn.Module):
         self.offset = _head(64, 2)
         self.shape = _head(64, len(MARKER_CLASSES))
         self.embed = _head(64, embed_dim)
+        if aux:
+            self.size = _head(64, 1, bias=1.6)  # exp(1.6) ~ 5 px
+            self.region = _head(64, 2)
         self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
@@ -80,12 +91,39 @@ class MarkerNet(nn.Module):
         d = self.up3(d, s3)
         d = self.up2(d, s2)
         d = self.up1(d, s1)
-        return {
+        out = {
             "heat": self.heat(d),
             "offset": self.offset(d),
             "shape": self.shape(d),
             "embed": self.embed(d),
         }
+        if self.aux:
+            out["size"] = self.size(d)
+            out["region"] = self.region(d)
+        return out
+
+
+def pick_device() -> str:
+    """cuda, else Apple MPS, else cpu (RCB_DEVICE overrides)."""
+    import os
+
+    if os.environ.get("RCB_DEVICE"):
+        return os.environ["RCB_DEVICE"]
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def region_loss(logits, target, known):
+    """BCE per region channel, only on images whose region is known.
+    target: B,2,H,W in {0,1}; known: B,2 in {0,1}."""
+    w = known[:, :, None, None].expand_as(target)
+    if w.sum() == 0:
+        return logits.sum() * 0
+    bce = F.binary_cross_entropy_with_logits(logits, target, reduction="none")
+    return (bce * w).sum() / w.sum()
 
 
 def focal_loss(logits, target, alpha: float = 2.0, beta: float = 4.0, neg_weight=None):

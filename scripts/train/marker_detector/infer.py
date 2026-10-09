@@ -14,7 +14,7 @@ from PIL import Image
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "src"))
 
-from model import MARKER_CLASSES, STRIDE  # noqa: E402
+from model import MARKER_CLASSES, STRIDE, pick_device  # noqa: E402
 
 from real_chart_bench.domain.marker_detection import (  # noqa: E402
     Detection,
@@ -25,7 +25,7 @@ from real_chart_bench.domain.marker_detection import (  # noqa: E402
 )
 
 # RCB_DEVICE=cpu runs inference without the GPU (and without the GPU lock)
-DEVICE = os.environ.get("RCB_DEVICE", "cuda")
+DEVICE = os.environ.get("RCB_DEVICE") or pick_device()
 
 
 @torch.no_grad()
@@ -43,7 +43,7 @@ def detect(
     canvas = Image.new("RGB", (lb.out_w, lb.out_h), (255, 255, 255))
     canvas.paste(im.resize((nw, nh), Image.BILINEAR), (0, 0))
     x = torch.from_numpy(np.asarray(canvas).copy()).permute(2, 0, 1).float()[None] / 255
-    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
+    with torch.autocast(device, dtype=torch.bfloat16, enabled=device in ("cuda", "mps")):
         out = model(x.to(device))
     heat = out["heat"].float().sigmoid()[0, 0]
     peak = heat == F.max_pool2d(heat[None, None], 3, 1, 1)[0, 0]
@@ -59,6 +59,8 @@ def detect(
     off = out["offset"].float()[0][:, ys, xs]
     cls = out["shape"].float()[0][:, ys, xs].argmax(0)
     emb = out["embed"].float()[0][:, ys, xs].T
+    size = out["size"].float()[0, 0, ys, xs].exp() / lb.scale if "size" in out else None
+    region = out["region"].float().sigmoid()[0][:, ys, xs] if "region" in out else None
     dets = []
     for k in range(len(scores)):
         gx = (xs[k].item() + off[0, k].item()) * STRIDE
@@ -71,6 +73,9 @@ def detect(
                 score=round(scores[k].item(), 4),
                 marker=MARKER_CLASSES[cls[k].item()],
                 embedding=tuple(round(v, 4) for v in emb[k].tolist()),
+                size=round(size[k].item(), 2) if size is not None else None,
+                plot=round(region[0, k].item(), 4) if region is not None else None,
+                legend=round(region[1, k].item(), 4) if region is not None else None,
             )
         )
     return dets

@@ -456,6 +456,7 @@ LOCAL_MODEL_ARCHIVE = REPO / "data/local_model_runs"
 for _env in sorted(LOCAL_MODEL_ARCHIVE.glob("*/env.json")):
     _run = _env.parent.name
     _meta = json.loads(_env.read_text())
+    _gpu = "Apple M3 Max (MPS)" if _meta.get("device") == "mps" else "RTX 4090"
     CONDITIONS[f"local-cuda-detector-{_run}"] = {
         **CONDITIONS["local-cuda-bf16-pixcal"],
         "v2": "pixpts_px",
@@ -465,8 +466,8 @@ for _env in sorted(LOCAL_MODEL_ARCHIVE.glob("*/env.json")):
         "local_archive": LOCAL_MODEL_ARCHIVE,
         "models": {_run: _meta["display_name"]},
         "suffix": "-local-cuda-pixcal-detector",
-        "name_suffix": "（マーカー検出器、画素座標を目盛校正で換算、ローカル RTX 4090）",
-        "label": "目盛のピクセル位置を与えた条件・検出器(方式A、RTX 4090、採点対象全図)",
+        "name_suffix": "（マーカー検出器、画素座標を目盛校正で換算、ローカル " + _gpu + "）",
+        "label": f"目盛のピクセル位置を与えた条件・検出器(方式A、{_gpu}、採点対象全図)",
         "notes": (
             "方式A(docs/design/local-model.md「方式A: 検出器」)。学習したマーカー検出器"
             "(" + _meta["architecture"] + ")がマーカー中心の画素位置と系列の振り分けを出し、"

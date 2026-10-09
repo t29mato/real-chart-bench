@@ -117,6 +117,25 @@ def series_points(lab: dict, require_marker: bool) -> list[tuple[list, str | Non
     return out
 
 
+def marker_size_px(lab: dict) -> float | None:
+    """The figure's marker diameter in image pixels when the source knows it
+    (the synthetic generators draw one size per figure)."""
+    v = (lab.get("synth") or {}).get("marker_size_px")
+    return float(v) if isinstance(v, int | float) and v > 0 else None
+
+
+def legend_boxes(lab: dict) -> list | None:
+    """Legend rectangles in image pixels: [] = known to have none, None =
+    unknown (PlotQA draws legends but does not annotate them)."""
+    if "synth" in lab:
+        b = lab["synth"].get("legend_bbox")
+        return [b] if b else []
+    extra = lab.get("extra") or {}
+    if "legend_bboxes" in extra:
+        return extra["legend_bboxes"] or []
+    return None
+
+
 def _augment(im: Image.Image, rng: random.Random) -> Image.Image:
     if rng.random() < 0.5:  # global hue rotation keeps series colours distinct
         hsv = np.array(im.convert("HSV"))
@@ -181,7 +200,9 @@ class CropDataset(Dataset):
         gh = gw = c // STRIDE
         heat = np.zeros((gh, gw), np.float32)
         rad = int(math.ceil(3 * self.sigma))
-        pts = []  # (gy, gx, dx, dy, cls, sid)
+        size = marker_size_px(lab)
+        log_size = math.log(size * lb.scale) if size else -1.0
+        pts = []  # (gy, gx, dx, dy, cls, sid, log size in input px or -1)
         for sid, (series, marker) in enumerate(series_points(lab, self.require_marker)):
             cls = CLASS_INDEX.get(marker, -1) if marker else -1
             for x, y in series:
@@ -195,15 +216,34 @@ class CropDataset(Dataset):
                 yy, xx = np.mgrid[y0:y1, x0:x1]
                 g = np.exp(-((xx - ix) ** 2 + (yy - iy) ** 2) / (2 * self.sigma**2))
                 heat[y0:y1, x0:x1] = np.maximum(heat[y0:y1, x0:x1], g)
-                pts.append((iy, ix, gx - ix, gy - iy, cls, sid))
+                pts.append((iy, ix, gx - ix, gy - iy, cls, sid, log_size))
         rng.shuffle(pts)
         pts = pts[: self.max_points]
         neg_w = self.partial_neg_weight if lab.get("source") in PARTIAL_SOURCES else 1.0
+        region = np.zeros((2, gh, gw), np.float32)
+        known = [0.0, 0.0]
+
+        def fill(ch, box):
+            x0, y0, x1, y1 = ((v * lb.scale - o) / STRIDE for v, o in
+                              zip(box, (ox, oy, ox, oy), strict=True))
+            region[ch, max(0, int(y0)):max(0, int(math.ceil(y1))),
+                   max(0, int(x0)):max(0, int(math.ceil(x1)))] = 1
+
+        if lab.get("plot_bbox"):
+            fill(0, lab["plot_bbox"])
+            known[0] = 1.0
+        legends = legend_boxes(lab)
+        if legends is not None:
+            for b in legends:
+                fill(1, b)
+            known[1] = 1.0
         return (
             img,
             torch.from_numpy(heat)[None],
-            torch.tensor(pts, dtype=torch.float32).view(-1, 6),
+            torch.tensor(pts, dtype=torch.float32).view(-1, 7),
             neg_w,
+            torch.from_numpy(region),
+            torch.tensor(known),
         )
 
 
@@ -212,4 +252,6 @@ def collate(batch):
     heats = torch.stack([b[1] for b in batch])
     pts = [torch.cat([torch.full((len(b[2]), 1), float(i)), b[2]], 1) for i, b in enumerate(batch)]
     neg_w = torch.tensor([float(b[3]) for b in batch])
-    return imgs, heats, torch.cat(pts) if pts else torch.zeros(0, 7), neg_w
+    regions = torch.stack([b[4] for b in batch])
+    known = torch.stack([b[5] for b in batch])
+    return imgs, heats, torch.cat(pts) if pts else torch.zeros(0, 8), neg_w, regions, known
