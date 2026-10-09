@@ -416,3 +416,9 @@ x 値が一致する相手曲線があり、y が(a)一致するか(b)片方だ�
 
 **評価の数え方**: primary の提案が、検証済みメンバーの所有画像を指すとき `group_correct`、その検証済みメンバーの記録は
 `covered`(sibling_of で画像が一致)。再現率 = (correct + covered) / 検証済み図数。
+
+**結果(検証済み136図、`--both-y-sides --sibling-groups`)**: correct 92→92、wrong 2→2、sibling 提案 6→0(`group_correct` 6)、
+検証済み log(σ) 6図の未割当 → `sibling_of`(covered)6。再現率 (correct+covered)/136 = 98/136 = 72.1%(前 67.6%)。
+dev 46→50/73、held-out 46→48/63。**本番340図(CC BY 89論文)には兄弟グループが無い**(12グループは全てベンチマーク登録論文で、
+候補生成から除外済み)ため `--redecide --both-y-sides --sibling-groups` の結果は現行と全記録で同一(high 107 / review 60 / unassigned 173)。
+候補ファイルとレビュー画面は更新していない。今後 σ/log σ を持つ論文が候補に入るとき `--sibling-groups` を付ける。
