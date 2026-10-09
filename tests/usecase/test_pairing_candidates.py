@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from real_chart_bench.domain.pairing_assignment import PairScore
-from real_chart_bench.usecase.pairing_candidates import FigureInfo, FrameInfo, decide_paper
+from real_chart_bench.usecase.pairing_candidates import (
+    FigureInfo,
+    FrameInfo,
+    decide_paper,
+    prefer_embedded_frames,
+)
 
 
 @dataclass
@@ -75,3 +80,40 @@ def test_paper_rank_orders_assigned_figures_by_score():
     out = decide_paper("p", [frame("f1"), frame("f2")], [fig("g1"), fig("g2")], scored, rule="r")
     ranks = {r["figure_id"]: r["paper_rank"] for r in out}
     assert ranks == {"g2": 1, "g1": 2}
+
+
+def pframe(fid, image):
+    return FrameInfo(frame_id=fid, image=image, bbox=(0, 0, 10, 10), y_side="left")
+
+
+EMB = "p/p03_embedded_4.png"
+REN = "p/p03_page_render_2.png"
+
+
+class TestPreferEmbedded:
+    def test_page_render_duplicate_of_embedded_frame_is_dropped(self):
+        frames = [pframe("e#0", EMB), pframe("r#0", REN)]
+        scored = {("e#0", "g"): sc("e#0", "g", 0.9), ("r#0", "g"): sc("r#0", "g", 0.9)}
+        assert [f.frame_id for f in prefer_embedded_frames(frames, scored)] == ["e#0"]
+
+    def test_page_render_on_another_page_is_kept(self):
+        frames = [pframe("e#0", EMB), pframe("r#0", "p/p04_page_render_3.png")]
+        scored = {("e#0", "g"): sc("e#0", "g", 0.9), ("r#0", "g"): sc("r#0", "g", 0.9)}
+        assert len(prefer_embedded_frames(frames, scored)) == 2
+
+    def test_page_render_showing_a_different_figure_is_kept(self):
+        frames = [pframe("e#0", EMB), pframe("r#0", REN)]
+        scored = {("e#0", "g1"): sc("e#0", "g1", 0.9), ("r#0", "g2"): sc("r#0", "g2", 0.9)}
+        assert len(prefer_embedded_frames(frames, scored)) == 2
+
+    def test_ineligible_overlap_does_not_count_as_duplicate(self):
+        frames = [pframe("e#0", EMB), pframe("r#0", REN)]
+        scored = {("e#0", "g"): sc("e#0", "g", 0.9), ("r#0", "g"): sc("r#0", "g", 0.1)}
+        assert len(prefer_embedded_frames(frames, scored)) == 2
+
+    def test_decide_paper_does_not_dilute_margin_with_the_duplicate(self):
+        frames = [pframe("e#0", EMB), pframe("r#0", REN)]
+        scored = {("e#0", "g"): sc("e#0", "g", 0.9), ("r#0", "g"): sc("r#0", "g", 0.9)}
+        out = decide_paper("p", frames, [fig("g")], scored, rule="r")
+        assert out[0]["decision"] == "proposed_high"
+        assert out[0]["image"].endswith("embedded_4.png")

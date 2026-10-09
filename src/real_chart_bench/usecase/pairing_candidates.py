@@ -45,6 +45,32 @@ def _r(v: float) -> float:
     return round(float(v), 4)
 
 
+def _page_of(image: str) -> str:
+    return image.rsplit("/", 1)[-1].split("_", 1)[0]
+
+
+def prefer_embedded_frames(
+    frames: Sequence[FrameInfo], scored: Mapping[tuple[str, str], ScoredPair]
+) -> list[FrameInfo]:
+    """Drop page-render frames that show the same figure as an embedded
+    image's frame on the same page (design pairing-automation.md §12.5)."""
+    eligible: dict[str, set[str]] = {}
+    for (f, g), s in scored.items():
+        if s.pair.eligible:
+            eligible.setdefault(f, set()).add(g)
+    embedded = [f for f in frames if "_embedded_" in f.image]
+    kept = []
+    for fr in frames:
+        if "_page_render_" in fr.image and any(
+            _page_of(e.image) == _page_of(fr.image)
+            and eligible.get(e.frame_id, set()) & eligible.get(fr.frame_id, set())
+            for e in embedded
+        ):
+            continue
+        kept.append(fr)
+    return kept
+
+
 def decide_paper(
     paper_id: str,
     frames: Sequence[FrameInfo],
@@ -53,6 +79,9 @@ def decide_paper(
     *,
     rule: str,
 ) -> list[dict]:
+    frames = prefer_embedded_frames(frames, scored)
+    kept_ids = {f.frame_id for f in frames}
+    scored = {k: v for k, v in scored.items() if k[0] in kept_ids}
     pairs = [s.pair for s in scored.values()]
     assignments = assign_frames_to_figures(
         [f.frame_id for f in frames], [g.figure_id for g in figures], pairs
