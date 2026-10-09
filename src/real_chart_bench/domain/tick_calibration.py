@@ -297,7 +297,9 @@ def candidate_transforms(prop: str, unit: str) -> list[Transform]:
     decades (S/m -> S/cm is -2)."""
     if prop.strip().lower().startswith("log"):
         return [Transform("shift", n) for n in range(-6, 7)]
-    out = [Transform("scale", k) for k in range(-12, 13)]
+    # whole decades of unit change; wide enough for carrier concentrations
+    # (stored m^-3, printed as 2.0 x 10^20 cm^-3: a factor of 1e-26)
+    out = [Transform("scale", k) for k in range(-30, 31)]
     out += [Transform("log10", k) for k in range(-12, 13)]
     if unit.strip() == "K":
         out.append(Transform("k_to_degc"))
@@ -641,9 +643,14 @@ def split_merged_labels(text: str, *, min_pieces: int = 3) -> list[str] | None:
             if m:
                 yield s[i:m_end]
 
-    def walk(i: int, got: list[str], step: float | None):
+    best: list[str] | None = None
+
+    def walk(i: int, got: list[str], step: float | None) -> None:
+        nonlocal best
         if i == len(s):
-            return list(got) if len(got) >= min_pieces else None
+            if len(got) >= min_pieces and (best is None or len(got) > len(best)):
+                best = list(got)
+            return
         for p in pieces_at(i):
             v = float(p)
             if got:
@@ -652,14 +659,15 @@ def split_merged_labels(text: str, *, min_pieces: int = 3) -> list[str] | None:
                     continue
                 if step is not None and abs(d - step) > 1e-9 * max(1.0, abs(step)):
                     continue
-                res = walk(i + len(p), [*got, p], d)
+                walk(i + len(p), [*got, p], d)
             else:
-                res = walk(i + len(p), [p], None)
-            if res:
-                return res
-        return None
+                walk(i + len(p), [p], None)
 
-    return walk(0, [], None)
+    # The decomposition with the most labels: the longest-piece-first parse
+    # also reads "220230240250260270280290300310320330" as three 12-digit
+    # numbers in a progression of step 40040040040.
+    walk(0, [], None)
+    return best
 
 
 _DECADE = re.compile(r"^10(\^?(-?\d{1,2}))?$")
